@@ -1938,8 +1938,9 @@ met.
   delivery specification in `PROJECT.md`.
 - [x] Remove the abandoned browser-application scaffold from `orifude` while
   preserving this project document and approved artwork.
-- [ ] Initialize or confirm the `orifude` Go module and repository.
-- [ ] Create the sibling `orifude-front` Astro repository.
+- [x] Initialize or confirm the `orifude` Go module and repository.
+- [x] Reserve the sibling `orifude-front` repository for later landing-page
+  work.
 - [x] License source code, documentation, and project-owned artwork under
   Apache-2.0.
 - [x] Support Linux, macOS, and Windows on amd64 and arm64 for the first release.
@@ -1947,20 +1948,18 @@ met.
   policy in this document.
 - [x] Fix device-key authentication, DPoP sessions, envelope encryption, KMS
   separation, and report-only moderation policy in this document.
-- [ ] Pin the current supported Go toolchain and direct Go dependencies.
-- [ ] Pin pnpm through `packageManager` and commit the frontend lockfile.
-- [ ] Pin sqlc, Goose, govulncheck, Oxlint, and Oxfmt as project tools.
-- [ ] Create the root `sql/queries` and `sql/migrations` directories.
-- [ ] Create `sqlc.yaml` targeting `internal/database/dbgen` with pgx v5.
-- [ ] Add baseline CI jobs for Go checks, generated-code drift, and frontend
-  checks without requiring production secrets.
-- [ ] Optimize copies of the supplied logo, icon, watermark, and monochrome
-  assets without modifying the originals.
-- [ ] Document local development prerequisites and environment variables.
+- [x] Pin the current supported Go toolchain and direct Go dependencies.
+- [x] Pin sqlc, Goose, and govulncheck as Go project tools.
+- [x] Create the root `sql/queries` and `sql/migrations` directories.
+- [x] Create `sqlc.yaml` targeting `internal/database/dbgen` with pgx v5.
+- [x] Add baseline CI jobs for Go checks and generated-code drift without
+  requiring production secrets.
+- [x] Document Go and post-office development prerequisites and environment
+  variables.
 
-Done when both repositories install from clean checkouts, all empty baseline
-checks pass, sqlc and Goose paths are fixed, assets are accounted for, and no
-blocking product decision remains for the prototype or schema.
+Done when `orifude` installs from a clean checkout, its baseline Go and generated
+checks pass, sqlc and Goose paths are fixed, the reserved frontend repository
+exists, and no blocking product decision remains for the prototype or schema.
 
 ### Phase 1: offline TUI interaction prototype
 
@@ -2103,8 +2102,12 @@ restart authentication succeeds from each stored device key.
 ### Phase 4: landing page and release distribution
 
 - [ ] Scaffold `orifude-front` with Astro, strict TypeScript, and pnpm.
+- [ ] Pin pnpm through `packageManager` and commit the frontend lockfile.
 - [ ] Add Tailwind CSS 4 through `@tailwindcss/vite`.
 - [ ] Add and configure Oxlint, Oxfmt, Astro Check, and project scripts.
+- [ ] Add frontend CI for formatting, linting, Astro checks, and production
+  builds without production secrets.
+- [ ] Document frontend prerequisites, local commands, and environment variables.
 - [ ] Build the base layout with metadata, canonical URL, favicon, social card,
   design tokens, skip link, and reduced-motion handling.
 - [ ] Build the hero with the real Orifude wordmark, tagline, and primary
@@ -2117,8 +2120,9 @@ restart authentication succeeds from each stored device key.
   the request and failure behavior before adding it.
 - [ ] Build responsive mobile and desktop layouts without generic dashboard
   cards or fake application controls.
-- [ ] Optimize all images and video, reserve dimensions, and lazy-load below the
-  fold.
+- [ ] Optimize copies of the supplied logo, icon, watermark, and monochrome
+  assets without modifying the originals; optimize video, reserve dimensions,
+  and lazy-load below the fold.
 - [ ] Make the page usable by keyboard, screen reader, touch, and mouse.
 - [ ] Add a restrictive content security policy and other static security
   headers.
@@ -2139,10 +2143,10 @@ restart authentication succeeds from each stored device key.
 - [ ] Run Oxc, Astro, build, responsive, accessibility, SEO, link, header, and
   download smoke checks.
 
-Done when `https://orifude.com` loads the production Astro build from Cloudflare
-Pages, all checks pass, `www` redirects correctly, and a visitor
-can download and verify a working TUI release without the site calling the
-post-office API.
+Done when `orifude-front` installs from a clean checkout,
+`https://orifude.com` loads its production Astro build from Cloudflare Pages,
+all checks pass, `www` redirects correctly, and a visitor can download and
+verify a working TUI release without the site calling the post-office API.
 
 ### Phase 5: private online alpha
 
