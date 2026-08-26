@@ -53,15 +53,17 @@ secrets:
 if test -n "$(git ls-files 'sql/queries/*.sql')"; then go tool sqlc generate; fi
 git diff --exit-code -- internal/database/dbgen
 test -z "$(git status --porcelain --untracked-files=all -- internal/database/dbgen)"
-go test ./...
-go test -race ./...
-go vet ./...
-if test -n "$(go list ./...)"; then go tool govulncheck ./...; fi
+if test -n "$(go list -e ./...)"; then
+  go test ./...
+  go test -race ./...
+  go vet ./...
+  go tool govulncheck ./...
+fi
 ```
 
-The guards skip generation and vulnerability analysis only while the repository
-has no SQL queries or Go packages. They start running as soon as those inputs
-exist.
+The guards skip database generation while there are no SQL queries and skip Go
+package checks while there are no Go packages. They start running as soon as
+those inputs exist.
 
 Post-office development will require PostgreSQL and an AWS account with separate
 message and evidence KMS keys. Moderation routes will also require a Cloudflare
