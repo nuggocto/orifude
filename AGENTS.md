@@ -20,6 +20,9 @@
   remains authoritative.
 - Format touched Go files with `gofmt`. Run the narrowest useful checks during
   development and `go test ./...` before handing off a working Go change.
+- Keep commit subjects simple. Add a concise, well-written body that explains
+  why the change exists and any important tradeoffs instead of repeating the
+  diff.
 
 ## Tests
 
