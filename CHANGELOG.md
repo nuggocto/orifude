@@ -14,3 +14,6 @@ All notable changes to Orifude will be recorded here.
 
 - Settled identity, alias, retention, moderation, hosting, update, and 1.0
   release policy.
+- Replaced bearer identity tokens and plaintext message columns with device-key
+  authentication, short DPoP-bound sessions, KMS envelope encryption, and
+  report-only audited moderation access.
