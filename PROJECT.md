@@ -2,7 +2,7 @@
 
 > Send a letter into the quiet and let a stranger find it.
 
-Orifude is an online, anonymous, one-to-one letter exchange experienced only
+Orifude is an online, pseudonymous, one-to-one letter exchange experienced only
 through a terminal user interface. A person writes a short letter, folds it,
 and releases it. The post office assigns it to one unrelated recipient. That
 recipient unfolds it and may send one reply. The exchange then becomes a
@@ -12,9 +12,8 @@ The public website is a separate, static landing page. It explains the project,
 shows the TUI, and distributes builds. It never reads, writes, or displays
 letters.
 
-This document is the product and technical baseline. Decisions marked "open"
-must be settled before a public release. Everything else is the intended first
-implementation.
+This document is the product and technical baseline. Product and operational
+policy is settled here before implementation begins.
 
 ## Product identity
 
@@ -27,18 +26,19 @@ implementation.
 - Public presentation: a static website only
 - Primary motif: folded paper carried through an ink-painted garden
 
-The name is treated as a coined brand inspired by folding and brushwork. The
-project must not market it as a dictionary Japanese word without a native
-language review.
+The name is a coined brand inspired by folding and brushwork. Marketing must not
+present it as a dictionary Japanese word or claim cultural authenticity.
 
 ## Product promise
 
 Orifude creates a small exchange between two people without turning that
 exchange into content for an audience.
 
-The product has no public feed, follower graph, profiles, likes, search,
-trending page, recipient picker, attachments, or unrestricted direct messages.
-Those omissions are product rules, not missing features.
+Each person chooses one unique alias. It is visible only to matched strangers
+and is never searchable. The product has no public feed, follower graph,
+profiles, likes, search, trending page, recipient picker, attachments, or
+unrestricted direct messages. Those omissions are product rules, not missing
+features.
 
 ### Core rules
 
@@ -49,13 +49,14 @@ Those omissions are product rules, not missing features.
 5. The body remains hidden until the assigned recipient explicitly unfolds it.
 6. The recipient may send zero or one reply.
 7. A reply cannot receive another reply.
-8. Neither participant sees the other's identity or activity history.
+8. Each participant sees the other's alias, but no profile, identifier, or
+   activity history.
 9. A claimed letter is one-reader, not one-view. Its recipient may reopen it.
 10. The website cannot participate in the exchange.
 
 ### Goals
 
-- Make receiving a small anonymous letter feel deliberate rather than noisy.
+- Make receiving a small pseudonymous letter feel deliberate rather than noisy.
 - Make the folding, carrying, and unfolding interactions memorable in a TUI.
 - Let real users exchange letters online through one authoritative service.
 - Work well with keyboards, Unicode text, narrow terminals, and limited color.
@@ -70,8 +71,10 @@ Those omissions are product rules, not missing features.
 - Algorithmic engagement ranking
 - Publicly browsable content
 - File, image, audio, or link attachments
-- End-to-end encryption in the first release
+- End-to-end encryption; the service-readable storage model supports moderation
 - A browser version of the letter application
+- Push notifications or background notification services
+- Native desktop wrappers
 - A command-based interface or a family of CLI subcommands
 - Offline delivery between users
 
@@ -84,16 +87,24 @@ commands and environment variables.
 ### First launch
 
 1. The TUI displays the Orifude mark and checks terminal capabilities.
-2. The person enters an alpha invite code if the service is invite-only.
-3. The TUI requests an anonymous identity from the post office.
-4. The post office returns a secret bearer token once.
-5. The TUI stores the token in the operating system's user config directory
+2. During private alpha, the person enters a single-use invite code.
+3. The person chooses a unique, non-searchable alias.
+4. The TUI requests a pseudonymous identity from the post office.
+5. The post office returns a secret bearer token once.
+6. The TUI stores the token in the operating system's user config directory
    with owner-only permissions.
-6. The person enters the branch screen.
+7. The person enters the branch screen.
 
-There is no username, password, profile, biography, avatar, or email in the
-first release. Losing the local token loses access to that identity and its
-keepsakes. This must be stated during onboarding.
+The alias is immutable, globally unique, and shown only to matched strangers.
+It contains 2 to 24 Unicode code points after NFC normalization. Letters and
+marks come from one Unicode script; Japanese may combine Han, Hiragana, and
+Katakana. ASCII digits, single spaces, hyphens, and underscores are allowed.
+Unicode TR39 confusable skeletons enforce uniqueness. Controls, invisible
+formatting characters, emoji, and other script mixing are rejected. Deleted
+aliases are never reused. There is no password, profile, biography, avatar,
+email, recovery, or second device. Losing the local token loses access
+permanently. The service treats an identity as deleted after one year without an
+authenticated request.
 
 ### Send a letter
 
@@ -106,7 +117,8 @@ keepsakes. This must be stated during onboarding.
 7. The sender receives a release receipt and can see its delivery state.
 
 The client-generated ID makes a retried submission idempotent. A timeout after
-a successful write must not create a duplicate letter.
+a successful write must not create a duplicate letter. The sender can reread
+the original while they retain their keepsake access.
 
 ### Receive a letter
 
@@ -119,9 +131,9 @@ a successful write must not create a duplicate letter.
 6. The post office records the open and returns the body.
 7. The person may reply, keep it without replying, report it, or discard it.
 
-An unopened claim expires after a configurable period. The first proposed
-period is 24 hours. After expiry, the letter returns to the queue and can be
-claimed by someone else. Once opened, assignment is permanent.
+An unopened claim expires after 24 hours. After expiry, the letter returns to
+the queue and can be claimed by someone else. An unclaimed letter expires and
+is deleted seven days after release. Once opened, assignment is permanent.
 
 ### Reply
 
@@ -137,12 +149,13 @@ Retries with the same body are safe. A second, different reply is rejected.
 
 1. The recipient selects `Report and burn`.
 2. The TUI asks for one reason from a fixed list.
-3. The server records the report, hides the letter from the reporter, and blocks
-   future matching between the two anonymous identities.
-4. The server retains the reported content for the moderation retention period.
+3. The server records the report, hides the letter from the reporter, and
+   permanently blocks future matching between the two identities.
+4. The block is hidden from the other person and cannot be reversed.
+5. Report evidence is deleted 90 days after moderation closes the case.
 
-The recipient never receives an identifier for the sender. Blocking is applied
-server-side using the letter relationship.
+The recipient sees the sender's alias but never receives an internal identifier.
+Blocking is applied server-side using the letter relationship.
 
 ## Letter lifecycle
 
@@ -150,27 +163,28 @@ State is derived from timestamps and ownership columns rather than duplicated
 in a mutable status string.
 
 ```text
-                  claim lease expires
-             +-----------------------------+
-             |                             |
-             v                             |
+                  24-hour claim expires
+             +---------------------------------+
+             |                                 |
+             v                                 |
 [waiting] --claim--> [folded/claimed] --unfold--> [opened] --reply--> [replied]
-    |                       |                    |                    |
- withdraw                  report               report               report
-    |                       |                    |                    |
-    v                       v                    v                    v
-[withdrawn]             [reported]           [reported]           [reported]
+    |      |                |                    |                    |
+withdraw  7 days           report               report               report
+    |      |                |                    |                    |
+    v      v                v                    v                    v
+[withdrawn] [expired]   [reported]           [reported]           [reported]
 ```
 
 Derived states:
 
 | State | Required facts |
 | --- | --- |
-| Waiting | No recipient, not withdrawn, not reported |
+| Waiting | No recipient, not withdrawn, not reported, not expired |
 | Claimed | Recipient and claim timestamps exist, not opened |
 | Opened | Recipient and opened timestamp exist, no reply |
 | Replied | Reply body and replied timestamp exist |
 | Withdrawn | Sender withdrew before a successful claim |
+| Expired | Seven days elapsed before claim; cleanup deletes the row |
 | Reported | A report exists for the letter |
 
 A state transition is authorized and committed by the post office. The TUI
@@ -285,19 +299,18 @@ messages. The program does not start unmanaged goroutines.
 ### Operations
 
 - One Go post-office service initially
-- One managed PostgreSQL database
+- One Railway service and one Railway PostgreSQL database in the same project
+- Railway private networking between the service and database
 - TLS terminated by the deployment platform or reverse proxy
 - Cloudflare Pages for `orifude-front`, connected to its GitHub repository
 - `orifude.com` as the canonical custom domain and `www.orifude.com` redirected
   to it
-- GitHub Releases for checksummed TUI binaries, with signing added when the
-  release process can operate it reliably
+- GitHub Releases with SHA-256 checksums; artifact signing is out of scope
 - GoReleaser for release archives and checksums once `cmd/orifude` exists
 - Homebrew through `nuggocto/homebrew-tap`, Scoop through
   `nuggocto/scoop-bucket`, and AUR through its separate SSH-backed repository
 - Cloudflare DNS and TLS for the public domain
-- The Go service and managed PostgreSQL provider remain open; application code
-  must not depend on one host
+- Application code remains portable and does not depend on Railway-specific APIs
 
 ## Repository design
 
@@ -428,7 +441,7 @@ Splash
 +-- First-run onboarding
 |   +-- Service explanation
 |   +-- Invite code
-|   +-- Anonymous identity creation
+|   +-- Alias and identity creation
 |   +-- Recovery warning
 |
 +-- Branch
@@ -543,7 +556,7 @@ This is a shape guide, not a frozen API.
 | Mouse targets | Small `[]HitRegion` rebuilt by `View` | Target count is tiny and layout order matters |
 | Short forms | Embedded `*huh.Form` | Reuses validation, selection, confirmation, and accessible mode |
 | Async results | Concrete Bubble Tea message structs | Type switches match the framework model |
-| Local token | Fixed-length byte value at creation, encoded on disk | Bounds and entropy remain explicit |
+| Local credential | Bearer token and immutable alias, encoded on disk | One device owns the identity |
 
 A `map[LetterID]Letter` is not planned. The TUI displays ordered pages and one
 active letter, so keyed random access would duplicate state without serving a
@@ -567,23 +580,55 @@ common operation. The server remains the source of truth.
 
 The expected initial workload is modest: one write per sent letter, one atomic
 claim, one open, and at most one reply. Reads are identity-scoped keepsake pages
-and claim lookups. A single PostgreSQL instance is sufficient. The design avoids
-Redis, queues, caches, search indexes, and partitioning until measurements show
-a need.
+and claim lookups. One Go service and one PostgreSQL database are the complete
+runtime architecture. Another component is allowed only when load tests or
+production metrics prove this design cannot meet a published service objective.
 
 ### `identities`
 
 | Column | Type | Rules |
 | --- | --- | --- |
 | `id` | `bigint generated always as identity` | Primary key, internal only |
-| `token_hash` | `bytea` | Unique, exactly 32 bytes |
+| `token_hash` | `bytea` | Nullable; unique and 32 bytes while active |
+| `alias` | `text` | Nullable; unique canonical alias while active |
+| `alias_key` | `text` | Nullable; unique comparison key while active |
 | `created_at` | `timestamptz` | Required, server time |
-| `disabled_at` | `timestamptz` | Nullable |
+| `last_seen_at` | `timestamptz` | Required, updated by authenticated use |
+| `deleted_at` | `timestamptz` | Nullable; set by explicit or inactivity deletion |
 
 The client receives 32 random bytes encoded with unpadded base64url. The server
 stores only `SHA-256(token)`. Because the token is high entropy, a database leak
 does not provide a practical offline token-guessing route. Password hashing is
 not appropriate because this is not a human-chosen password.
+
+Alias input is normalized and validated before both display and comparison
+values are stored. Matching recipients may see `alias`; no endpoint searches or
+lists aliases. An alias is immutable. Deletion moves `alias_key` to
+`alias_reservations` before clearing the identity's credential and alias fields.
+Identity creation checks active and reserved keys in one transaction.
+
+### `alias_reservations`
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `alias_key` | `text` | Primary key; never reused |
+| `reserved_at` | `timestamptz` | Required |
+
+This table has one job: prevent impersonation through reuse of a deleted alias.
+It contains no profile, activity, or contact data.
+
+### `invites`
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `token_hash` | `bytea` | Primary key; hash of a random high-entropy code |
+| `created_at` | `timestamptz` | Required |
+| `expires_at` | `timestamptz` | Seven days after creation |
+| `redeemed_at` | `timestamptz` | Nullable; may be set once |
+| `revoked_at` | `timestamptz` | Nullable; only before redemption |
+
+Private-alpha invites are single-use, expire after seven days, and can be
+revoked before redemption. Public registration does not require an invite.
 
 ### `letters`
 
@@ -592,6 +637,8 @@ not appropriate because this is not a human-chosen password.
 | `id` | `varchar(22)` | Primary key, 128-bit client-generated base64url ID |
 | `sender_id` | `bigint` | Required identity foreign key |
 | `recipient_id` | `bigint` | Nullable identity foreign key |
+| `sender_alias` | `text` | Immutable keepsake snapshot |
+| `recipient_alias` | `text` | Follows an active claim; frozen when opened |
 | `body` | `text` | 1 to 2,000 Unicode code points, at most 12 KiB UTF-8 |
 | `fold_seed` | `bigint` | Non-negative random 63-bit value |
 | `created_at` | `timestamptz` | Required |
@@ -601,13 +648,15 @@ not appropriate because this is not a human-chosen password.
 | `reply_body` | `text` | Nullable, same 2,000-code-point and 12 KiB limits |
 | `replied_at` | `timestamptz` | Nullable, agrees with reply body |
 | `withdrawn_at` | `timestamptz` | Nullable, only before claim |
+| `expires_at` | `timestamptz` | Required; seven days after creation |
+| `sender_removed_at` | `timestamptz` | Nullable; hides the sender's keepsake |
+| `recipient_removed_at` | `timestamptz` | Nullable; hides the recipient's keepsake |
 
 The original and reply share one row because the product permits exactly two
 messages. A generic `conversations` plus `messages` design was rejected. It
 would add a relationship, joins, ordering rules, and impossible multi-message
-states for flexibility Orifude does not offer. If the product later permits
-multi-turn conversations, that change requires a deliberate migration rather
-than speculative schema now.
+states for flexibility Orifude does not offer. Multi-turn conversation is a
+permanent non-goal.
 
 The 2,000-code-point limit is long enough for an actual letter, including
 Japanese text, while still fitting a terminal viewport and a tightly bounded
@@ -637,15 +686,27 @@ pair if either direction is blocked.
 | `reason` | `smallint` | Fixed application enum |
 | `created_at` | `timestamptz` | Required |
 | `reviewed_at` | `timestamptz` | Nullable |
+| `closed_at` | `timestamptz` | Nullable |
+| `evidence_purge_at` | `timestamptz` | 90 days after closure |
+| `evidence_body` | `text` | Exact reported message; cleared on evidence purge |
 
 `(letter_id, reporter_id)` is unique. Free-form moderation notes are excluded
 from the user-facing report to avoid collecting another body of unsafe text.
+The reported letter is already service-readable. Moderation keeps an evidence
+copy so participant deletion cannot erase an active case, then purges that copy
+90 days after the case closes. A participant's keepsake copy follows the normal
+keepsake retention rule.
 
 ### Required indexes
 
 ```sql
 CREATE INDEX letters_waiting_idx
     ON letters (created_at, id)
+    WHERE recipient_id IS NULL
+      AND withdrawn_at IS NULL;
+
+CREATE INDEX letters_expiry_idx
+    ON letters (expires_at, id)
     WHERE recipient_id IS NULL
       AND withdrawn_at IS NULL;
 
@@ -659,6 +720,14 @@ CREATE INDEX letters_recipient_idx
 CREATE INDEX reports_unreviewed_idx
     ON reports (created_at, id)
     WHERE reviewed_at IS NULL;
+
+CREATE INDEX identities_inactive_idx
+    ON identities (last_seen_at, id)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX reports_evidence_purge_idx
+    ON reports (evidence_purge_at, id)
+    WHERE evidence_purge_at IS NOT NULL;
 ```
 
 No index is added without a named query. Index usage must be checked after real
@@ -667,15 +736,27 @@ traffic before adding more.
 ### Data invariants
 
 - Letter IDs are valid 22-character unpadded base64url values.
+- Active aliases are unique, immutable, normalized, non-searchable, and absent
+  from unauthenticated and unrelated API responses.
+- Deleted alias comparison keys remain permanently reserved.
+- The sender alias snapshot is immutable. The recipient alias follows claim
+  expiry and reassignment until opening makes the assignment permanent.
 - Original and reply bodies contain 1 to 2,000 Unicode code points and no more
   than 12 KiB of valid UTF-8.
 - The sender and recipient differ.
-- `recipient_id`, `claimed_at`, and `claim_expires_at` are all null or initially
-  set together.
+- Before claim, `recipient_id`, `claimed_at`, and `claim_expires_at` are null.
+  An unopened claim sets all three; opening clears only `claim_expires_at`.
+- Claim expiry clears the recipient ID, recipient alias, claim timestamps, and
+  recipient removal timestamp before the letter returns to waiting.
 - `opened_at` requires a recipient.
 - `reply_body` and `replied_at` are both null or both present.
 - A reply requires `opened_at`.
 - A withdrawal requires no recipient and no open.
+- An unclaimed letter is deleted after seven days.
+- A participant may remove only their own keepsake access. The letter is purged
+  after both participants remove it.
+- Explicit deletion or one year without authenticated activity deletes identity
+  access, waiting letters, blocks, and that participant's keepsake access.
 - Only the sender may read their sent body and eventual reply.
 - Only the active recipient may open, read, reply to, report, or discard a
   received letter.
@@ -693,7 +774,9 @@ SELECT id
 FROM letters
 WHERE recipient_id IS NULL
   AND withdrawn_at IS NULL
+  AND expires_at > now()
   AND sender_id <> $1
+  AND NOT EXISTS (SELECT 1 FROM reports WHERE letter_id = letters.id)
   AND NOT EXISTS (/* block in either direction */)
 ORDER BY created_at, id
 FOR UPDATE SKIP LOCKED
@@ -712,12 +795,12 @@ two concurrent requests from hoarding multiple letters without requiring a
 second mutable queue.
 
 Expired unopened claims are released in the same operation or by a small
-scheduled cleanup query. There is no background in-memory queue. PostgreSQL is
-the only source of truth.
+scheduled cleanup query. Claims expire after 24 hours. Unclaimed letters expire
+after seven days. There is no background in-memory queue. PostgreSQL is the only
+source of truth.
 
-FIFO ordering is intentional. `ORDER BY random()` becomes expensive as the
-waiting set grows and gives old letters no delivery guarantee. A different
-matching policy should be added only for a concrete product requirement.
+FIFO ordering is permanent product policy. Matching uses eligibility and queue
+order only; it never ranks content, aliases, or participant behavior.
 
 ## HTTP API
 
@@ -729,8 +812,9 @@ validation where applicable.
 
 | Method and path | Purpose |
 | --- | --- |
-| `POST /v1/identities` | Exchange an alpha invite for a new anonymous token |
-| `GET /v1/me` | Validate identity and return service limits |
+| `POST /v1/identities` | Create a unique alias and exchange an alpha invite when required |
+| `GET /v1/me` | Validate identity and return limits plus the latest supported version |
+| `DELETE /v1/me` | Permanently delete identity access and apply retention rules |
 | `POST /v1/letters` | Release an idempotent client-ID letter |
 | `POST /v1/letters/claim` | Return or atomically create one active claim |
 | `GET /v1/letters/{id}` | Return role-safe metadata and authorized content |
@@ -740,6 +824,7 @@ validation where applicable.
 | `POST /v1/letters/{id}/report` | Report a received letter |
 | `POST /v1/letters/{id}/block` | Block future matching with its other party |
 | `GET /v1/keepsakes` | Cursor-paginated sent and received exchanges |
+| `DELETE /v1/keepsakes/{id}` | Remove the caller's access and purge after both remove it |
 | `GET /healthz` | Process liveness only |
 | `GET /readyz` | Database-backed readiness |
 
@@ -807,10 +892,10 @@ client contract. Internal database and network details are never returned.
 - Exponential retry machinery is not planned. The person chooses to retry after
   a bounded failure.
 
-## Authentication and local identity
+## Authentication, alias, and local identity
 
 The identity token is an opaque bearer credential. Possession grants access to
-sent letters, received letters, and keepsakes.
+the alias, sent letters, received letters, and keepsakes.
 
 The TUI stores configuration under `os.UserConfigDir()` in an `orifude`
 directory. The token file is created with owner-only permissions where the
@@ -818,16 +903,28 @@ platform supports Unix permission bits. Atomic write-and-rename prevents a
 partial file from destroying the credential.
 
 The token is never accepted through a CLI flag, printed in normal output,
-included in URLs, sent to the landing page, or logged. A future system keychain
-integration may replace the file if users need stronger local protection.
+included in URLs, sent to the landing page, or logged. There is no recovery,
+account linking, token export, or multi-device identity. Losing the token is
+permanent.
 
-Token recovery, account linking, and multi-device identities are deferred. They
-require a recovery authority such as email, passkeys, or recovery codes and
-would weaken the current no-account promise if added casually.
+The alias is chosen once during identity creation. It is globally unique but
+visible only to matched participants. Validation uses a pinned Unicode version,
+NFC normalization, and the Unicode TR39 confusable skeleton. Aliases contain 2
+to 24 code points, use one script except for Japanese Han, Hiragana, and Katakana
+combinations, and allow ASCII digits, single spaces, hyphens, and underscores.
+Controls, invisible formatting characters, emoji, and other script mixing are
+rejected. Alias availability is checked only during identity creation; there is
+no lookup or search endpoint.
+
+Explicit deletion immediately revokes the token, deletes waiting letters and
+blocks, and removes that participant's keepsake access. Shared keepsakes remain
+for the other participant until they also remove them. The same cleanup runs
+after one year without an authenticated request. A minimal alias reservation
+remains permanently so another person cannot impersonate a deleted identity.
 
 ## Safety, privacy, and abuse controls
 
-Anonymous messages are a hostile-input boundary. The initial service must be an
+Pseudonymous messages are a hostile-input boundary. The initial service must be an
 invite-only alpha until moderation and operational response exist.
 
 ### Required before alpha
@@ -841,7 +938,7 @@ invite-only alpha until moderation and operational response exist.
 - No rendering of terminal escape sequences from letter bodies
 - No logging of bodies, replies, invite codes, or bearer tokens
 - Database backups and a tested restore procedure
-- A privacy statement that explains plaintext server storage
+- A privacy statement that explains service-readable letter storage
 
 All user text must be treated as text. Control characters other than newline
 are rejected or visibly escaped before terminal rendering. This prevents a
@@ -852,9 +949,13 @@ Orifude UI.
 
 - Transport is encrypted with TLS.
 - The managed database must provide encryption at rest.
-- Letter bodies are readable by the post office because delivery and moderation
-  require server access in the first release.
-- The system is not end-to-end encrypted and must not imply otherwise.
+- Letter bodies are readable by the post office for delivery and moderation.
+- Orifude is not end-to-end encrypted and must not imply otherwise.
+- Aliases are visible only to matched participants and service operators. They
+  are never searchable or attached to a public history.
+- Report evidence is deleted 90 days after the case closes.
+- Waiting letters expire after seven days; unopened claims expire after 24
+  hours; completed keepsakes remain until both participants remove them.
 - Public analytics are absent by default on the landing page.
 - Logs use internal IDs only and never contain message content or credentials.
 
@@ -1017,7 +1118,7 @@ CLI subcommands for setup or use.
 
 ## Release distribution
 
-The first release matrix is Linux, macOS, and Windows on amd64 and arm64.
+The 1.0 release matrix is Linux, macOS, and Windows on amd64 and arm64.
 GoReleaser builds archives, a Windows zip, and one checksum file from tags after
 `cmd/orifude` exists. Until that entrypoint builds, the repository does not carry
 a speculative GoReleaser configuration.
@@ -1030,6 +1131,10 @@ created. Simple POSIX shell and PowerShell installers select the current OS and
 architecture, download a pinned release from GitHub, and verify its checksum
 before installation.
 
+Version 1.0 is not published until GitHub archives, both installers, Homebrew,
+Scoop, and AUR all install working artifacts. SHA-256 checksums are mandatory.
+Artifact signatures and attestations are not part of the release contract.
+
 ## Configuration
 
 ### TUI configuration
@@ -1037,7 +1142,7 @@ before installation.
 | Setting | Source | Default |
 | --- | --- | --- |
 | API base URL | Built-in release value, environment override for development | Production service URL |
-| Identity token | Owner-only local config file | Created during onboarding |
+| Identity token and alias | Owner-only local config file | Created during onboarding |
 | Reduced motion | TUI settings | Auto-detect where possible, otherwise off |
 | Theme | TUI settings | Terminal background adaptive |
 | Debug logging | Development environment only | Disabled |
@@ -1048,8 +1153,8 @@ before installation.
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `LISTEN_ADDR` | HTTP listen address |
-| `INVITE_SECRET` or invite-store configuration | Alpha identity creation |
-| `CLAIM_TTL` | Unopened claim lease |
+| Invite administration credential | Issue and revoke private-alpha invites |
+| `LATEST_TUI_VERSION` | Passive update notice returned by the post office |
 | Rate-limit settings | Alpha abuse tuning |
 | `LOG_LEVEL` | Structured log threshold |
 
@@ -1066,9 +1171,11 @@ printed at startup, or exposed through readiness endpoints.
 - A lost claim response returns the identity's existing active claim on retry.
 - An expired unopened claim disappears with an explanation rather than showing
   stale content.
+- The TUI shows a non-blocking notice when the post office reports a newer
+  supported version. It never downloads or installs an update.
 - Server errors preserve the current screen and user text.
-- Unauthorized identity errors lead to a recovery warning, never silent token
-  replacement.
+- Unauthorized identity errors explain that the identity cannot be recovered;
+  the TUI never silently creates a replacement.
 - Database unavailability fails readiness so new traffic stops reaching the
   instance.
 - Graceful shutdown stops new requests, drains admitted requests for a bounded
@@ -1089,6 +1196,8 @@ details.
 - Fold output is deterministic for a given seed and terminal size
 - Input validation accepts 2,000 code points and rejects 2,001, oversized UTF-8,
   invalid UTF-8, and unsafe control text
+- Alias validation covers normalization, uniqueness, supported scripts,
+  confusables, invisible characters, immutability, and permanent reservation
 - API error codes map to the correct visible state
 
 ### Integration tests
@@ -1102,6 +1211,12 @@ details.
 - Unauthorized identities cannot infer or read a letter
 - Create, open, reply, report, and withdraw are idempotent
 - An expired unopened claim can return to the queue
+- Waiting letters expire after seven days
+- Single-use invites expire after seven days and cannot be redeemed twice
+- Identity inactivity and explicit deletion apply the same cleanup
+- One participant deleting a keepsake does not remove the other's copy; both
+  deletions purge it
+- Closed report evidence is purged after 90 days
 - The full HTTP router enforces body limits and content types
 
 ### End-to-end tests
@@ -1109,7 +1224,7 @@ details.
 Keep this suite small:
 
 1. Start the shipped post-office binary against a disposable database.
-2. Create two synthetic identities through the real HTTP API.
+2. Create two synthetic identities with unique aliases through the real HTTP API.
 3. Send, claim, unfold, reply, and read the completed keepsake.
 4. Start the shipped TUI in a controlled pseudo-terminal for one critical
    onboarding and compose journey.
@@ -1149,13 +1264,15 @@ authenticated.
 It never logs authorization headers, invite codes, request bodies, letter
 bodies, reply bodies, or raw database errors returned to clients.
 
-Initial operation relies on platform HTTP metrics, database metrics, readiness,
-and structured logs. Prometheus, tracing, and a custom metrics dependency are
-deferred until the deployment or an incident demonstrates a need.
+Operation relies on Railway HTTP metrics, PostgreSQL metrics, readiness, and
+structured logs. Prometheus, tracing, or another metrics dependency is added
+only if those sources cannot measure a published service objective or diagnose
+an incident.
 
 Events worth counting without content:
 
 - Identities created
+- Identities deleted by request or inactivity
 - Letters released
 - Claims created and expired
 - Letters opened
@@ -1186,8 +1303,8 @@ met.
 - [x] License source code, documentation, and project-owned artwork under
   Apache-2.0.
 - [x] Support Linux, macOS, and Windows on amd64 and arm64 for the first release.
-- [ ] Resolve the retention, claim lease, sender reread, and invite decisions in
-  the open-decisions section.
+- [x] Fix identity, alias, retention, claim, invite, hosting, update, and release
+  policy in this document.
 - [ ] Pin the current supported Go toolchain and direct Go dependencies.
 - [ ] Pin pnpm through `packageManager` and commit the frontend lockfile.
 - [ ] Pin sqlc, Goose, govulncheck, Oxlint, and Oxfmt as project tools.
@@ -1210,6 +1327,8 @@ blocking product decision remains for the prototype or schema.
 - [ ] Build the splash, first-run, branch, compose, fold preview, delivery,
   unfold, read, reply, keepsake, report, and settings screens using synthetic
   fixtures.
+- [ ] Add unique multilingual alias creation and the permanent no-recovery
+  warning to onboarding.
 - [ ] Implement wide, compact, text-first, and too-small terminal layouts.
 - [ ] Translate the monochrome Orifude mark into ANSI and ASCII-safe artwork.
 - [ ] Implement the truecolor palette with ANSI 256, ANSI 16, monochrome, and
@@ -1230,7 +1349,7 @@ blocking product decision remains for the prototype or schema.
 - [ ] Expose Huh accessible mode and ensure important state is never color-only.
 - [ ] Add contextual Bubbles help for active keyboard and mouse actions.
 - [ ] Add focused tests for navigation modes, mouse hit regions, size changes,
-  input boundaries, control text, and deterministic folds.
+  input boundaries, alias rules, control text, and deterministic folds.
 - [ ] Create a deterministic VHS tape for the core compose-to-unfold journey.
 
 The prototype may use immutable synthetic fixtures, but fixture behavior must
@@ -1243,7 +1362,8 @@ and the VHS recording can be regenerated from a clean checkout.
 ### Phase 2: PostgreSQL and post-office API
 
 - [ ] Write `sql/migrations/00001_initial.sql` with Goose Up and Down sections
-  for identities, letters, blocks, reports, constraints, and named indexes.
+  for identities, alias reservations, invites, letters, blocks, reports,
+  constraints, and named indexes.
 - [ ] Verify the migration applies to an empty PostgreSQL database.
 - [ ] Document whether production rollback uses Goose Down or a forward repair
   migration for each released schema change.
@@ -1255,11 +1375,14 @@ and the VHS recording can be regenerated from a clean checkout.
   `internal/database`.
 - [ ] Implement transaction ownership in `internal/postoffice` using generated
   sqlc queries bound to pgx transactions.
-- [ ] Implement the identity-token exchange and SHA-256 token lookup.
+- [ ] Implement alias reservation, single-use invite redemption, identity-token
+  exchange, last-seen updates, and SHA-256 token lookup.
 - [ ] Implement letter creation with client-generated idempotent IDs.
 - [ ] Implement atomic claim reuse and assignment with identity locking and
   `FOR UPDATE SKIP LOCKED`.
 - [ ] Implement claim expiry and safe requeue of unopened letters.
+- [ ] Implement seven-day waiting expiry, one-year identity inactivity cleanup,
+  participant keepsake deletion, and 90-day closed-report evidence cleanup.
 - [ ] Implement authorized open, reply, withdraw, report, block, and keepsake
   operations.
 - [ ] Implement the Chi route tree, middleware order, route-specific body
@@ -1289,8 +1412,9 @@ letter bodies nor tokens.
   retaining only simple display fixtures for tests and demos.
 - [ ] Reuse one configured `http.Client` and transport for the process lifetime.
 - [ ] Add deadlines, response-size limits, body closure, and typed API errors.
-- [ ] Implement first-run invite exchange and anonymous identity creation.
-- [ ] Store the bearer token atomically with owner-only local permissions.
+- [ ] Implement first-run invite exchange and pseudonymous identity creation.
+- [ ] Store the bearer token and immutable alias atomically with owner-only local
+  permissions.
 - [ ] Never accept the token through a command flag, URL, clipboard prompt, or
   landing-page handoff.
 - [ ] Connect send, claim, open, reply, withdraw, report, block, and keepsake
@@ -1298,6 +1422,8 @@ letter bodies nor tokens.
 - [ ] Preserve drafts and current context across recoverable network failures.
 - [ ] Handle offline startup, reconnect, expired claims, invalid identities,
   conflicts, rate limits, and server failures with actionable messages.
+- [ ] Show passive update notices from the post office without downloading or
+  installing updates.
 - [ ] Prevent duplicate mutation submissions while a request is active.
 - [ ] Ignore stale asynchronous messages after screen or operation changes.
 - [ ] Confirm every online flow remains usable through keyboard and mouse.
@@ -1357,16 +1483,18 @@ post-office API.
 
 ### Phase 5: private online alpha
 
-- [ ] Select the Go service host and managed PostgreSQL provider.
+- [x] Select Railway for the Go service and managed PostgreSQL.
 - [ ] Create separate production and disposable test databases.
 - [ ] Run Goose migrations as a controlled deployment step, not server startup.
 - [ ] Configure TLS, service secrets, pool limits, timeouts, readiness, and
   graceful deployment behavior.
 - [ ] Configure Cloudflare or deployment-edge request limits for the API host.
-- [ ] Establish invite issuance, expiry, revocation, and support procedures.
+- [ ] Implement random hashed single-use invites with seven-day expiry and
+  pre-redemption revocation.
 - [ ] Establish report review, escalation, evidence retention, and response
   procedures before inviting testers.
-- [ ] Publish an accurate alpha privacy notice and plaintext-storage statement.
+- [ ] Publish an accurate alpha privacy notice and service-readable storage
+  statement.
 - [ ] Configure structured log retention and alerts without content logging.
 - [ ] Configure database backups and complete one documented restore test.
 - [ ] Measure API latency, claim contention, connection-pool waits, and TUI
@@ -1385,14 +1513,16 @@ claim.
 
 ### Phase 6: public readiness and launch
 
-- [ ] Finalize waiting, claim, keepsake, report, and deleted-content retention.
+- [x] Fix waiting, claim, keepsake, report, identity, and deleted-content
+  retention in this document.
 - [ ] Implement and verify scheduled retention cleanup without an in-memory
   second source of truth.
 - [ ] Publish privacy policy, terms, acceptable-use rules, contact, and deletion
   instructions.
 - [ ] Add an identity deletion flow and verify its data effects.
-- [ ] Complete a threat-model review covering anonymous abuse, token theft,
-  authorization, terminal injection, races, and operational access.
+- [ ] Complete a threat-model review covering pseudonymous abuse, alias
+  impersonation, token theft, authorization, terminal injection, races, and
+  operational access.
 - [ ] Retest every authorization boundary with controlled identities.
 - [ ] Validate edge and per-identity rate limits against measured abuse cases.
 - [ ] Confirm moderation capacity and an incident escalation path.
@@ -1400,8 +1530,8 @@ claim.
   setting public traffic limits.
 - [ ] Verify restore objectives and deployment rollback with production-shaped
   data.
-- [ ] Add signed artifacts or attestations if the chosen release process can
-  operate them reliably; checksums remain mandatory.
+- [ ] Verify SHA-256 checksums for every immutable release artifact and install
+  path; signing and attestations remain out of scope.
 - [ ] Publish final supported platforms and installation instructions.
 - [ ] Complete landing-page accessibility, performance, SEO, and security-header
   audits on the production domain.
@@ -1409,52 +1539,71 @@ claim.
 - [ ] Remove alpha-only claims from copy and open identity creation according to
   the approved abuse-control plan.
 
-Done when anonymous registration can be opened without removing the controls
+Done when pseudonymous registration can be opened without removing the controls
 that protected alpha users, the measured system fits published limits, release
 artifacts pass native smoke tests, and moderation, backup, deletion, and incident
 procedures each have a named owner.
 
-### Deferred until proven necessary
+## Settled policy
 
-- Multi-device identity recovery
-- Push notifications
-- Native desktop wrappers
-- Public profiles or social graphs
-- Multi-turn conversations
-- Content recommendation
-- Redis, message queues, event buses, or microservices
-- End-to-end encryption
-- Browser letter client
+These are product boundaries, not a backlog:
 
-## Open decisions
+- One immutable global alias per identity, visible only to matched strangers
+- No alias search, public profile, follower graph, reputation, or public history
+- No identity recovery, account linking, token export, or second device
+- No push notifications or background notification service
+- No native desktop wrapper or browser letter client
+- One reply per letter, permanently
+- No content or behavior ranking; matching remains eligible FIFO
+- No end-to-end encryption; TLS, encrypted storage, strict authorization, and
+  honest disclosure of service-readable content are required
+- One Go service and PostgreSQL until measured service objectives prove another
+  component necessary
 
-These decisions require product or operational agreement before implementation
-reaches the related phase:
+Operational policy is fixed:
 
-- [ ] Set the unopened claim lease; the current proposal is 24 hours.
-- [ ] Set waiting-letter expiry; the current proposal is 7 days.
-- [ ] Set completed-keepsake retention and deletion behavior.
-- [ ] Decide whether a sender can reread their original body after release.
-- [ ] Define alpha invite issuance and revocation.
-- [ ] Select managed PostgreSQL and Go service hosting providers.
-- [ ] Decide whether the TUI performs automatic update checks.
-- [ ] Obtain native Japanese review of the name and Japanese-language marketing.
+- Unopened claims expire after 24 hours.
+- Unclaimed letters are deleted after seven days.
+- Completed keepsakes remain until both participants remove them.
+- Report evidence is deleted 90 days after moderation closes the case.
+- Senders can always reread their original letter while retaining the keepsake.
+- Explicit deletion and one year without authenticated activity both delete
+  identity access. Deleted aliases remain reserved forever.
+- Blocks are permanent, hidden, and irreversible.
+- Private-alpha invites are random, hashed, single-use, valid for seven days,
+  and revocable before redemption.
+- Railway hosts the Go service and PostgreSQL in one project.
+- The TUI may show a passive version notice from the post office but never
+  downloads or installs an update.
+- Native Japanese review is not required. Orifude remains explicitly described
+  as a coined name, not a Japanese dictionary word.
+- Release artifacts use SHA-256 checksums. Signing and attestations are out of
+  scope.
 
-## Definition of the first complete release
+## Definition of the 1.0 release
 
-The first release is complete when two real people on separate machines can:
+Every build remains `0.x` until the full public release contract is met. Version
+1.0 requires two real people on separate machines to complete this journey in
+production:
 
-1. Install the TUI from a checksummed release.
-2. Create anonymous identities inside the TUI.
-3. Send one letter through the online post office.
-4. Claim that letter exactly once from the other identity.
-5. Unfold and read it without terminal-control injection.
-6. Send one reply.
-7. See the exchange in both keepsake views.
-8. Report and block the other identity without learning its identifier.
-9. Complete the operational journey with Neovim-style keys or with a mouse.
-10. Download the checksummed TUI from `https://orifude.com` while the website
-    remains unable to read or send letters.
+1. Install the TUI on every supported OS and architecture through GitHub
+   archives and each applicable shell, PowerShell, Homebrew, Scoop, and AUR
+   channel.
+2. Verify each downloaded artifact with its published SHA-256 checksum.
+3. Create unique pseudonymous identities inside the TUI without an alpha invite.
+4. Send one letter through the online post office and reread the sender copy.
+5. Claim that letter exactly once from the other identity.
+6. Unfold and read it without terminal-control injection.
+7. Send the only allowed reply and see the exchange in both keepsake views.
+8. Report and permanently block the other identity while learning only its
+   alias, never its internal identifier or history.
+9. Complete the entire operational journey with Neovim-style keys and again
+   with a mouse.
+10. Delete each participant's keepsake access and verify that the shared record
+    is purged only after both delete it.
+11. Download the checksummed TUI from `https://orifude.com` while the Cloudflare
+    Pages site remains unable to read, send, or display letters.
 
-The landing page must explain and distribute that release, but it must remain
-incapable of performing any of these application actions.
+The landing page, public registration, moderation process, backups, restore
+test, deletion jobs, all promised install channels, and native-platform smoke
+tests must be live before 1.0. A feature-complete private build remains `0.x`.
