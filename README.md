@@ -1,6 +1,6 @@
 # Orifude
 
-> Fold a thought. Leave it for one stranger.
+> Write a letter. Fold it. Somewhere, a stranger opens it.
 
 Orifude is an anonymous, one-to-one letter exchange for the terminal. Write a
 short letter, fold it, and leave it for one unrelated recipient. They may send

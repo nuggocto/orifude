@@ -1,6 +1,6 @@
 # Orifude
 
-> Fold a thought. Leave it for one stranger.
+> Write a letter. Fold it. Somewhere, a stranger opens it.
 
 Orifude is an online, anonymous, one-to-one letter exchange experienced only
 through a terminal user interface. A person writes a short letter, folds it,
@@ -22,7 +22,7 @@ implementation.
 - TUI repository and Go module: `orifude`
 - Landing-page repository: `orifude-front`
 - Public domain: `https://orifude.com`
-- Working tagline: `Fold a thought. Leave it for one stranger.`
+- Working tagline: `Write a letter. Fold it. Somewhere, a stranger opens it.`
 - Operational client: the Orifude TUI only
 - Public presentation: a static website only
 - Primary motif: folded paper carried through an ink-painted garden
