@@ -252,7 +252,7 @@ func (m Model) navigationBindings() []key.Binding {
 	selection := []key.Binding{
 		binding("j/down", "next"),
 		binding("k/up", "previous"),
-		binding("l/right/enter", "select"),
+		binding("enter", "select item"),
 		binding("g g/home", "first"),
 		binding("G/end", "last"),
 	}
@@ -274,6 +274,7 @@ func (m Model) navigationBindings() []key.Binding {
 		bindings = append([]key.Binding{binding("enter", "continue"), binding("b", "back")}, bindings...)
 	case ScreenKeepsakeDetail:
 		detail := []key.Binding{
+			binding("b", "back"),
 			binding("j/down", "scroll down"),
 			binding("k/up", "scroll up"),
 			binding("ctrl+u/ctrl+d", "half page"),
@@ -282,9 +283,8 @@ func (m Model) navigationBindings() []key.Binding {
 			binding("G/end", "bottom"),
 		}
 		if m.keepsakeReportable() {
-			detail = append(detail, binding("l/right/enter", "report"))
+			detail = append(detail, binding("enter", "report"))
 		}
-		detail = append(detail, binding("b", "back"))
 		bindings = append(detail, bindings...)
 	default:
 		bindings = append([]key.Binding{binding("b", "back")}, bindings...)

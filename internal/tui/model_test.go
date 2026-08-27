@@ -68,6 +68,22 @@ func TestNeovimNavigationSelectsBranchActions(t *testing.T) {
 	}
 }
 
+func TestOnlyEnterActivatesBranchSelection(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.screen = ScreenBranch
+	m = updateModel(t, m, textKey("l"))
+	m = updateModel(t, m, specialKey(tea.KeyRight))
+	if m.screen != ScreenBranch {
+		t.Fatalf("l or right opened screen %v, want branch", m.screen)
+	}
+	m = updateModel(t, m, specialKey(tea.KeyEnter))
+	if m.screen != ScreenCompose {
+		t.Fatalf("enter opened screen %v, want compose", m.screen)
+	}
+}
+
 func TestSettingsApplyDisplayAndAccessibilityPreferences(t *testing.T) {
 	t.Parallel()
 
@@ -520,6 +536,20 @@ func TestKeepsakeDetailKeepsLongReplyInsideViewport(t *testing.T) {
 	}
 }
 
+func TestKeepsakeLabelsOriginalAndReply(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.keepsakes = []LetterSummary{{
+		Direction: "received",
+		Letter:    Letter{Body: "original", Reply: "response"},
+	}}
+	m.setKeepsake(0)
+	if got := m.viewport.GetContent(); got != "Received - original\n\nReply - response" {
+		t.Fatalf("keepsake content = %q", got)
+	}
+}
+
 func TestLetterViewWrapsProseWithoutSplittingWords(t *testing.T) {
 	t.Parallel()
 
@@ -878,6 +908,18 @@ func TestFullHelpOnlyShowsCurrentScreenActions(t *testing.T) {
 		if !strings.Contains(keepsakeHelp, action) {
 			t.Fatalf("keepsake help omits %q: %q", action, keepsakeHelp)
 		}
+	}
+}
+
+func TestKeepsakeShortHelpShowsBack(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.resize(120, 30)
+	m.setKeepsake(0)
+	m.screen = ScreenKeepsakeDetail
+	if help := ansi.Strip(m.renderKeyHelp()); !strings.Contains(help, "b back") {
+		t.Fatalf("keepsake help omits b back: %q", help)
 	}
 }
 

@@ -249,7 +249,7 @@ func (m Model) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.move(1)
 	case "k", "up", "shift+tab":
 		m.move(-1)
-	case "l", "right", "enter":
+	case "enter":
 		return m.activate()
 	case "G", "end":
 		m.goBottom()

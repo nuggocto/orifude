@@ -340,8 +340,15 @@ func (m *Model) refreshLetterViewport() {
 		return
 	}
 	content := neutralizeTerminalText(m.current.Body)
-	if m.keepsakeIndex >= 0 && m.current.Reply != "" {
-		content += "\n\nReply\n" + neutralizeTerminalText(m.current.Reply)
+	if m.keepsakeIndex >= 0 {
+		prefix := "Received - "
+		if m.keepsakes[m.keepsakeIndex].Direction == "sent" {
+			prefix = "Sent - "
+		}
+		content = prefix + content
+		if m.current.Reply != "" {
+			content += "\n\nReply - " + neutralizeTerminalText(m.current.Reply)
+		}
 	}
 	content = ansi.Wrap(content, m.viewport.Width(), "")
 	lineCount := strings.Count(content, "\n") + 1
