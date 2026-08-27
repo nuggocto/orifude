@@ -52,14 +52,7 @@ func (m Model) render() string {
 	}
 
 	mode := m.layout()
-	panelWidth := min(max(m.width-6, 24), 70)
-	if mode == layoutWide {
-		panelWidth = min(max(m.width-34, 48), 76)
-	}
-	panelStyle := m.styles.Panel
-	if mode == layoutText {
-		panelStyle = panelStyle.BorderLeft(false).Padding(0)
-	}
+	panelStyle, panelWidth := m.panel()
 	panel := panelStyle.Width(panelWidth).Render(body)
 
 	var content string
@@ -72,6 +65,24 @@ func (m Model) render() string {
 		content = panel
 	}
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+}
+
+func (m Model) panel() (lipgloss.Style, int) {
+	mode := m.layout()
+	width := min(max(m.width-6, 24), 70)
+	if mode == layoutWide {
+		width = min(max(m.width-34, 48), 76)
+	}
+	style := m.styles.Panel
+	if mode == layoutText {
+		style = style.BorderLeft(false).Padding(0)
+	}
+	return style, width
+}
+
+func (m Model) panelContentWidth() int {
+	style, width := m.panel()
+	return min(max(width-style.GetHorizontalFrameSize(), 20), 68)
 }
 
 func (m Model) renderScreen() string {

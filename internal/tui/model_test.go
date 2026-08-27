@@ -188,6 +188,49 @@ func TestEveryScreenFitsMinimumSupportedTerminal(t *testing.T) {
 	}
 }
 
+func TestLongReadFitsLayoutThresholds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		width  int
+		height int
+		status string
+	}{
+		{name: "compact with status", width: 72, height: 24, status: "A folded letter is waiting."},
+		{name: "wide", width: 100, height: 30},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := New()
+			m.resize(test.width, test.height)
+			m.setCurrent(Letter{SenderAlias: "aoi", Body: strings.Repeat("word ", 120)})
+			m.screen = ScreenRead
+			m.setStatus(statusInfo, test.status)
+			rendered := m.View().Content
+			if width, height := lipgloss.Width(rendered), lipgloss.Height(rendered); width > m.width || height > m.height {
+				t.Fatalf("long read renders %dx%d in %dx%d", width, height, m.width, m.height)
+			}
+		})
+	}
+}
+
+func TestStatusRemovalClampsLetterViewportAtBottom(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.resize(72, 24)
+	m.setStatus(statusInfo, "A folded letter is waiting.")
+	m.setCurrent(Letter{Body: strings.Repeat("line\n", 30)})
+	m.viewport.GotoBottom()
+	m.setStatus(statusInfo, "")
+	lineCount := strings.Count(m.viewport.GetContent(), "\n") + 1
+	if want := max(lineCount-m.viewport.Height(), 0); m.viewport.YOffset() != want {
+		t.Fatalf("viewport offset = %d, want bottom %d", m.viewport.YOffset(), want)
+	}
+}
+
 func TestEmbeddedFormsFitMinimumSupportedTerminal(t *testing.T) {
 	t.Parallel()
 
@@ -214,6 +257,26 @@ func TestEmbeddedFormsFitMinimumSupportedTerminal(t *testing.T) {
 				t.Fatalf("form %v renders %dx%d in %dx%d", test.kind, lipgloss.Width(rendered), lipgloss.Height(rendered), m.width, m.height)
 			}
 		})
+	}
+}
+
+func TestOnboardingCopyFitsLayoutThresholds(t *testing.T) {
+	t.Parallel()
+
+	for _, size := range []struct {
+		width  int
+		height int
+	}{
+		{width: 72, height: 24},
+		{width: 100, height: 30},
+	} {
+		m := New()
+		m.resize(size.width, size.height)
+		m.screen = ScreenOnboarding
+		m.beginForm(formOnboarding)
+		if rendered := ansi.Strip(m.View().Content); !strings.Contains(rendered, "service.") {
+			t.Fatalf("onboarding copy is truncated at %dx%d", size.width, size.height)
+		}
 	}
 }
 

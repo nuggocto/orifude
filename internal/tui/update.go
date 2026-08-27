@@ -697,7 +697,7 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 			huh.NewConfirm().Title("Discard the current draft and quit?").Affirmative("Quit").Negative("Keep writing").Value(&data.confirmed),
 		))
 	}
-	form = form.WithTheme(m.huhTheme()).WithShowHelp(false).WithWidth(min(max(m.width-8, 20), 68))
+	form = form.WithTheme(m.huhTheme()).WithShowHelp(false).WithWidth(m.panelContentWidth())
 	if formHeight := formHeight(kind, m.height); formHeight > 0 {
 		form.WithHeight(formHeight)
 	}
