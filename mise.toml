@@ -1,0 +1,43 @@
+[tools]
+go = "1.27.0"
+
+[tasks.dev]
+description = "Run the TUI"
+run = "go run ./cmd/orifude"
+
+[tasks.build]
+description = "Build all Go packages"
+run = "go build ./..."
+
+[tasks.fmt]
+description = "Format all Go packages"
+run = "go fmt ./..."
+
+[tasks.test]
+description = "Run the test suite"
+run = "go test ./..."
+
+[tasks.test-race]
+description = "Run the test suite with the race detector"
+run = "go test -race ./..."
+
+[tasks.vet]
+description = "Run Go static analysis"
+run = "go vet ./..."
+
+[tasks.vuln]
+description = "Scan Go dependencies for known vulnerabilities"
+run = "go tool govulncheck ./..."
+
+[tasks.check]
+description = "Run tests, race detection, vet, and vulnerability scanning"
+run = [
+  "go test ./...",
+  "go test -race ./...",
+  "go vet ./...",
+  "go tool govulncheck ./...",
+]
+
+[tasks.vhs]
+description = "Record and verify the offline TUI journey with Docker"
+run = "./testdata/vhs/check.sh"

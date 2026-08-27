@@ -76,6 +76,7 @@ features.
 - A browser version of the letter application
 - Push notifications or background notification services
 - Native desktop wrappers
+- Mouse interaction in the participant TUI; Orifude is keyboard-only
 - A participant-facing command interface or family of CLI subcommands; the
   internal moderation command is operator tooling, not a product client
 - Offline delivery between users
@@ -332,8 +333,6 @@ that talks to the post office.
   compact ANSI line art for the TUI.
 - No animation library is planned. Short fold animations use Bubble Tea tick
   commands and a small fixed frame slice.
-- Bubble Tea mouse click and wheel messages make every visible control usable
-  with a mouse. Hover and pointer motion are not required.
 - Charm's VHS records deterministic terminal demos for the landing page and
   release notes. VHS is development tooling, not a runtime dependency.
 
@@ -478,7 +477,7 @@ The intended repositories are siblings:
 |   +-- go.mod
 |   +-- go.sum
 |   +-- sqlc.yaml
-|   +-- Makefile                     # only repeated development tasks
+|   +-- mise.toml                    # pinned toolchain and development tasks
 |
 +-- orifude-front/
     +-- public/
@@ -599,9 +598,9 @@ Global keys:
 | Key | Action |
 | --- | --- |
 | `?` | Toggle contextual help |
-| `esc` | Leave text input, then go back or close a modal |
+| `esc` | Leave text-input mode; never navigate back |
 | `tab` / `shift+tab` | Move focus |
-| `h` / left arrow | Move left, close detail, or go back |
+| `b` | Close the current detail or go back |
 | `j` / down arrow | Move down one item or line |
 | `k` / up arrow | Move up one item or line |
 | `l` / right arrow / `enter` | Open, select, or move right |
@@ -613,28 +612,14 @@ Global keys:
 | `q` | Quit from navigation mode, with confirmation for a draft |
 | `ctrl+c` | Quit, with confirmation if a draft exists |
 
-Navigation follows familiar Neovim motions, but Orifude does not implement a
-complete modal text editor. While a Bubbles textarea or Huh text field has
-focus, printable keys edit text and `q` is ordinary letter content. `esc`
-returns to navigation mode. This keeps the bindings predictable without owning
-a second editor implementation.
-
-### Mouse behavior
-
-Mouse support is required for the first release and has keyboard parity:
-
-- Left click selects visible buttons, tabs, list rows, and confirmation choices.
-- Clicking a folded letter opens the same action as `enter`.
-- The wheel scrolls letters, keepsakes, help, and long settings forms.
-- Clicking the composer focuses it; clicking outside returns to navigation.
-- Destructive actions still require confirmation after the initial click.
-- No action exists only on hover, right click, drag, or double click.
-- Focus remains visible after a mouse action so keyboard use can resume.
-
-The TUI enables click and wheel events, not all-motion tracking. Avoiding
-continuous pointer motion reduces redraws and interferes less with native
-terminal text selection. Hit regions are rebuilt from the current layout on
-every `View`, so compact and wide layouts share the same action model.
+Navigation keeps familiar Neovim movement keys but uses `b` consistently for
+back. Orifude does not implement a complete modal text editor. While a Bubbles
+textarea or Huh text field has focus, printable keys edit text and `q` is
+ordinary letter content. In a Bubbles textarea, `esc` returns to navigation
+mode; in a Huh text field, it finishes typing and moves focus to the next
+control. It never closes a form or changes screens; use `b` when it is
+available, or select the form's explicit negative action. This keeps the
+bindings predictable without owning a second editor implementation.
 
 ## TUI model and in-memory data
 
@@ -656,7 +641,6 @@ type Model struct {
     current    *Letter
     cursor     int
     foldFrame  int
-    hitRegions []HitRegion
     err        error
     styles     Styles
 }
@@ -674,7 +658,6 @@ This is a shape guide, not a frozen API.
 | Current letter | `*Letter` | At most one detail is active |
 | Fixed fold animation | `[]string` | Frames are bounded, ordered, and immutable |
 | Key bindings | One concrete key-map struct | Bubbles help can consume bindings directly |
-| Mouse targets | Small `[]HitRegion` rebuilt by `View` | Target count is tiny and layout order matters |
 | Short forms | Embedded `*huh.Form` | Reuses validation, selection, confirmation, and accessible mode |
 | Async results | Concrete Bubble Tea message structs | Type switches match the framework model |
 | Local identity | P-256 private key and immutable alias | The key stays in the OS credential store or owner-only fallback file |
@@ -694,8 +677,7 @@ common operation. The server remains the source of truth.
 - Late responses include an operation ID and are ignored if their screen or
   operation is no longer current.
 - Draft text stays local until release is confirmed.
-- Mouse and keyboard actions dispatch the same internal action values.
-- Text-input mode receives key presses before global Neovim-style bindings.
+- Text-input mode receives key presses before global navigation bindings.
 - Letter plaintext, device keys, access tokens, revocation credentials,
   DPoP proofs, and encryption material are never written to logs.
 
@@ -816,7 +798,9 @@ It contains no profile, activity, or contact data.
 | `revoked_at` | `timestamptz` | Nullable; only before redemption |
 
 Private-alpha invites are single-use, expire after seven days, and can be
-revoked before redemption. Public registration does not require an invite.
+revoked before redemption. Only restricted operator tooling may issue or revoke
+them. Public registration does not require an invite once moderation, rate
+limits, privacy policy, and operations are ready.
 
 ### `letters`
 
@@ -1491,9 +1475,13 @@ Orifude UI.
 
 Letter and reply bodies allow at most 2,000 Unicode code points and 12 KiB of
 valid UTF-8. Their complete JSON request bodies allow at most 16 KiB. Other
-operational numbers remain configurable: letters per hour, claims per minute,
-reports per day, identity creation attempts, and database pool size. Defaults
-start conservatively during alpha and change from observed traffic and abuse.
+operational numbers remain configurable. During private alpha, an identity may
+hold only one unopened claim. Each successful new claim starts a 15-minute
+cooldown and an identity may receive at most three new claims per hour and eight
+per day. Returning an existing active claim does not consume another successful
+claim allowance. Claim requests, reports, identity creation attempts, letters
+per hour, deployment-edge IP traffic, and database pool size start with
+conservative limits and change from observed traffic and abuse.
 
 ## Visual system
 
@@ -1775,10 +1763,8 @@ details.
 ### Unit tests
 
 - TUI screen transitions from typed Bubble Tea messages
-- Neovim-style navigation while in navigation mode
+- Keyboard navigation while in navigation mode
 - Printable keyboard behavior while a textarea is focused
-- Mouse clicks and keyboard selections dispatch the same action
-- Mouse hit regions remain correct across compact and wide layouts
 - Fold output is deterministic for a given seed and terminal size
 - Input validation accepts 2,000 code points and rejects 2,001, oversized UTF-8,
   invalid UTF-8, and unsafe control text
@@ -1963,42 +1949,39 @@ exists, and no blocking product decision remains for the prototype or schema.
 
 ### Phase 1: offline TUI interaction prototype
 
-- [ ] Add Bubble Tea v2, Bubbles v2, Lip Gloss v2, and Huh v2.
-- [ ] Implement one root model with explicit `Screen` and `InputMode` enums.
-- [ ] Build the splash, first-run, branch, compose, fold preview, delivery,
+- [x] Add Bubble Tea v2, Bubbles v2, Lip Gloss v2, and Huh v2.
+- [x] Implement one root model with explicit `Screen` and `InputMode` enums.
+- [x] Build the splash, first-run, branch, compose, fold preview, delivery,
   unfold, read, reply, keepsake, report, and settings screens using synthetic
   fixtures.
-- [ ] Add unique multilingual alias creation and the permanent no-recovery
+- [x] Add unique multilingual alias creation and the permanent no-recovery
   warning to onboarding.
-- [ ] Implement wide, compact, text-first, and too-small terminal layouts.
-- [ ] Translate the monochrome Orifude mark into ANSI and ASCII-safe artwork.
-- [ ] Implement the truecolor palette with ANSI 256, ANSI 16, monochrome, and
+- [x] Implement wide, compact, text-first, and too-small terminal layouts.
+- [x] Translate the monochrome Orifude mark into ANSI and ASCII-safe artwork.
+- [x] Implement the truecolor palette with ANSI 256, ANSI 16, monochrome, and
   light/dark background behavior.
-- [ ] Implement deterministic fold shapes and fixed-frame fold/unfold animation.
-- [ ] Add reduced-motion behavior that skips decorative frames.
-- [ ] Accept letters and replies up to 2,000 Unicode code points and 12 KiB.
-- [ ] Reject or visibly neutralize unsafe terminal control characters.
-- [ ] Add Neovim-style `h`, `j`, `k`, `l`, `g g`, `G`, half-page, and full-page
-  navigation outside text-input mode.
-- [ ] Make `i` focus the composer and `esc` return to navigation mode.
-- [ ] Ensure printable keys, including `q`, remain text while an editor is
+- [x] Implement deterministic fold shapes and fixed-frame fold/unfold animation.
+- [x] Add reduced-motion behavior that skips decorative frames.
+- [x] Accept letters and replies up to 2,000 Unicode code points and 12 KiB.
+- [x] Reject or visibly neutralize unsafe terminal control characters.
+- [x] Add consistent `b` back navigation plus `j`, `k`, `l`, `g g`, `G`,
+  half-page, and full-page navigation outside text-input mode.
+- [x] Make `i` focus the composer and `esc` return to navigation mode.
+- [x] Ensure printable keys, including `q`, remain text while an editor is
   focused.
-- [ ] Add mouse click targets for every visible action and wheel scrolling for
-  every scrollable view.
-- [ ] Ensure mouse and keyboard paths dispatch the same internal actions.
-- [ ] Integrate Huh for onboarding, confirmations, settings, and report reasons.
-- [ ] Expose Huh accessible mode and ensure important state is never color-only.
-- [ ] Add contextual Bubbles help for active keyboard and mouse actions.
-- [ ] Add focused tests for navigation modes, mouse hit regions, size changes,
-  input boundaries, alias rules, control text, and deterministic folds.
-- [ ] Create a deterministic VHS tape for the core compose-to-unfold journey.
+- [x] Integrate Huh for onboarding, confirmations, settings, and report reasons.
+- [x] Expose Huh accessible mode and ensure important state is never color-only.
+- [x] Add contextual Bubbles help for active keyboard actions.
+- [x] Add focused tests for navigation modes, size changes, input boundaries,
+  alias rules, control text, and deterministic folds.
+- [x] Create a deterministic VHS tape for the core compose-to-unfold journey.
 
 The prototype may use immutable synthetic fixtures, but fixture behavior must
 not become a local database or a second post office.
 
-Done when a person can complete the entire simulated journey with only a
-keyboard or only a mouse at every supported terminal size, all TUI tests pass,
-and the VHS recording can be regenerated from a clean checkout.
+Done when a person can complete the entire simulated journey with the keyboard
+at every supported terminal size, all TUI tests pass, and the VHS recording can
+be regenerated from a clean checkout.
 
 ### Phase 2: PostgreSQL and post-office API
 
@@ -2086,7 +2069,7 @@ pass, and logs contain neither test plaintext nor authentication or key material
   installing updates.
 - [ ] Prevent duplicate mutation submissions while a request is active.
 - [ ] Ignore stale asynchronous messages after screen or operation changes.
-- [ ] Confirm every online flow remains usable through keyboard and mouse.
+- [ ] Confirm every online flow remains usable through the keyboard.
 - [ ] Confirm accessible and reduced-motion modes work with real responses.
 - [ ] Add contract tests between shared DTOs, handlers, and client decoding.
 - [ ] Add a controlled pseudo-terminal test for first run, lost-identity
@@ -2123,7 +2106,7 @@ restart authentication succeeds from each stored device key.
 - [ ] Optimize copies of the supplied logo, icon, watermark, and monochrome
   assets without modifying the originals; optimize video, reserve dimensions,
   and lazy-load below the fold.
-- [ ] Make the page usable by keyboard, screen reader, touch, and mouse.
+- [ ] Make the page usable by keyboard, screen reader, mouse, and touch.
 - [ ] Add a restrictive content security policy and other static security
   headers.
 - [ ] Connect the `orifude-front` repository to Cloudflare Pages with
@@ -2184,8 +2167,8 @@ verify a working TUI release without the site calling the post-office API.
 - [ ] Track crashes, authorization failures, delivery failures, reports, and
   rate-limit rejections during the alpha.
 - [ ] Fix all critical and high-impact defects found in the complete journey.
-- [ ] Re-run keyboard-only, mouse-only, reduced-motion, monochrome, and
-  accessible-mode QA on release artifacts.
+- [ ] Re-run keyboard-only, reduced-motion, monochrome, and accessible-mode QA
+  on release artifacts.
 
 Done when invited users on separate networks complete the full journey against
 production, backup restoration and retention reconciliation have succeeded, one
@@ -2289,8 +2272,7 @@ production:
 7. Send the only allowed reply and see the exchange in both keepsake views.
 8. Report and irreversibly block the other identity while learning only its
    alias, never its internal identifier or history.
-9. Complete the entire operational journey with Neovim-style keys and again
-   with a mouse.
+9. Complete the entire operational journey with keyboard navigation.
 10. Delete each participant's keepsake access and verify that the shared record
     is purged only after both delete it.
 11. Download the checksummed TUI from `https://orifude.com` while the Cloudflare

@@ -11,6 +11,7 @@
 coverage.*
 *.coverprofile
 profile.cov
+/testdata/vhs/output/
 
 # Local Go workspaces
 go.work
