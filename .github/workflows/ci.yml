@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [shrek]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -24,6 +29,8 @@ jobs:
           go test -race ./...
           go vet ./...
           go tool govulncheck ./...
+      - name: Verify offline TUI journey
+        run: ./testdata/vhs/check.sh
 
   generated:
     runs-on: ubuntu-latest
