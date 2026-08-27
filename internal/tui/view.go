@@ -188,7 +188,11 @@ func (m Model) renderTooSmall() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
-	lines := []string{"Resize terminal", "Need 56x18", fmt.Sprintf("Now %dx%d", m.width, m.height), "q quit"}
+	quitHelp := "q quit"
+	if (m.form == nil && m.mode == ModeText) || m.formAcceptsText() {
+		quitHelp = "esc then q"
+	}
+	lines := []string{"Resize terminal", "Need 56x18", fmt.Sprintf("Now %dx%d", m.width, m.height), quitHelp}
 	if m.formKind == formQuit {
 		lines = []string{"Draft exists", "y quit", "n keep"}
 	}
@@ -246,7 +250,12 @@ func (m Model) navigationBindings() []key.Binding {
 		bindings = append([]key.Binding{binding("enter", "begin"), binding("a", "screen reader")}, bindings...)
 	case ScreenBranch:
 		bindings = append(selection, bindings...)
-	case ScreenRead, ScreenKeepsakes:
+	case ScreenRead:
+		bindings = append(append(selection,
+			binding("ctrl+u/ctrl+d", "half page"),
+			binding("ctrl+b/ctrl+f", "full page"),
+			binding("b", "back")), bindings...)
+	case ScreenKeepsakes:
 		bindings = append(append(selection, binding("b", "back")), bindings...)
 	case ScreenCompose, ScreenReply:
 		bindings = append([]key.Binding{binding("i", "edit"), binding("enter", "preview"), binding("b", "back")}, bindings...)
@@ -342,7 +351,8 @@ func (m Model) renderFold() string {
 }
 
 func (m Model) renderLetter() string {
-	return m.styles.Paper.Width(m.viewport.Width()).Render(m.viewport.View())
+	style := m.styles.Paper
+	return style.Width(m.viewport.Width() + style.GetHorizontalFrameSize()).Render(m.viewport.View())
 }
 
 func (m Model) renderEditor(content string, width, height int) string {
@@ -350,7 +360,7 @@ func (m Model) renderEditor(content string, width, height int) string {
 	if m.mode == ModeText {
 		style = style.BorderForeground(m.styles.Active.GetForeground())
 	}
-	return style.Width(width).Height(height).Render(content)
+	return style.Width(width + style.GetHorizontalFrameSize()).Height(height).Render(content)
 }
 
 func (m Model) editorInstruction() string {

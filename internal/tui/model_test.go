@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestPrintableNavigationKeysRemainTextWhileComposerIsFocused(t *testing.T) {
@@ -56,6 +57,14 @@ func TestNeovimNavigationSelectsBranchActions(t *testing.T) {
 	m = updateModel(t, m, textKey("g"))
 	if m.cursor != 0 {
 		t.Fatalf("g g cursor = %d, want 0", m.cursor)
+	}
+
+	m.cursor = 3
+	m = updateModel(t, m, textKey("g"))
+	m = updateModel(t, m, tea.KeyPressMsg(tea.Key{Code: 'v', Mod: tea.ModCtrl}))
+	m = updateModel(t, m, textKey("g"))
+	if m.cursor != 3 {
+		t.Fatalf("interrupted g prefix moved cursor to %d, want 3", m.cursor)
 	}
 }
 
@@ -234,6 +243,9 @@ func TestStaleSearchCannotReplaceLaterNavigation(t *testing.T) {
 	m = next.(Model)
 	searchID := m.searchID
 	m = updateModel(t, m, textKey("b"))
+	if m.status == "Waiting by the branch..." {
+		t.Fatal("cancelled search retained its waiting status")
+	}
 	m = updateModel(t, m, specialKey(tea.KeyEnter))
 	m = updateModel(t, m, searchDoneMsg{id: searchID})
 	if m.screen != ScreenCompose {
@@ -459,6 +471,24 @@ func TestLetterViewWrapsProseWithoutSplittingWords(t *testing.T) {
 	}
 }
 
+func TestPaperDoesNotRewrapSizedContent(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.resize(56, 18)
+	line := strings.Repeat("x", m.viewport.Width())
+	m.setCurrent(Letter{Body: line})
+	if rendered := ansi.Strip(m.renderLetter()); !strings.Contains(rendered, line) {
+		t.Fatal("paper rewrapped a line that fits the letter viewport")
+	}
+
+	editorLine := strings.Repeat("x", m.draft.Width()-1)
+	m.draft.SetValue(editorLine)
+	if rendered := ansi.Strip(m.renderEditor(m.draft.View(), m.draft.Width(), m.draft.Height())); !strings.Contains(rendered, editorLine) {
+		t.Fatal("paper rewrapped a line that fits the editor")
+	}
+}
+
 func TestJKScrollKeepsakeWithoutReportAction(t *testing.T) {
 	t.Parallel()
 
@@ -541,6 +571,9 @@ func TestTooSmallModeKeepsTextFocusedAndQuitConfirmationVisible(t *testing.T) {
 	m.draft.SetValue("keep me")
 	m.draft.Focus()
 	m.resize(20, 10)
+	if rendered := m.View().Content; !strings.Contains(rendered, "esc then q") || strings.Contains(rendered, "q quit") {
+		t.Fatalf("too-small text help misstates quit binding: %q", rendered)
+	}
 	m = updateModel(t, m, textKey("q"))
 	if m.formKind != formNone || m.draft.Value() != "keep meq" {
 		t.Fatalf("too-small q form=%v draft=%q", m.formKind, m.draft.Value())
@@ -552,6 +585,14 @@ func TestTooSmallModeKeepsTextFocusedAndQuitConfirmationVisible(t *testing.T) {
 	}
 	if lipgloss.Width(rendered) > m.width || lipgloss.Height(rendered) > m.height {
 		t.Fatalf("too-small render exceeds %dx%d", m.width, m.height)
+	}
+
+	m = New()
+	m.screen = ScreenFoldPreview
+	m.beginForm(formRelease)
+	m.resize(20, 10)
+	if rendered := m.View().Content; !strings.Contains(rendered, "q quit") || strings.Contains(rendered, "esc then q") {
+		t.Fatalf("too-small confirm help misstates quit binding: %q", rendered)
 	}
 }
 
@@ -591,6 +632,23 @@ func TestQuitDuringFoldCannotBeReplacedByLateTick(t *testing.T) {
 	m = next.(Model)
 	if m.screen != ScreenCompose {
 		t.Fatalf("declining quit returned to %v, want compose", m.screen)
+	}
+}
+
+func TestLateFormCommandCannotAdvanceReplacementForm(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.screen = ScreenFoldPreview
+	m.draft.SetValue("keep me")
+	m.beginForm(formRelease)
+	next, stale := m.Update(textKey("n"))
+	m = next.(Model)
+	next, _ = m.requestQuit()
+	m = next.(Model)
+	m = runCommands(t, m, stale)
+	if m.formKind != formQuit || m.form == nil {
+		t.Fatalf("late release command replaced quit form with kind=%v form=%v", m.formKind, m.form != nil)
 	}
 }
 
@@ -661,6 +719,23 @@ func TestAccessibleConfirmationCompletesWithoutTerminalUI(t *testing.T) {
 	}
 }
 
+func TestAccessibleOnboardingRepromptsForInvalidAlias(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.accessible = true
+	data := formData{}
+	command := accessibleFormCommand{form: m.buildForm(formOnboarding, &data)}
+	command.SetStdin(strings.NewReader("a\nquiet branch\nn\n"))
+	command.SetStdout(io.Discard)
+	if err := command.Run(); err != nil {
+		t.Fatalf("accessible onboarding: %v", err)
+	}
+	if data.alias != "quiet branch" {
+		t.Fatalf("accessible onboarding accepted invalid alias %q", data.alias)
+	}
+}
+
 func TestStaleAccessibleFormCompletionIsIgnored(t *testing.T) {
 	t.Parallel()
 
@@ -725,6 +800,14 @@ func TestFullHelpOnlyShowsCurrentScreenActions(t *testing.T) {
 		}
 	}
 
+	m.screen = ScreenRead
+	readHelp := m.View().Content
+	for _, action := range []string{"half page", "full page"} {
+		if !strings.Contains(readHelp, action) {
+			t.Fatalf("read help omits %q: %q", action, readHelp)
+		}
+	}
+
 	m.setKeepsake(0)
 	m.screen = ScreenKeepsakeDetail
 	keepsakeHelp := m.View().Content
@@ -763,6 +846,23 @@ func TestEscapeLeavesEmbeddedTextInputWithoutLeavingForm(t *testing.T) {
 	}
 	if m.formAcceptsText() {
 		t.Fatal("escape left the alias input focused")
+	}
+}
+
+func TestInvalidOnboardingAliasCanGoBack(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.screen = ScreenOnboarding
+	m.beginForm(formOnboarding)
+	m.form.NextGroup()
+	m = updateModel(t, m, textKey("a"))
+	next, command := m.Update(specialKey(tea.KeyEscape))
+	m = runCommands(t, next.(Model), command)
+	next, command = m.Update(textKey("n"))
+	m = runCommands(t, next.(Model), command)
+	if m.form != nil || m.screen != ScreenSplash {
+		t.Fatalf("go back left form=%v screen=%v, want splash", m.form != nil, m.screen)
 	}
 }
 
@@ -824,6 +924,32 @@ func textKey(text string) tea.KeyPressMsg {
 
 func specialKey(code rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg(tea.Key{Code: code})
+}
+
+func runCommands(t *testing.T, model Model, commands ...tea.Cmd) Model {
+	t.Helper()
+
+	processed := 0
+	for len(commands) > 0 {
+		processed++
+		if processed > 100 {
+			t.Fatal("command chain did not finish")
+		}
+		command := commands[0]
+		commands = commands[1:]
+		if command == nil {
+			continue
+		}
+		message := command()
+		if batch, ok := message.(tea.BatchMsg); ok {
+			commands = append(commands, batch...)
+			continue
+		}
+		next, command := model.Update(message)
+		model = next.(Model)
+		commands = append(commands, command)
+	}
+	return model
 }
 
 func (mode layoutMode) String() string {
