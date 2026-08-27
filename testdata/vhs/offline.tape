@@ -63,7 +63,7 @@ Type "b"
 Wait+Screen /The branch/
 Type "G"
 Enter
-Wait+Screen /Connection: offline prototype/
+Wait+Screen /Connection.*offline prototype/
 Enter
 Wait+Screen /Theme and contrast/
 Enter

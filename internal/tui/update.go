@@ -15,6 +15,11 @@ import (
 
 type searchDoneMsg struct{ id uint64 }
 
+type embeddedFormMsg struct {
+	id      uint64
+	message tea.Msg
+}
+
 type accessibleFormDoneMsg struct {
 	id   uint64
 	kind formKind
@@ -52,7 +57,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.form != nil {
 			form, command := m.form.Update(message)
 			m.form = form.(*huh.Form)
-			return m, command
+			return m, scopeFormCommand(m.formID, command)
 		}
 		return m, nil
 	case tea.ColorProfileMsg:
@@ -62,7 +67,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.form != nil {
 			form, command := m.form.Update(message)
 			m.form = form.(*huh.Form)
-			return m, command
+			return m, scopeFormCommand(m.formID, command)
 		}
 		return m, nil
 	case foldTickMsg:
@@ -103,6 +108,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.finishForm(message.kind, message.data)
+	case embeddedFormMsg:
+		if message.id != m.formID || m.form == nil {
+			return m, nil
+		}
+		return m.forwardInput(message.message)
 	case tea.PasteMsg:
 		if err := m.validatePaste(message.Content); err != nil {
 			m.setStatus(statusError, err.Error())
@@ -121,6 +131,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := message.String()
+	if key != "g" {
+		m.pendingG = false
+	}
 	if key == "ctrl+c" {
 		if m.formKind == formQuit {
 			return m, nil
@@ -140,7 +153,7 @@ func (m Model) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key == "esc" {
-			return m, m.form.NextField()
+			return m, scopeFormCommand(m.formID, m.form.NextField())
 		}
 		return m.forwardInput(message)
 	}
@@ -211,8 +224,6 @@ func (m Model) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	m.pendingG = false
-
 	switch key {
 	case "?":
 		m.showHelp = true
@@ -260,6 +271,7 @@ func (m Model) forwardInput(message tea.Msg) (tea.Model, tea.Cmd) {
 	if m.form != nil {
 		form, command := m.form.Update(message)
 		m.form = form.(*huh.Form)
+		command = scopeFormCommand(m.formID, command)
 		if m.form.State == huh.StateCompleted {
 			kind := m.formKind
 			data := *m.formData
@@ -290,6 +302,28 @@ func (m Model) forwardInput(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, command
 	}
 	return m, nil
+}
+
+func scopeFormCommand(id uint64, command tea.Cmd) tea.Cmd {
+	if command == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		message := command()
+		if message == nil {
+			return nil
+		}
+		if batch, ok := message.(tea.BatchMsg); ok {
+			scoped := make(tea.BatchMsg, 0, len(batch))
+			for _, command := range batch {
+				if command := scopeFormCommand(id, command); command != nil {
+					scoped = append(scoped, command)
+				}
+			}
+			return scoped
+		}
+		return embeddedFormMsg{id: id, message: message}
+	}
 }
 
 func (m Model) activate() (tea.Model, tea.Cmd) {
@@ -463,8 +497,11 @@ func (m *Model) back() {
 		m.screen = ScreenBranch
 	case ScreenFoldPreview:
 		m.screen = ScreenCompose
-	case ScreenDelivery, ScreenSearching, ScreenFoldedDelivery, ScreenRead, ScreenKeepsakes, ScreenSettings:
+	case ScreenDelivery, ScreenFoldedDelivery, ScreenRead, ScreenKeepsakes, ScreenSettings:
 		m.screen = ScreenBranch
+	case ScreenSearching:
+		m.screen = ScreenBranch
+		m.setStatus(statusInfo, "Search cancelled.")
 	case ScreenUnfold:
 		m.screen = ScreenFoldedDelivery
 	case ScreenReply:
@@ -578,6 +615,17 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 	var form *huh.Form
 	switch kind {
 	case formOnboarding:
+		aliasInput := huh.NewInput().
+			Title("Choose a private alias").
+			Description("2-24 characters, one writing system, never searchable").
+			CharLimit(4 * maxAliasPoints).
+			Value(&data.alias)
+		if m.accessible {
+			aliasInput.Validate(func(value string) error {
+				_, _, err := normalizeAlias(value)
+				return err
+			})
+		}
 		form = huh.NewForm(
 			huh.NewGroup(
 				huh.NewNote().
@@ -587,21 +635,20 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 					NextLabel("continue"),
 			),
 			huh.NewGroup(
-				huh.NewInput().
-					Title("Choose a private alias").
-					Description("2-24 characters, one writing system, never searchable").
-					CharLimit(4*maxAliasPoints).
-					Value(&data.alias).
-					Validate(func(value string) error {
-						_, _, err := normalizeAlias(value)
-						return err
-					}),
+				aliasInput,
 				huh.NewConfirm().
 					Title("Losing the device key means losing access permanently.").
 					Description("There is no password recovery or second device.").
 					Affirmative("I understand").
 					Negative("Go back").
-					Value(&data.confirmed),
+					Value(&data.confirmed).
+					Validate(func(confirmed bool) error {
+						if !confirmed {
+							return nil
+						}
+						_, _, err := normalizeAlias(data.alias)
+						return err
+					}),
 			),
 		)
 	case formRelease:
@@ -650,7 +697,7 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 			huh.NewConfirm().Title("Discard the current draft and quit?").Affirmative("Quit").Negative("Keep writing").Value(&data.confirmed),
 		))
 	}
-	form = form.WithTheme(m.huhTheme()).WithShowHelp(false).WithWidth(min(max(m.width-8, 20), 68))
+	form = form.WithTheme(m.huhTheme()).WithShowHelp(false).WithWidth(m.panelContentWidth())
 	if formHeight := formHeight(kind, m.height); formHeight > 0 {
 		form.WithHeight(formHeight)
 	}

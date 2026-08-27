@@ -251,8 +251,12 @@ func (m Model) textareaStyles() textarea.Styles {
 }
 
 func (m *Model) setStatus(kind statusKind, text string) {
+	hadStatus := m.status != ""
 	m.statusKind = kind
 	m.status = text
+	if m.current != nil && hadStatus != (text != "") {
+		m.refreshLetterViewport()
+	}
 }
 
 func (m Model) formAcceptsText() bool {
@@ -285,13 +289,14 @@ func (m Model) Init() tea.Cmd {
 func (m *Model) resize(width, height int) {
 	m.width = width
 	m.height = height
-	contentWidth := min(max(width-8, 20), 68)
+	contentWidth := m.panelContentWidth()
 	contentHeight := min(max(height-13, 3), 10)
-	m.draft.SetWidth(max(contentWidth-4, 16))
+	paperWidth := max(contentWidth-m.styles.Paper.GetHorizontalFrameSize(), 16)
+	m.draft.SetWidth(paperWidth)
 	m.draft.SetHeight(max(contentHeight-2, 3))
-	m.replyDraft.SetWidth(max(contentWidth-4, 16))
+	m.replyDraft.SetWidth(paperWidth)
 	m.replyDraft.SetHeight(max(contentHeight-2, 3))
-	m.viewport.SetWidth(max(contentWidth-4, 16))
+	m.viewport.SetWidth(paperWidth)
 	m.viewport.SetHeight(max(contentHeight-2, 3))
 	m.refreshLetterViewport()
 	m.help.SetWidth(contentWidth)
@@ -339,10 +344,14 @@ func (m *Model) refreshLetterViewport() {
 		content += "\n\nReply\n" + neutralizeTerminalText(m.current.Reply)
 	}
 	content = ansi.Wrap(content, m.viewport.Width(), "")
-	m.viewport.SetContent(content)
 	lineCount := strings.Count(content, "\n") + 1
 	contentHeight := min(max(m.height-13, 3), 10)
-	m.viewport.SetHeight(min(max(contentHeight-2, 3), max(lineCount, 2)))
+	viewportHeight := min(max(contentHeight-2, 3), max(lineCount, 2))
+	if m.layout() == layoutCompact && m.status != "" && viewportHeight > 3 {
+		viewportHeight--
+	}
+	m.viewport.SetHeight(viewportHeight)
+	m.viewport.SetContent(content)
 }
 
 func (m *Model) startAnimation(screen Screen, reverse bool) tea.Cmd {

@@ -52,14 +52,7 @@ func (m Model) render() string {
 	}
 
 	mode := m.layout()
-	panelWidth := min(max(m.width-6, 24), 70)
-	if mode == layoutWide {
-		panelWidth = min(max(m.width-34, 48), 76)
-	}
-	panelStyle := m.styles.Panel
-	if mode == layoutText {
-		panelStyle = panelStyle.BorderLeft(false).Padding(0)
-	}
+	panelStyle, panelWidth := m.panel()
 	panel := panelStyle.Width(panelWidth).Render(body)
 
 	var content string
@@ -72,6 +65,24 @@ func (m Model) render() string {
 		content = panel
 	}
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+}
+
+func (m Model) panel() (lipgloss.Style, int) {
+	mode := m.layout()
+	width := min(max(m.width-6, 24), 70)
+	if mode == layoutWide {
+		width = min(max(m.width-34, 48), 76)
+	}
+	style := m.styles.Panel
+	if mode == layoutText {
+		style = style.BorderLeft(false).Padding(0)
+	}
+	return style, width
+}
+
+func (m Model) panelContentWidth() int {
+	style, width := m.panel()
+	return min(max(width-style.GetHorizontalFrameSize(), 20), 68)
 }
 
 func (m Model) renderScreen() string {
@@ -188,7 +199,11 @@ func (m Model) renderTooSmall() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
-	lines := []string{"Resize terminal", "Need 56x18", fmt.Sprintf("Now %dx%d", m.width, m.height), "q quit"}
+	quitHelp := "q quit"
+	if (m.form == nil && m.mode == ModeText) || m.formAcceptsText() {
+		quitHelp = "esc then q"
+	}
+	lines := []string{"Resize terminal", "Need 56x18", fmt.Sprintf("Now %dx%d", m.width, m.height), quitHelp}
 	if m.formKind == formQuit {
 		lines = []string{"Draft exists", "y quit", "n keep"}
 	}
@@ -246,7 +261,12 @@ func (m Model) navigationBindings() []key.Binding {
 		bindings = append([]key.Binding{binding("enter", "begin"), binding("a", "screen reader")}, bindings...)
 	case ScreenBranch:
 		bindings = append(selection, bindings...)
-	case ScreenRead, ScreenKeepsakes:
+	case ScreenRead:
+		bindings = append(append(selection,
+			binding("ctrl+u/ctrl+d", "half page"),
+			binding("ctrl+b/ctrl+f", "full page"),
+			binding("b", "back")), bindings...)
+	case ScreenKeepsakes:
 		bindings = append(append(selection, binding("b", "back")), bindings...)
 	case ScreenCompose, ScreenReply:
 		bindings = append([]key.Binding{binding("i", "edit"), binding("enter", "preview"), binding("b", "back")}, bindings...)
@@ -342,7 +362,8 @@ func (m Model) renderFold() string {
 }
 
 func (m Model) renderLetter() string {
-	return m.styles.Paper.Width(m.viewport.Width()).Render(m.viewport.View())
+	style := m.styles.Paper
+	return style.Width(m.viewport.Width() + style.GetHorizontalFrameSize()).Render(m.viewport.View())
 }
 
 func (m Model) renderEditor(content string, width, height int) string {
@@ -350,7 +371,7 @@ func (m Model) renderEditor(content string, width, height int) string {
 	if m.mode == ModeText {
 		style = style.BorderForeground(m.styles.Active.GetForeground())
 	}
-	return style.Width(width).Height(height).Render(content)
+	return style.Width(width + style.GetHorizontalFrameSize()).Height(height).Render(content)
 }
 
 func (m Model) editorInstruction() string {
