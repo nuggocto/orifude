@@ -342,7 +342,7 @@ func TestLockedChallengeAndInviteCannotCrossExpiry(t *testing.T) {
 }
 
 func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
-	service, db, _, fake, ctx := openPostOffice(t)
+	service, db, raw, fake, ctx := openPostOffice(t)
 	sender := seedIdentity(t, ctx, db, 21, "Cedar Wren")
 	recipient := seedIdentity(t, ctx, db, 22, "River Wren")
 	unrelated := seedIdentity(t, ctx, db, 23, "Stone Wren")
@@ -474,9 +474,42 @@ func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
 		RequestID: publicID('C'), Purpose: api.ModerationPurposeReportedContentReview,
 		Disposition: api.ModerationDispositionIdentityDisabled,
 	}
-	closed, err := service.CloseReport(ctx, testModerator, reportID, closeRequest)
+	closeLockConn := connectPostgres(t, ctx)
+	closeLock, err := closeLockConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := closeLock.Exec(ctx, `SELECT 1 FROM reports WHERE id = $1 FOR UPDATE`, reportID); err != nil {
+		t.Fatal(err)
+	}
+	type closeResult struct {
+		response api.CloseReportResponse
+		err      error
+	}
+	closeResultChannel := make(chan closeResult, 1)
+	go func() {
+		response, err := service.CloseReport(ctx, testModerator, reportID, closeRequest)
+		closeResultChannel <- closeResult{response: response, err: err}
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	lateSessionHash := bytes.Repeat([]byte{110}, 32)
+	lateSession, err := db.Queries().CreateAccessSession(ctx, dbgen.CreateAccessSessionParams{
+		TokenHash: lateSessionHash, IdentityID: sender.ID, KeyThumbprint: sender.KeyThumbprint,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closeLock.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	result := <-closeResultChannel
+	closed, err := result.response, result.err
 	if err != nil || closed.Disposition != api.ModerationDispositionIdentityDisabled {
 		t.Fatalf("close = %+v, %v", closed, err)
+	}
+	var revokedAt time.Time
+	if err := raw.QueryRow(ctx, `SELECT revoked_at FROM access_sessions WHERE token_hash = $1`, lateSessionHash).Scan(&revokedAt); err != nil || revokedAt.Before(lateSession.CreatedAt.Time) {
+		t.Fatalf("late session revocation = %v after %v, %v", revokedAt, lateSession.CreatedAt.Time, err)
 	}
 	closedAgain, err := service.CloseReport(ctx, testModerator, reportID, closeRequest)
 	if err != nil || closedAgain.ClosedAt != closed.ClosedAt {

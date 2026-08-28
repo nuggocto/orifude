@@ -178,7 +178,7 @@ func (q *Queries) GetAuthChallengeForUpdate(ctx context.Context, id string) (Aut
 
 const revokeIdentitySessions = `-- name: RevokeIdentitySessions :execrows
 UPDATE access_sessions
-SET revoked_at = now()
+SET revoked_at = clock_timestamp()
 WHERE identity_id = $1 AND revoked_at IS NULL
 `
 
