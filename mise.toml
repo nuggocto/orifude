@@ -43,7 +43,7 @@ run = [
 ]
 
 [tasks.vhs]
-description = "Record and verify the offline TUI journey with Docker"
+description = "Record and verify the online TUI journey with Docker"
 run = "./testdata/vhs/check.sh"
 
 [tasks.db-generate]

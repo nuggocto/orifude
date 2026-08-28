@@ -20,6 +20,22 @@ Run the TUI:
 mise run dev
 ```
 
+The participant TUI connects to `https://api.orifude.com` by default. For local
+development, set `ORIFUDE_API_URL` to an HTTPS origin or a loopback HTTP origin:
+
+```sh
+ORIFUDE_API_URL=http://127.0.0.1:8080 mise run dev
+```
+
+Orifude keeps access sessions in memory. It stores the device key in the
+operating-system credential store and offers an explicitly confirmed,
+owner-only file fallback if that store is unavailable. The delete-only
+revocation credential is displayed once and is never persisted. Set
+`ORIFUDE_OFFLINE_DEMO=1` only when running the fixture-backed local demo.
+
+Database migrations remain a separate deployment or development step; neither
+the TUI nor the post office runs them at startup.
+
 Available tasks:
 
 | Command | Purpose |
@@ -33,4 +49,4 @@ Available tasks:
 | `mise run vet` | Run Go static analysis. |
 | `mise run vuln` | Scan Go dependencies for known vulnerabilities. |
 | `mise run check` | Run tests, race detection, vet, and vulnerability scanning. |
-| `mise run vhs` | Record and verify the offline TUI journey with Docker. |
+| `mise run vhs` | Record the online TUI journey against a disposable local post office. |

@@ -19,6 +19,12 @@ All notable changes to Orifude will be recorded here.
   strict authorization and redacted structured logging.
 - Disposable PostgreSQL integration coverage for migrations, generated queries,
   concurrency, complete API behavior, and rollback.
+- Online participant TUI integration with invite onboarding, device-bound DPoP
+  sessions, keyring-first local identity storage, real letter and safety flows,
+  reconnect and deletion handling, passive update notices, and durable display
+  preferences.
+- Strict, bounded participant API client coverage and a real post-office terminal
+  journey for onboarding, release, and lost-identity deletion.
 
 ### Changed
 
@@ -31,6 +37,8 @@ All notable changes to Orifude will be recorded here.
   landing-page delivery.
 - Required rate-event retention to cover every enabled cooldown, hourly window,
   and daily window.
+- Made the participant binary use the online post office by default while
+  retaining an explicit fixture-backed demo for recordings and development.
 
 ### Fixed
 
