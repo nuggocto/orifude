@@ -20,6 +20,7 @@ const (
 	// MaxAliasCodePoints is the maximum number of Unicode code points in an alias.
 	MaxAliasCodePoints = 24
 	minAliasCodePoints = 2
+	maxAliasKeyBytes   = 512
 	pinnedUnicode      = "17.0.0"
 )
 
@@ -160,6 +161,9 @@ func NormalizeAlias(raw string) (string, string, error) {
 	key, err := aliasKey(alias)
 	if err != nil {
 		return "", "", err
+	}
+	if len(key) > maxAliasKeyBytes {
+		return "", "", ErrAliasCharacters
 	}
 	for _, reserved := range reservedAliasKeys {
 		if key == reserved {

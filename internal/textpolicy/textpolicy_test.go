@@ -81,6 +81,7 @@ func TestAliasValidationAppliesUnicodeAndReservationRules(t *testing.T) {
 		{name: "cross-script mark", alias: "a\u064b", want: ErrAliasScript},
 		{name: "invisible mark", alias: "mo\u034fri", want: ErrAliasCharacters},
 		{name: "whole-script confusable", alias: "αοι", want: ErrAliasUnavailable},
+		{name: "expanded comparison key", alias: strings.Repeat("ﷺ", MaxAliasCodePoints), want: ErrAliasCharacters},
 	}
 
 	for _, test := range invalid {
