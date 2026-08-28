@@ -691,6 +691,18 @@ func TestCleanupAndIdentityDeletionQueries(t *testing.T) {
 	if _, err := db.pool.Exec(ctx, `UPDATE letters SET created_at = now() - interval '8 days', expires_at = now() - interval '1 day' WHERE id = $1`, expiredWaiting.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := q.GetLetterForSender(ctx, dbgen.GetLetterForSenderParams{SenderID: sender.ID, ID: expiredWaiting.ID}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expired waiting sender read error = %v, want no rows", err)
+	}
+	if sent, err := q.ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: sender.ID, PageSize: 100}); err != nil {
+		t.Fatal(err)
+	} else {
+		for _, letter := range sent {
+			if letter.ID == expiredWaiting.ID {
+				t.Fatal("expired waiting letter remained in sent keepsakes")
+			}
+		}
+	}
 	if ids, err := q.DeleteExpiredWaitingLetters(ctx, 10); err != nil || len(ids) != 1 || ids[0] != expiredWaiting.ID {
 		t.Fatalf("delete expired waiting letters = %v, %v", ids, err)
 	}

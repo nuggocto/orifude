@@ -14,7 +14,8 @@ SELECT letters.* FROM letters
 JOIN identities ON identities.id = sqlc.arg(sender_id) AND identities.deleted_at IS NULL
 WHERE letters.id = sqlc.arg(id)
   AND letters.sender_id = sqlc.arg(sender_id)
-  AND letters.sender_removed_at IS NULL;
+  AND letters.sender_removed_at IS NULL
+  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp());
 
 -- name: GetLetterForRecipient :one
 SELECT letters.* FROM letters

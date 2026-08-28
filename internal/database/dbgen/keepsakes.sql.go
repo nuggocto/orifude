@@ -162,6 +162,7 @@ const listSentKeepsakes = `-- name: ListSentKeepsakes :many
 SELECT letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at FROM letters
 WHERE letters.sender_id = $1
   AND letters.sender_removed_at IS NULL
+  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp())
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = $1 AND deleted_at IS NULL)
 ORDER BY letters.created_at DESC, letters.id DESC
 LIMIT $2
@@ -223,6 +224,7 @@ const listSentKeepsakesAfter = `-- name: ListSentKeepsakesAfter :many
 SELECT letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at FROM letters
 WHERE letters.sender_id = $1
   AND letters.sender_removed_at IS NULL
+  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp())
   AND (letters.created_at, letters.id) < ($2, $3::varchar(22))
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = $1 AND deleted_at IS NULL)
 ORDER BY letters.created_at DESC, letters.id DESC

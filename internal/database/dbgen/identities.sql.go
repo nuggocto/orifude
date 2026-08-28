@@ -244,7 +244,7 @@ SELECT token_hash, created_at, expires_at, redeemed_at, redeemed_by, revoked_at 
 WHERE token_hash = $1
   AND redeemed_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
 FOR UPDATE
 `
 
@@ -371,11 +371,11 @@ func (q *Queries) MarkIdentityDeleted(ctx context.Context, id int64) (Identity, 
 
 const redeemInvite = `-- name: RedeemInvite :one
 UPDATE invites
-SET redeemed_at = now(), redeemed_by = $1
+SET redeemed_at = clock_timestamp(), redeemed_by = $1
 WHERE token_hash = $2
   AND redeemed_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
 RETURNING token_hash, created_at, expires_at, redeemed_at, redeemed_by, revoked_at
 `
 

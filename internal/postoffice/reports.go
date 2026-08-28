@@ -32,6 +32,22 @@ func (s *Service) ReportLetter(ctx context.Context, principal Principal, letterI
 
 	letter, role, err := s.reportableLetter(ctx, principal.IdentityID, letterID, request.Target)
 	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			return api.ReportLetterResponse{}, err
+		}
+		if existing, lookupErr := s.db.Queries().GetReportByIDForReporter(ctx, dbgen.GetReportByIDForReporterParams{ID: request.ReportID, ReporterID: principal.IdentityID}); lookupErr == nil {
+			if existing.LetterID != letterID {
+				return api.ReportLetterResponse{}, ErrConflict
+			}
+			return reportResponse(existing), nil
+		} else if !errors.Is(lookupErr, pgx.ErrNoRows) {
+			return api.ReportLetterResponse{}, lookupErr
+		}
+		if _, lookupErr := s.db.Queries().GetReportByLetterForReporter(ctx, dbgen.GetReportByLetterForReporterParams{LetterID: letterID, ReporterID: principal.IdentityID}); lookupErr == nil {
+			return api.ReportLetterResponse{}, ErrReportExists
+		} else if !errors.Is(lookupErr, pgx.ErrNoRows) {
+			return api.ReportLetterResponse{}, lookupErr
+		}
 		return api.ReportLetterResponse{}, err
 	}
 	otherID := letter.SenderID

@@ -323,6 +323,7 @@ JOIN identities ON identities.id = $1 AND identities.deleted_at IS NULL
 WHERE letters.id = $2
   AND letters.sender_id = $1
   AND letters.sender_removed_at IS NULL
+  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp())
 `
 
 type GetLetterForSenderParams struct {

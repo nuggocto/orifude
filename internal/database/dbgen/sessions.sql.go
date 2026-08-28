@@ -29,11 +29,11 @@ func (q *Queries) AccessSessionExpired(ctx context.Context, tokenHash []byte) (b
 
 const consumeAuthChallenge = `-- name: ConsumeAuthChallenge :one
 UPDATE auth_challenges
-SET used_at = now()
+SET used_at = clock_timestamp()
 WHERE id = $1
   AND purpose = $2
   AND used_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
 RETURNING id, identity_id, public_key, key_thumbprint, purpose, nonce_hash, created_at, expires_at, used_at
 `
 

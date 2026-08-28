@@ -200,6 +200,110 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 	}
 }
 
+func TestLockedChallengeAndInviteCannotCrossExpiry(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	revocationHashValue := auth.HashRevocationCredential(secret(101))
+	revocationHash := base64.RawURLEncoding.EncodeToString(revocationHashValue[:])
+
+	challengeKey := privateKey(t)
+	challengeInvite := secret(102)
+	challengeInviteHash := auth.HashOpaque(challengeInvite)
+	if _, err := db.Queries().CreateInvite(ctx, challengeInviteHash[:]); err != nil {
+		t.Fatal(err)
+	}
+	challenge, err := service.CreateChallenge(ctx, api.CreateChallengeRequest{Purpose: api.ChallengePurposeRegistration, PublicJWK: publicJWK(challengeKey)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var challengeDeadline time.Time
+	if err := raw.QueryRow(ctx, `
+		WITH deadline AS (SELECT clock_timestamp() + interval '500 milliseconds' AS value)
+		UPDATE auth_challenges
+		SET created_at = deadline.value - interval '5 minutes', expires_at = deadline.value
+		FROM deadline
+		WHERE id = $1
+		RETURNING expires_at
+	`, challenge.ChallengeID).Scan(&challengeDeadline); err != nil {
+		t.Fatal(err)
+	}
+	challengeLock := connectPostgres(t, ctx)
+	challengeTx, err := challengeLock.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer challengeTx.Rollback(context.Background())
+	if _, err := challengeTx.Exec(ctx, `SELECT 1 FROM auth_challenges WHERE id = $1 FOR UPDATE`, challenge.ChallengeID); err != nil {
+		t.Fatal(err)
+	}
+	challengeProof := proof(t, challengeKey, "POST", testOrigin+"/v1/identities", "locked-challenge-proof", challenge.Nonce, "")
+	challengeResult := make(chan error, 1)
+	go func() {
+		_, err := service.Register(ctx, api.CreateIdentityRequest{
+			ChallengeID: challenge.ChallengeID, Alias: "Locked Challenge", InviteCode: challengeInvite, RevocationHash: revocationHash,
+		}, challengeProof)
+		challengeResult <- err
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	waitPast(challengeDeadline)
+	if err := challengeTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-challengeResult; !errors.Is(err, ErrAuthentication) {
+		t.Fatalf("registration after locked challenge expiry = %v, want authentication", err)
+	}
+
+	inviteKey := privateKey(t)
+	invite := secret(103)
+	inviteHash := auth.HashOpaque(invite)
+	if _, err := db.Queries().CreateInvite(ctx, inviteHash[:]); err != nil {
+		t.Fatal(err)
+	}
+	inviteChallenge, err := service.CreateChallenge(ctx, api.CreateChallengeRequest{Purpose: api.ChallengePurposeRegistration, PublicJWK: publicJWK(inviteKey)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inviteDeadline time.Time
+	if err := raw.QueryRow(ctx, `
+		WITH deadline AS (SELECT clock_timestamp() + interval '500 milliseconds' AS value)
+		UPDATE invites
+		SET created_at = deadline.value - interval '7 days', expires_at = deadline.value
+		FROM deadline
+		WHERE token_hash = $1
+		RETURNING expires_at
+	`, inviteHash[:]).Scan(&inviteDeadline); err != nil {
+		t.Fatal(err)
+	}
+	inviteLock := connectPostgres(t, ctx)
+	inviteTx, err := inviteLock.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inviteTx.Rollback(context.Background())
+	if _, err := inviteTx.Exec(ctx, `SELECT 1 FROM invites WHERE token_hash = $1 FOR UPDATE`, inviteHash[:]); err != nil {
+		t.Fatal(err)
+	}
+	inviteProof := proof(t, inviteKey, "POST", testOrigin+"/v1/identities", "locked-invite-proof", inviteChallenge.Nonce, "")
+	inviteResult := make(chan error, 1)
+	go func() {
+		_, err := service.Register(ctx, api.CreateIdentityRequest{
+			ChallengeID: inviteChallenge.ChallengeID, Alias: "Locked Invite", InviteCode: invite, RevocationHash: revocationHash,
+		}, inviteProof)
+		inviteResult <- err
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	waitPast(inviteDeadline)
+	if err := inviteTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-inviteResult; !errors.Is(err, ErrInviteInvalid) {
+		t.Fatalf("registration after locked invite expiry = %v, want invite invalid", err)
+	}
+	var identities int
+	if err := raw.QueryRow(ctx, `SELECT count(*) FROM identities`).Scan(&identities); err != nil || identities != 0 {
+		t.Fatalf("expired credential registrations = %d identities, %v", identities, err)
+	}
+}
+
 func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
 	service, db, _, fake, ctx := openPostOffice(t)
 	sender := seedIdentity(t, ctx, db, 21, "Cedar Wren")
@@ -392,6 +496,53 @@ func TestConcurrentClaimHasOneWinner(t *testing.T) {
 	letter, err := db.Queries().GetLetterForOpen(ctx, dbgen.GetLetterForOpenParams{RecipientID: winner, ID: letterID})
 	if err != nil || letter.RecipientID.Int64 != winner {
 		t.Fatalf("durable winner = %+v, %v", letter.RecipientID, err)
+	}
+}
+
+func TestClaimRejectsLetterExpiringWhileIdentityLocked(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 69, "Claim Expiry Sender")
+	recipient := seedIdentity(t, ctx, db, 70, "Claim Expiry Recipient")
+	letterID := publicID('v')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	var deadline time.Time
+	if err := raw.QueryRow(ctx, `
+		WITH deadline AS (SELECT clock_timestamp() + interval '500 milliseconds' AS value)
+		UPDATE letters
+		SET created_at = deadline.value - interval '7 days', expires_at = deadline.value
+		FROM deadline
+		WHERE id = $1
+		RETURNING expires_at
+	`, letterID).Scan(&deadline); err != nil {
+		t.Fatal(err)
+	}
+	lockConn := connectPostgres(t, ctx)
+	lockTx, err := lockConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockTx.Rollback(context.Background())
+	if _, err := lockTx.Exec(ctx, `SELECT 1 FROM identities WHERE id = $1 FOR NO KEY UPDATE`, recipient.ID); err != nil {
+		t.Fatal(err)
+	}
+	claimResult := make(chan error, 1)
+	go func() {
+		_, err := service.ClaimLetter(ctx, Principal{IdentityID: recipient.ID})
+		claimResult <- err
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	waitPast(deadline)
+	if err := lockTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-claimResult; !errors.Is(err, ErrNoLetters) {
+		t.Fatalf("claim after locked letter expiry = %v, want no letters", err)
+	}
+	var assigned bool
+	if err := raw.QueryRow(ctx, `SELECT recipient_id IS NOT NULL FROM letters WHERE id = $1`, letterID).Scan(&assigned); err != nil || assigned {
+		t.Fatalf("expired letter assigned = %t, %v", assigned, err)
 	}
 }
 
@@ -1180,6 +1331,12 @@ func waitForLockWaiters(t *testing.T, ctx context.Context, conn *pgx.Conn, want 
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for %d database lock waiters", want)
+}
+
+func waitPast(deadline time.Time) {
+	if wait := time.Until(deadline.Add(20 * time.Millisecond)); wait > 0 {
+		time.Sleep(wait)
+	}
 }
 
 func seedIdentity(t *testing.T, ctx context.Context, db *database.DB, value byte, alias string) dbgen.Identity {

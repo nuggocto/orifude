@@ -14,11 +14,11 @@ FOR UPDATE;
 
 -- name: ConsumeAuthChallenge :one
 UPDATE auth_challenges
-SET used_at = now()
+SET used_at = clock_timestamp()
 WHERE id = sqlc.arg(id)
   AND purpose = sqlc.arg(purpose)
   AND used_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
 RETURNING *;
 
 -- name: CreateAccessSession :one

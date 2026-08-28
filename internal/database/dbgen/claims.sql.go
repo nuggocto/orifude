@@ -12,15 +12,17 @@ import (
 )
 
 const assignLetterClaim = `-- name: AssignLetterClaim :one
+WITH claim_time AS (SELECT clock_timestamp() AS value)
 UPDATE letters
 SET recipient_id = $1,
     recipient_alias = $2,
-    claimed_at = now(),
-    claim_expires_at = now() + interval '24 hours'
+    claimed_at = claim_time.value,
+    claim_expires_at = claim_time.value + interval '24 hours'
+FROM claim_time
 WHERE letters.id = $3
   AND letters.recipient_id IS NULL
   AND letters.withdrawn_at IS NULL
-  AND letters.expires_at > now()
+  AND letters.expires_at > claim_time.value
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = letters.sender_id AND identities.deleted_at IS NULL)
   AND NOT EXISTS (SELECT 1 FROM reports WHERE reports.letter_id = letters.id)
   AND NOT EXISTS (
@@ -28,7 +30,7 @@ WHERE letters.id = $3
       WHERE (blocker_id = $1 AND blocked_id = letters.sender_id)
          OR (blocker_id = letters.sender_id AND blocked_id = $1)
   )
-RETURNING id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at
+RETURNING letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at
 `
 
 type AssignLetterClaimParams struct {
@@ -75,7 +77,7 @@ const getActiveClaimForUpdate = `-- name: GetActiveClaimForUpdate :one
 SELECT id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at FROM letters
 WHERE recipient_id = $1
   AND opened_at IS NULL
-  AND claim_expires_at > now()
+  AND claim_expires_at > clock_timestamp()
   AND recipient_removed_at IS NULL
 ORDER BY claimed_at, id
 FOR UPDATE
@@ -124,7 +126,7 @@ SET recipient_id = NULL,
     recipient_removed_at = NULL
 WHERE recipient_id = $1
   AND opened_at IS NULL
-  AND claim_expires_at <= now()
+  AND claim_expires_at <= clock_timestamp()
 `
 
 func (q *Queries) ReleaseExpiredClaimsForIdentity(ctx context.Context, recipientID pgtype.Int8) (int64, error) {
@@ -139,7 +141,7 @@ const selectEligibleLetterForClaim = `-- name: SelectEligibleLetterForClaim :one
 SELECT id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at FROM letters
 WHERE recipient_id IS NULL
   AND withdrawn_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
   AND sender_id <> $1
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = letters.sender_id AND identities.deleted_at IS NULL)
   AND NOT EXISTS (SELECT 1 FROM reports WHERE reports.letter_id = letters.id)

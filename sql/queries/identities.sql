@@ -118,16 +118,16 @@ SELECT * FROM invites
 WHERE token_hash = sqlc.arg(token_hash)
   AND redeemed_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
 FOR UPDATE;
 
 -- name: RedeemInvite :one
 UPDATE invites
-SET redeemed_at = now(), redeemed_by = sqlc.arg(identity_id)
+SET redeemed_at = clock_timestamp(), redeemed_by = sqlc.arg(identity_id)
 WHERE token_hash = sqlc.arg(token_hash)
   AND redeemed_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > now()
+  AND expires_at > clock_timestamp()
 RETURNING *;
 
 -- name: RevokeInvite :execrows
