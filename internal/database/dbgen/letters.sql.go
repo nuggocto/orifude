@@ -512,6 +512,7 @@ WHERE letters.id = $1
   AND letters.sender_id = $2
   AND letters.recipient_id IS NULL
   AND letters.withdrawn_at IS NULL
+  AND letters.expires_at > clock_timestamp()
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = $2 AND deleted_at IS NULL)
 RETURNING id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at
 `

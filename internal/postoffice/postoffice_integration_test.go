@@ -878,6 +878,25 @@ func TestClaimLimitsAndExpiredClaimRelease(t *testing.T) {
 	}
 }
 
+func TestWithdrawRejectsExpiredWaitingLetter(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 89, "Withdraw Expiry Sender")
+	letterID := publicID('w')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(ctx, `UPDATE letters SET created_at = now() - interval '8 days', expires_at = now() - interval '1 day' WHERE id = $1`, letterID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.WithdrawLetter(ctx, Principal{IdentityID: sender.ID}, letterID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("withdraw expired waiting letter = %v, want not found", err)
+	}
+	var withdrawn bool
+	if err := raw.QueryRow(ctx, `SELECT withdrawn_at IS NOT NULL FROM letters WHERE id = $1`, letterID).Scan(&withdrawn); err != nil || withdrawn {
+		t.Fatalf("expired waiting letter withdrawn = %t, %v", withdrawn, err)
+	}
+}
+
 func TestOpenRejectsClaimExpiringWhileLocked(t *testing.T) {
 	service, db, raw, _, ctx := openPostOffice(t)
 	sender := seedIdentity(t, ctx, db, 67, "Expiry Lock Sender")

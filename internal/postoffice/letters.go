@@ -326,6 +326,9 @@ func (s *Service) WithdrawLetter(ctx context.Context, principal Principal, lette
 			return ErrConflict
 		}
 		letter, err = q.WithdrawLetter(ctx, dbgen.WithdrawLetterParams{ID: letterID, SenderID: principal.IdentityID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
 		return err
 	})
 	if err != nil {

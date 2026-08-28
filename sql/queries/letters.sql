@@ -60,6 +60,7 @@ WHERE letters.id = sqlc.arg(id)
   AND letters.sender_id = sqlc.arg(sender_id)
   AND letters.recipient_id IS NULL
   AND letters.withdrawn_at IS NULL
+  AND letters.expires_at > clock_timestamp()
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(sender_id) AND deleted_at IS NULL)
 RETURNING *;
 
