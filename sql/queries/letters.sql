@@ -15,7 +15,14 @@ JOIN identities ON identities.id = sqlc.arg(sender_id) AND identities.deleted_at
 WHERE letters.id = sqlc.arg(id)
   AND letters.sender_id = sqlc.arg(sender_id)
   AND letters.sender_removed_at IS NULL
-  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp());
+  AND (
+    letters.opened_at IS NOT NULL
+    OR letters.claim_expires_at > clock_timestamp()
+    OR letters.expires_at > clock_timestamp()
+  );
+
+-- name: CurrentDatabaseTime :one
+SELECT clock_timestamp()::timestamptz;
 
 -- name: GetLetterForRecipient :one
 SELECT letters.* FROM letters

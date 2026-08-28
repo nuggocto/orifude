@@ -26,7 +26,11 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 		return api.CreateLetterResponse{}, errors.Join(ErrInvalid, err)
 	}
 	if existing, err := s.db.Queries().GetLetterForSender(ctx, dbgen.GetLetterForSenderParams{SenderID: principal.IdentityID, ID: request.LetterID}); err == nil {
-		return createLetterResponse(existing), nil
+		responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
+		if err != nil {
+			return api.CreateLetterResponse{}, err
+		}
+		return createLetterResponse(existing, responseAt.Time), nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return api.CreateLetterResponse{}, err
 	}
@@ -86,7 +90,11 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 	if err != nil {
 		return api.CreateLetterResponse{}, err
 	}
-	return createLetterResponse(letter), nil
+	responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
+	if err != nil {
+		return api.CreateLetterResponse{}, err
+	}
+	return createLetterResponse(letter, responseAt.Time), nil
 }
 
 func (s *Service) ClaimLetter(ctx context.Context, principal Principal) (api.ClaimLetterResponse, error) {
@@ -159,6 +167,7 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 			}
 		}
 		var locked dbgen.Letter
+		var responseAt time.Time
 		err = s.db.InTx(ctx, func(q *dbgen.Queries) error {
 			if _, err := q.LockActiveIdentity(ctx, principal.IdentityID); err != nil {
 				return ErrNotFound
@@ -170,7 +179,9 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 			if !sameReadableVersion(letter, locked) {
 				return errRetryRead
 			}
-			return nil
+			databaseTime, err := q.CurrentDatabaseTime(ctx)
+			responseAt = databaseTime.Time
+			return err
 		})
 		if errors.Is(err, errRetryRead) {
 			clear(original)
@@ -182,7 +193,7 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 			clear(reply)
 			return api.GetLetterResponse{}, err
 		}
-		response := letterResponse(locked, role, string(original), string(reply))
+		response := letterResponse(locked, role, string(original), string(reply), responseAt)
 		clear(original)
 		clear(reply)
 		return response, nil
@@ -406,6 +417,10 @@ func (s *Service) ListKeepsakes(ctx context.Context, principal Principal, reques
 	if err != nil {
 		return api.ListKeepsakesResponse{}, err
 	}
+	responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
+	if err != nil {
+		return api.ListKeepsakesResponse{}, err
+	}
 
 	type item struct {
 		letter dbgen.Letter
@@ -430,7 +445,7 @@ func (s *Service) ListKeepsakes(ctx context.Context, principal Principal, reques
 	}
 	response := api.ListKeepsakesResponse{Keepsakes: make([]api.LetterSummary, 0, len(items))}
 	for _, item := range items {
-		response.Keepsakes = append(response.Keepsakes, letterSummary(item.letter, item.role))
+		response.Keepsakes = append(response.Keepsakes, letterSummary(item.letter, item.role, responseAt.Time))
 	}
 	if more {
 		last := items[len(items)-1].letter
@@ -560,9 +575,9 @@ func sameReadableVersion(a, b dbgen.Letter) bool {
 		a.RecipientRemovedAt == b.RecipientRemovedAt && a.RecipientID == b.RecipientID
 }
 
-func createLetterResponse(letter dbgen.Letter) api.CreateLetterResponse {
+func createLetterResponse(letter dbgen.Letter, responseAt time.Time) api.CreateLetterResponse {
 	return api.CreateLetterResponse{
-		LetterID: letter.ID, State: letterState(letter), FoldSeed: letter.FoldSeed,
+		LetterID: letter.ID, State: letterState(letter, responseAt), FoldSeed: letter.FoldSeed,
 		CreatedAt: letter.CreatedAt.Time, ExpiresAt: letter.ExpiresAt.Time,
 	}
 }
@@ -571,18 +586,22 @@ func replyResponse(letter dbgen.Letter) api.ReplyToLetterResponse {
 	return api.ReplyToLetterResponse{LetterID: letter.ID, ReplyID: letter.ReplyID.String, RepliedAt: letter.RepliedAt.Time}
 }
 
-func letterResponse(letter dbgen.Letter, role api.LetterRole, original, reply string) api.GetLetterResponse {
+func letterResponse(letter dbgen.Letter, role api.LetterRole, original, reply string, responseAt time.Time) api.GetLetterResponse {
 	response := api.GetLetterResponse{
-		LetterID: letter.ID, Role: role, State: letterState(letter), FoldSeed: letter.FoldSeed,
+		LetterID: letter.ID, Role: role, State: letterState(letter, responseAt), FoldSeed: letter.FoldSeed,
 		CreatedAt: letter.CreatedAt.Time,
 		Original:  &api.Message{Body: original, Alias: letter.SenderAlias, CreatedAt: letter.CreatedAt.Time},
 	}
 	if role == api.LetterRoleSender {
-		response.OtherAlias = letter.RecipientAlias.String
+		if letter.OpenedAt.Valid || claimActive(letter, responseAt) {
+			response.OtherAlias = letter.RecipientAlias.String
+		}
 	} else {
 		response.OtherAlias = letter.SenderAlias
 	}
-	response.ClaimExpiresAt = timePointer(letter.ClaimExpiresAt)
+	if letter.OpenedAt.Valid || claimActive(letter, responseAt) {
+		response.ClaimExpiresAt = timePointer(letter.ClaimExpiresAt)
+	}
 	response.OpenedAt = timePointer(letter.OpenedAt)
 	response.RepliedAt = timePointer(letter.RepliedAt)
 	if letter.ReplyID.Valid {
@@ -591,21 +610,26 @@ func letterResponse(letter dbgen.Letter, role api.LetterRole, original, reply st
 	return response
 }
 
-func letterSummary(letter dbgen.Letter, role api.LetterRole) api.LetterSummary {
+func letterSummary(letter dbgen.Letter, role api.LetterRole, responseAt time.Time) api.LetterSummary {
 	summary := api.LetterSummary{
-		LetterID: letter.ID, Role: role, State: letterState(letter), FoldSeed: letter.FoldSeed,
-		CreatedAt: letter.CreatedAt.Time, ClaimExpiresAt: timePointer(letter.ClaimExpiresAt),
-		OpenedAt: timePointer(letter.OpenedAt), RepliedAt: timePointer(letter.RepliedAt),
+		LetterID: letter.ID, Role: role, State: letterState(letter, responseAt), FoldSeed: letter.FoldSeed,
+		CreatedAt: letter.CreatedAt.Time,
+		OpenedAt:  timePointer(letter.OpenedAt), RepliedAt: timePointer(letter.RepliedAt),
 	}
 	if role == api.LetterRoleSender {
-		summary.OtherAlias = letter.RecipientAlias.String
+		if letter.OpenedAt.Valid || claimActive(letter, responseAt) {
+			summary.OtherAlias = letter.RecipientAlias.String
+		}
 	} else {
 		summary.OtherAlias = letter.SenderAlias
+	}
+	if letter.OpenedAt.Valid || claimActive(letter, responseAt) {
+		summary.ClaimExpiresAt = timePointer(letter.ClaimExpiresAt)
 	}
 	return summary
 }
 
-func letterState(letter dbgen.Letter) api.LetterState {
+func letterState(letter dbgen.Letter, responseAt time.Time) api.LetterState {
 	switch {
 	case letter.WithdrawnAt.Valid:
 		return api.LetterStateWithdrawn
@@ -613,11 +637,15 @@ func letterState(letter dbgen.Letter) api.LetterState {
 		return api.LetterStateReplied
 	case letter.OpenedAt.Valid:
 		return api.LetterStateOpened
-	case letter.RecipientID.Valid:
+	case claimActive(letter, responseAt):
 		return api.LetterStateClaimed
 	default:
 		return api.LetterStateWaiting
 	}
+}
+
+func claimActive(letter dbgen.Letter, responseAt time.Time) bool {
+	return letter.RecipientID.Valid && letter.ClaimExpiresAt.Valid && letter.ClaimExpiresAt.Time.After(responseAt)
 }
 
 func timePointer(value pgtype.Timestamptz) *time.Time {

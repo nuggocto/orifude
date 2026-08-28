@@ -151,6 +151,17 @@ func (q *Queries) CreateLetter(ctx context.Context, arg CreateLetterParams) (Let
 	return i, err
 }
 
+const currentDatabaseTime = `-- name: CurrentDatabaseTime :one
+SELECT clock_timestamp()::timestamptz
+`
+
+func (q *Queries) CurrentDatabaseTime(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, currentDatabaseTime)
+	var column_1 pgtype.Timestamptz
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const expiredClaimExistsForRecipient = `-- name: ExpiredClaimExistsForRecipient :one
 SELECT EXISTS (
     SELECT 1 FROM letters
@@ -323,7 +334,11 @@ JOIN identities ON identities.id = $1 AND identities.deleted_at IS NULL
 WHERE letters.id = $2
   AND letters.sender_id = $1
   AND letters.sender_removed_at IS NULL
-  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp())
+  AND (
+    letters.opened_at IS NOT NULL
+    OR letters.claim_expires_at > clock_timestamp()
+    OR letters.expires_at > clock_timestamp()
+  )
 `
 
 type GetLetterForSenderParams struct {

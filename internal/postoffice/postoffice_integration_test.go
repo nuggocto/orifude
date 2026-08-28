@@ -871,6 +871,14 @@ func TestClaimLimitsAndExpiredClaimRelease(t *testing.T) {
 	if _, err := service.OpenLetter(ctx, Principal{IdentityID: recipient.ID}, secondID); !errors.Is(err, ErrClaimExpired) {
 		t.Fatalf("expired open error = %v, want claim expired", err)
 	}
+	detail, err := service.GetLetter(ctx, Principal{IdentityID: secondSender.ID}, secondID)
+	if err != nil || detail.State != api.LetterStateWaiting || detail.OtherAlias != "" || detail.ClaimExpiresAt != nil {
+		t.Fatalf("expired claim detail = %+v, %v", detail, err)
+	}
+	keepsakes, err := service.ListKeepsakes(ctx, Principal{IdentityID: secondSender.ID}, api.ListKeepsakesRequest{})
+	if err != nil || len(keepsakes.Keepsakes) != 1 || keepsakes.Keepsakes[0].State != api.LetterStateWaiting || keepsakes.Keepsakes[0].OtherAlias != "" || keepsakes.Keepsakes[0].ClaimExpiresAt != nil {
+		t.Fatalf("expired claim keepsake = %+v, %v", keepsakes, err)
+	}
 	if _, err := raw.Exec(ctx, `UPDATE rate_limit_events SET created_at = now() - interval '16 minutes' WHERE identity_id = $1 AND kind = $2`, recipient.ID, rateClaim); err != nil {
 		t.Fatal(err)
 	}

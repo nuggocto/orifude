@@ -2,7 +2,7 @@
 SELECT letters.* FROM letters
 WHERE letters.sender_id = sqlc.arg(identity_id)
   AND letters.sender_removed_at IS NULL
-  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp())
+  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > clock_timestamp() OR letters.expires_at > clock_timestamp())
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(identity_id) AND deleted_at IS NULL)
 ORDER BY letters.created_at DESC, letters.id DESC
 LIMIT sqlc.arg(page_size);
@@ -11,7 +11,7 @@ LIMIT sqlc.arg(page_size);
 SELECT letters.* FROM letters
 WHERE letters.sender_id = sqlc.arg(identity_id)
   AND letters.sender_removed_at IS NULL
-  AND (letters.recipient_id IS NOT NULL OR letters.expires_at > clock_timestamp())
+  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > clock_timestamp() OR letters.expires_at > clock_timestamp())
   AND (letters.created_at, letters.id) < (sqlc.arg(cursor_created_at), sqlc.arg(cursor_id)::varchar(22))
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(identity_id) AND deleted_at IS NULL)
 ORDER BY letters.created_at DESC, letters.id DESC
