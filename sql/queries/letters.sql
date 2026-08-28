@@ -94,14 +94,16 @@ WHERE letters.id = sqlc.arg(id)
 RETURNING letters.*;
 
 -- name: OpenLetter :one
+WITH opening AS (SELECT clock_timestamp() AS value)
 UPDATE letters
-SET opened_at = clock_timestamp(), claim_expires_at = NULL
+SET opened_at = opening.value, claim_expires_at = NULL
+FROM opening
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id = sqlc.arg(recipient_id)
   AND letters.opened_at IS NULL
-  AND letters.claim_expires_at > clock_timestamp()
+  AND letters.claim_expires_at > opening.value
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(recipient_id) AND deleted_at IS NULL)
-RETURNING *;
+RETURNING letters.*;
 
 -- name: AddLetterReply :one
 UPDATE letters

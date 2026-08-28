@@ -526,14 +526,16 @@ func (q *Queries) LockLetterForSender(ctx context.Context, arg LockLetterForSend
 }
 
 const openLetter = `-- name: OpenLetter :one
+WITH opening AS (SELECT clock_timestamp() AS value)
 UPDATE letters
-SET opened_at = clock_timestamp(), claim_expires_at = NULL
+SET opened_at = opening.value, claim_expires_at = NULL
+FROM opening
 WHERE letters.id = $1
   AND letters.recipient_id = $2
   AND letters.opened_at IS NULL
-  AND letters.claim_expires_at > clock_timestamp()
+  AND letters.claim_expires_at > opening.value
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = $2 AND deleted_at IS NULL)
-RETURNING id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at
+RETURNING letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at
 `
 
 type OpenLetterParams struct {
