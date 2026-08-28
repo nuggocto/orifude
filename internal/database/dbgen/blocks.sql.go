@@ -10,9 +10,10 @@ import (
 )
 
 const createBlockFromLetter = `-- name: CreateBlockFromLetter :execrows
-INSERT INTO blocks (blocker_id, blocked_id)
+INSERT INTO blocks (blocker_id, blocked_id, created_at)
 SELECT $1,
-       CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END
+       CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END,
+       clock_timestamp()
 FROM letters
 WHERE letters.id = $2
   AND opened_at IS NOT NULL

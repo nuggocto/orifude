@@ -292,7 +292,7 @@ func (q *Queries) ListSentKeepsakesAfter(ctx context.Context, arg ListSentKeepsa
 
 const removeReceivedKeepsake = `-- name: RemoveReceivedKeepsake :one
 UPDATE letters
-SET recipient_removed_at = now()
+SET recipient_removed_at = clock_timestamp()
 WHERE letters.id = $1
   AND letters.recipient_id = $2
   AND letters.opened_at IS NOT NULL
@@ -342,7 +342,7 @@ func (q *Queries) RemoveReceivedKeepsake(ctx context.Context, arg RemoveReceived
 
 const removeSentKeepsake = `-- name: RemoveSentKeepsake :one
 UPDATE letters
-SET sender_removed_at = now()
+SET sender_removed_at = clock_timestamp()
 WHERE letters.id = $1
   AND letters.sender_id = $2
   AND letters.sender_removed_at IS NULL

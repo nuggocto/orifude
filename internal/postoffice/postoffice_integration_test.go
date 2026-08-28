@@ -109,9 +109,40 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 		t.Fatalf("known-key session error = %v, want authentication", err)
 	}
 	sessionProof := proof(t, key, "POST", testOrigin+"/v1/sessions", "session-proof-000", challenge.Nonce, "")
-	session, err := service.CreateSession(ctx, api.CreateSessionRequest{ChallengeID: challenge.ChallengeID}, sessionProof)
+	sessionLockConn := connectPostgres(t, ctx)
+	sessionLock, err := sessionLockConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessionLock.Exec(ctx, `SELECT 1 FROM auth_challenges WHERE id = $1 FOR UPDATE`, challenge.ChallengeID); err != nil {
+		t.Fatal(err)
+	}
+	type sessionResult struct {
+		response api.CreateSessionResponse
+		err      error
+	}
+	sessionResultChannel := make(chan sessionResult, 1)
+	go func() {
+		response, err := service.CreateSession(ctx, api.CreateSessionRequest{ChallengeID: challenge.ChallengeID}, sessionProof)
+		sessionResultChannel <- sessionResult{response: response, err: err}
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	issuedAfter, err := db.Queries().CurrentDatabaseTime(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sessionLock.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	createdSession := <-sessionResultChannel
+	session, err := createdSession.response, createdSession.err
 	if err != nil {
 		t.Fatalf("create session: %v", err)
+	}
+	sessionHash := auth.HashAccessToken(session.AccessToken)
+	persistedSession, err := db.Queries().GetActiveAccessSession(ctx, sessionHash[:])
+	if err != nil || persistedSession.CreatedAt.Time.Before(issuedAfter.Time) || persistedSession.ExpiresAt.Time.Sub(persistedSession.CreatedAt.Time) != 15*time.Minute {
+		t.Fatalf("delayed session lifetime = %v to %v after %v, %v", persistedSession.CreatedAt.Time, persistedSession.ExpiresAt.Time, issuedAfter.Time, err)
 	}
 	if _, err := raw.Exec(ctx, `UPDATE identities SET last_seen_at = created_at WHERE alias = 'Maple Finch'`); err != nil {
 		t.Fatal(err)
@@ -165,7 +196,6 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 	if _, err := lockTx.Exec(ctx, `LOCK TABLE dpop_replays IN ACCESS EXCLUSIVE MODE`); err != nil {
 		t.Fatal(err)
 	}
-	sessionHash := auth.HashAccessToken(session.AccessToken)
 	if _, err := raw.Exec(ctx, `
 		UPDATE access_sessions
 		SET created_at = deadline - interval '15 minutes', expires_at = deadline
@@ -506,6 +536,9 @@ func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
 	closed, err := result.response, result.err
 	if err != nil || closed.Disposition != api.ModerationDispositionIdentityDisabled {
 		t.Fatalf("close = %+v, %v", closed, err)
+	}
+	if closed.ClosedAt.Before(lateSession.CreatedAt.Time) || closed.EvidencePurgeAt.Sub(closed.ClosedAt) != 90*24*time.Hour || closed.RecordPurgeAt != closed.ClosedAt.AddDate(1, 0, 0) {
+		t.Fatalf("delayed close retention = %+v after %v", closed, lateSession.CreatedAt.Time)
 	}
 	var revokedAt time.Time
 	if err := raw.QueryRow(ctx, `SELECT revoked_at FROM access_sessions WHERE token_hash = $1`, lateSessionHash).Scan(&revokedAt); err != nil || revokedAt.Before(lateSession.CreatedAt.Time) {

@@ -1,9 +1,11 @@
 -- name: CreateAuthChallenge :one
+WITH creation AS (SELECT clock_timestamp() AS value)
 INSERT INTO auth_challenges (
-    id, identity_id, public_key, key_thumbprint, purpose, nonce_hash, expires_at
+    id, identity_id, public_key, key_thumbprint, purpose, nonce_hash, created_at, expires_at
 ) VALUES (
     sqlc.arg(id), sqlc.narg(identity_id), sqlc.arg(public_key), sqlc.arg(key_thumbprint),
-    sqlc.arg(purpose), sqlc.arg(nonce_hash), now() + interval '5 minutes'
+    sqlc.arg(purpose), sqlc.arg(nonce_hash), (SELECT value FROM creation),
+    (SELECT value + interval '5 minutes' FROM creation)
 )
 RETURNING *;
 
@@ -22,8 +24,11 @@ WHERE id = sqlc.arg(id)
 RETURNING *;
 
 -- name: CreateAccessSession :one
-INSERT INTO access_sessions (token_hash, identity_id, key_thumbprint, expires_at)
-VALUES (sqlc.arg(token_hash), sqlc.arg(identity_id), sqlc.arg(key_thumbprint), now() + interval '15 minutes')
+WITH issuance AS (SELECT clock_timestamp() AS value)
+INSERT INTO access_sessions (token_hash, identity_id, key_thumbprint, created_at, expires_at)
+SELECT sqlc.arg(token_hash), sqlc.arg(identity_id), sqlc.arg(key_thumbprint),
+       issuance.value, issuance.value + interval '15 minutes'
+FROM issuance
 RETURNING *;
 
 -- name: GetActiveAccessSession :one
@@ -32,7 +37,7 @@ FROM access_sessions
 JOIN identities ON identities.id = access_sessions.identity_id
 WHERE access_sessions.token_hash = sqlc.arg(token_hash)
   AND access_sessions.revoked_at IS NULL
-  AND access_sessions.expires_at > now()
+  AND access_sessions.expires_at > clock_timestamp()
   AND identities.deleted_at IS NULL
   AND identities.key_thumbprint = access_sessions.key_thumbprint;
 

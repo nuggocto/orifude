@@ -89,19 +89,19 @@ SELECT
         SELECT 1 FROM rate_limit_events
         WHERE rate_limit_events.identity_id = $2
           AND rate_limit_events.kind = $3
-          AND rate_limit_events.created_at >= now() - make_interval(secs => $1::integer)
+          AND rate_limit_events.created_at >= clock_timestamp() - make_interval(secs => $1::integer)
     ))
     AND ($4::integer <= 0 OR (
         SELECT count(*) FROM rate_limit_events
         WHERE rate_limit_events.identity_id = $2
           AND rate_limit_events.kind = $3
-          AND rate_limit_events.created_at >= now() - interval '1 hour'
+          AND rate_limit_events.created_at >= clock_timestamp() - interval '1 hour'
     ) < $4::integer)
     AND ($5::integer <= 0 OR (
         SELECT count(*) FROM rate_limit_events
         WHERE rate_limit_events.identity_id = $2
           AND rate_limit_events.kind = $3
-          AND rate_limit_events.created_at >= now() - interval '1 day'
+          AND rate_limit_events.created_at >= clock_timestamp() - interval '1 day'
     ) < $5::integer) AS allowed
 `
 
@@ -127,8 +127,8 @@ func (q *Queries) RateLimitAllowed(ctx context.Context, arg RateLimitAllowedPara
 }
 
 const recordRateLimitEvent = `-- name: RecordRateLimitEvent :one
-INSERT INTO rate_limit_events (identity_id, kind)
-SELECT $1, $2
+INSERT INTO rate_limit_events (identity_id, kind, created_at)
+SELECT $1, $2, clock_timestamp()
 WHERE EXISTS (SELECT 1 FROM identities WHERE id = $1 AND deleted_at IS NULL)
 RETURNING id, identity_id, kind, created_at
 `

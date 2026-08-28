@@ -1,7 +1,8 @@
 -- name: CreateBlockFromLetter :execrows
-INSERT INTO blocks (blocker_id, blocked_id)
+INSERT INTO blocks (blocker_id, blocked_id, created_at)
 SELECT sqlc.arg(identity_id),
-       CASE WHEN sender_id = sqlc.arg(identity_id) THEN recipient_id ELSE sender_id END
+       CASE WHEN sender_id = sqlc.arg(identity_id) THEN recipient_id ELSE sender_id END,
+       clock_timestamp()
 FROM letters
 WHERE letters.id = sqlc.arg(letter_id)
   AND opened_at IS NOT NULL

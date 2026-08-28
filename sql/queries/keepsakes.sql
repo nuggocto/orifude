@@ -38,7 +38,7 @@ LIMIT sqlc.arg(page_size);
 
 -- name: RemoveSentKeepsake :one
 UPDATE letters
-SET sender_removed_at = now()
+SET sender_removed_at = clock_timestamp()
 WHERE letters.id = sqlc.arg(id)
   AND letters.sender_id = sqlc.arg(identity_id)
   AND letters.sender_removed_at IS NULL
@@ -47,7 +47,7 @@ RETURNING *;
 
 -- name: RemoveReceivedKeepsake :one
 UPDATE letters
-SET recipient_removed_at = now()
+SET recipient_removed_at = clock_timestamp()
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id = sqlc.arg(identity_id)
   AND letters.opened_at IS NOT NULL

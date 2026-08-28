@@ -335,7 +335,7 @@ SET evidence_ciphertext = NULL,
     evidence_wrapped_key = NULL,
     evidence_kms_key_id = NULL,
     evidence_encryption_version = NULL,
-    evidence_purged_at = now()
+    evidence_purged_at = clock_timestamp()
 WHERE id = $1
   AND evidence_purge_at <= now()
   AND evidence_purged_at IS NULL

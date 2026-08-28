@@ -4,10 +4,11 @@ WITH reservation AS (
     VALUES (sqlc.arg(alias_key))
     ON CONFLICT DO NOTHING
     RETURNING alias_key
-)
-INSERT INTO identities (public_key, key_thumbprint, revocation_hash, alias, alias_key)
-SELECT sqlc.arg(public_key), sqlc.arg(key_thumbprint), sqlc.arg(revocation_hash), sqlc.arg(alias), reservation.alias_key
-FROM reservation
+), creation AS (SELECT clock_timestamp() AS value)
+INSERT INTO identities (public_key, key_thumbprint, revocation_hash, alias, alias_key, created_at, last_seen_at)
+SELECT sqlc.arg(public_key), sqlc.arg(key_thumbprint), sqlc.arg(revocation_hash), sqlc.arg(alias),
+       reservation.alias_key, creation.value, creation.value
+FROM reservation CROSS JOIN creation
 RETURNING *;
 
 -- name: GetIdentityByID :one
@@ -55,7 +56,7 @@ ON CONFLICT DO NOTHING;
 
 -- name: TouchIdentity :execrows
 UPDATE identities
-SET last_seen_at = now()
+SET last_seen_at = clock_timestamp()
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL;
 
 -- name: MarkIdentityDeleted :one
@@ -63,7 +64,7 @@ UPDATE identities
 SET revocation_hash = NULL,
     alias = NULL,
     alias_key = NULL,
-    deleted_at = now()
+    deleted_at = clock_timestamp()
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL
 RETURNING *;
 
@@ -97,8 +98,8 @@ WHERE sender_id = sqlc.arg(identity_id) AND recipient_id IS NULL;
 
 -- name: RemoveIdentityKeepsakes :execrows
 UPDATE letters
-SET sender_removed_at = CASE WHEN sender_id = sqlc.arg(identity_id) THEN now() ELSE sender_removed_at END,
-    recipient_removed_at = CASE WHEN recipient_id = sqlc.arg(identity_id) THEN now() ELSE recipient_removed_at END
+SET sender_removed_at = CASE WHEN sender_id = sqlc.arg(identity_id) THEN clock_timestamp() ELSE sender_removed_at END,
+    recipient_removed_at = CASE WHEN recipient_id = sqlc.arg(identity_id) THEN clock_timestamp() ELSE recipient_removed_at END
 WHERE (sender_id = sqlc.arg(identity_id) AND recipient_id IS NOT NULL)
    OR (recipient_id = sqlc.arg(identity_id) AND opened_at IS NOT NULL);
 
@@ -113,8 +114,10 @@ DELETE FROM blocks
 WHERE blocker_id = sqlc.arg(identity_id) OR blocked_id = sqlc.arg(identity_id);
 
 -- name: CreateInvite :one
-INSERT INTO invites (token_hash, expires_at)
-VALUES (sqlc.arg(token_hash), now() + interval '7 days')
+WITH creation AS (SELECT clock_timestamp() AS value)
+INSERT INTO invites (token_hash, created_at, expires_at)
+SELECT sqlc.arg(token_hash), creation.value, creation.value + interval '7 days'
+FROM creation
 RETURNING *;
 
 -- name: GetInviteForUpdate :one
@@ -141,7 +144,7 @@ RETURNING *;
 
 -- name: RevokeInvite :execrows
 UPDATE invites
-SET revoked_at = now()
+SET revoked_at = clock_timestamp()
 WHERE token_hash = sqlc.arg(token_hash)
   AND redeemed_at IS NULL
   AND revoked_at IS NULL;

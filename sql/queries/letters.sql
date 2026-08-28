@@ -1,11 +1,13 @@
 -- name: CreateLetter :one
+WITH creation AS (SELECT clock_timestamp() AS value)
 INSERT INTO letters (
     id, sender_id, sender_alias, body_ciphertext, body_nonce, body_wrapped_key,
-    body_kms_key_id, body_encryption_version, fold_seed, expires_at
+    body_kms_key_id, body_encryption_version, fold_seed, created_at, expires_at
 ) VALUES (
     sqlc.arg(id), sqlc.arg(sender_id), sqlc.arg(sender_alias), sqlc.arg(body_ciphertext),
     sqlc.arg(body_nonce), sqlc.arg(body_wrapped_key), sqlc.arg(body_kms_key_id),
-    sqlc.arg(body_encryption_version), sqlc.arg(fold_seed), now() + interval '7 days'
+    sqlc.arg(body_encryption_version), sqlc.arg(fold_seed), (SELECT value FROM creation),
+    (SELECT value + interval '7 days' FROM creation)
 )
 RETURNING *;
 
@@ -38,7 +40,7 @@ JOIN identities ON identities.id = sqlc.arg(recipient_id) AND identities.deleted
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id = sqlc.arg(recipient_id)
   AND letters.recipient_removed_at IS NULL
-  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > now());
+  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > clock_timestamp());
 
 -- name: ExpiredClaimExistsForRecipient :one
 SELECT EXISTS (
@@ -47,7 +49,7 @@ SELECT EXISTS (
     WHERE letters.id = sqlc.arg(id)
       AND letters.recipient_id = sqlc.arg(recipient_id)
       AND letters.opened_at IS NULL
-      AND letters.claim_expires_at <= now()
+      AND letters.claim_expires_at <= clock_timestamp()
 ) AS expired;
 
 -- name: LockLetterForSender :one
@@ -62,7 +64,7 @@ FOR UPDATE;
 
 -- name: WithdrawLetter :one
 UPDATE letters
-SET withdrawn_at = now()
+SET withdrawn_at = clock_timestamp()
 WHERE letters.id = sqlc.arg(id)
   AND letters.sender_id = sqlc.arg(sender_id)
   AND letters.recipient_id IS NULL
@@ -73,7 +75,7 @@ RETURNING *;
 
 -- name: OpenLetter :one
 UPDATE letters
-SET opened_at = now(), claim_expires_at = NULL
+SET opened_at = clock_timestamp(), claim_expires_at = NULL
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id = sqlc.arg(recipient_id)
   AND letters.opened_at IS NULL
@@ -89,7 +91,7 @@ SET reply_id = sqlc.arg(reply_id),
     reply_wrapped_key = sqlc.arg(reply_wrapped_key),
     reply_kms_key_id = sqlc.arg(reply_kms_key_id),
     reply_encryption_version = sqlc.arg(reply_encryption_version),
-    replied_at = now()
+    replied_at = clock_timestamp()
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id = sqlc.arg(recipient_id)
   AND letters.opened_at IS NOT NULL

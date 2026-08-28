@@ -12,15 +12,17 @@ import (
 )
 
 const closeReport = `-- name: CloseReport :one
+WITH close_time AS (SELECT clock_timestamp() AS value)
 UPDATE reports
 SET disposition = COALESCE(disposition, $1),
-    closed_at = COALESCE(closed_at, now()),
-    evidence_purge_at = COALESCE(evidence_purge_at, now() + interval '90 days'),
-    record_purge_at = COALESCE(record_purge_at, now() + interval '1 year')
+    closed_at = COALESCE(closed_at, close_time.value),
+    evidence_purge_at = COALESCE(evidence_purge_at, close_time.value + interval '90 days'),
+    record_purge_at = COALESCE(record_purge_at, close_time.value + interval '1 year')
+FROM close_time
 WHERE id = $2
   AND reviewed_at IS NOT NULL
   AND (disposition IS NULL OR disposition = $1)
-RETURNING id, letter_id, reporter_id, reported_identity_id, target, reason, created_at, reviewed_at, reviewed_by, disposition, closed_at, evidence_purge_at, record_purge_at, evidence_ciphertext, evidence_nonce, evidence_wrapped_key, evidence_kms_key_id, evidence_encryption_version, evidence_purged_at
+RETURNING reports.id, reports.letter_id, reports.reporter_id, reports.reported_identity_id, reports.target, reports.reason, reports.created_at, reports.reviewed_at, reports.reviewed_by, reports.disposition, reports.closed_at, reports.evidence_purge_at, reports.record_purge_at, reports.evidence_ciphertext, reports.evidence_nonce, reports.evidence_wrapped_key, reports.evidence_kms_key_id, reports.evidence_encryption_version, reports.evidence_purged_at
 `
 
 type CloseReportParams struct {
@@ -56,11 +58,13 @@ func (q *Queries) CloseReport(ctx context.Context, arg CloseReportParams) (Repor
 }
 
 const createModerationAudit = `-- name: CreateModerationAudit :one
+WITH creation AS (SELECT clock_timestamp() AS value)
 INSERT INTO moderation_audit (
-    request_id, report_id, moderator_subject, action, purpose, outcome, purge_at
+    request_id, report_id, moderator_subject, action, purpose, outcome, created_at, purge_at
 ) VALUES (
     $1, $2, $3,
-    $4, 'reported-content-review', $5, now() + interval '1 year'
+    $4, 'reported-content-review', $5,
+    (SELECT value FROM creation), (SELECT value + interval '1 year' FROM creation)
 )
 RETURNING id, request_id, report_id, moderator_subject, action, purpose, outcome, created_at, purge_at
 `
@@ -275,7 +279,7 @@ func (q *Queries) LockReportForReview(ctx context.Context, id string) (Report, e
 
 const markReportReviewed = `-- name: MarkReportReviewed :one
 UPDATE reports
-SET reviewed_at = COALESCE(reviewed_at, now()),
+SET reviewed_at = COALESCE(reviewed_at, clock_timestamp()),
     reviewed_by = COALESCE(reviewed_by, $1)
 WHERE id = $2
   AND (reviewed_by IS NULL OR reviewed_by = $1)

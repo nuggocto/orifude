@@ -15,7 +15,7 @@ const createReport = `-- name: CreateReport :one
 INSERT INTO reports (
     id, letter_id, reporter_id, reported_identity_id, target, reason,
     evidence_ciphertext, evidence_nonce, evidence_wrapped_key,
-    evidence_kms_key_id, evidence_encryption_version
+    evidence_kms_key_id, evidence_encryption_version, created_at
 )
 SELECT $1,
        letters.id,
@@ -27,7 +27,8 @@ SELECT $1,
        $6,
        $7,
        $8,
-       $9
+       $9,
+       clock_timestamp()
 FROM letters
 WHERE letters.id = $10
   AND letters.opened_at IS NOT NULL
@@ -170,8 +171,8 @@ func (q *Queries) GetReportByLetterForReporter(ctx context.Context, arg GetRepor
 
 const hideReportedLetter = `-- name: HideReportedLetter :execrows
 UPDATE letters
-SET recipient_removed_at = CASE WHEN reports.target = 1 THEN now() ELSE letters.recipient_removed_at END,
-    sender_removed_at = CASE WHEN reports.target = 2 THEN now() ELSE letters.sender_removed_at END
+SET recipient_removed_at = CASE WHEN reports.target = 1 THEN clock_timestamp() ELSE letters.recipient_removed_at END,
+    sender_removed_at = CASE WHEN reports.target = 2 THEN clock_timestamp() ELSE letters.sender_removed_at END
 FROM reports
 WHERE reports.id = $1
   AND reports.letter_id = letters.id

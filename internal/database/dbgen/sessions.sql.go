@@ -60,8 +60,11 @@ func (q *Queries) ConsumeAuthChallenge(ctx context.Context, arg ConsumeAuthChall
 }
 
 const createAccessSession = `-- name: CreateAccessSession :one
-INSERT INTO access_sessions (token_hash, identity_id, key_thumbprint, expires_at)
-VALUES ($1, $2, $3, now() + interval '15 minutes')
+WITH issuance AS (SELECT clock_timestamp() AS value)
+INSERT INTO access_sessions (token_hash, identity_id, key_thumbprint, created_at, expires_at)
+SELECT $1, $2, $3,
+       issuance.value, issuance.value + interval '15 minutes'
+FROM issuance
 RETURNING token_hash, identity_id, key_thumbprint, created_at, expires_at, revoked_at
 `
 
@@ -86,11 +89,13 @@ func (q *Queries) CreateAccessSession(ctx context.Context, arg CreateAccessSessi
 }
 
 const createAuthChallenge = `-- name: CreateAuthChallenge :one
+WITH creation AS (SELECT clock_timestamp() AS value)
 INSERT INTO auth_challenges (
-    id, identity_id, public_key, key_thumbprint, purpose, nonce_hash, expires_at
+    id, identity_id, public_key, key_thumbprint, purpose, nonce_hash, created_at, expires_at
 ) VALUES (
     $1, $2, $3, $4,
-    $5, $6, now() + interval '5 minutes'
+    $5, $6, (SELECT value FROM creation),
+    (SELECT value + interval '5 minutes' FROM creation)
 )
 RETURNING id, identity_id, public_key, key_thumbprint, purpose, nonce_hash, created_at, expires_at, used_at
 `
@@ -134,7 +139,7 @@ FROM access_sessions
 JOIN identities ON identities.id = access_sessions.identity_id
 WHERE access_sessions.token_hash = $1
   AND access_sessions.revoked_at IS NULL
-  AND access_sessions.expires_at > now()
+  AND access_sessions.expires_at > clock_timestamp()
   AND identities.deleted_at IS NULL
   AND identities.key_thumbprint = access_sessions.key_thumbprint
 `

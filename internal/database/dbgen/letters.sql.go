@@ -19,7 +19,7 @@ SET reply_id = $1,
     reply_wrapped_key = $4,
     reply_kms_key_id = $5,
     reply_encryption_version = $6,
-    replied_at = now()
+    replied_at = clock_timestamp()
 WHERE letters.id = $7
   AND letters.recipient_id = $8
   AND letters.opened_at IS NOT NULL
@@ -84,13 +84,15 @@ func (q *Queries) AddLetterReply(ctx context.Context, arg AddLetterReplyParams) 
 }
 
 const createLetter = `-- name: CreateLetter :one
+WITH creation AS (SELECT clock_timestamp() AS value)
 INSERT INTO letters (
     id, sender_id, sender_alias, body_ciphertext, body_nonce, body_wrapped_key,
-    body_kms_key_id, body_encryption_version, fold_seed, expires_at
+    body_kms_key_id, body_encryption_version, fold_seed, created_at, expires_at
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
-    $8, $9, now() + interval '7 days'
+    $8, $9, (SELECT value FROM creation),
+    (SELECT value + interval '7 days' FROM creation)
 )
 RETURNING id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at
 `
@@ -169,7 +171,7 @@ SELECT EXISTS (
     WHERE letters.id = $2
       AND letters.recipient_id = $1
       AND letters.opened_at IS NULL
-      AND letters.claim_expires_at <= now()
+      AND letters.claim_expires_at <= clock_timestamp()
 ) AS expired
 `
 
@@ -238,7 +240,7 @@ JOIN identities ON identities.id = $1 AND identities.deleted_at IS NULL
 WHERE letters.id = $2
   AND letters.recipient_id = $1
   AND letters.recipient_removed_at IS NULL
-  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > now())
+  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > clock_timestamp())
 `
 
 type GetLetterForOpenParams struct {
@@ -472,7 +474,7 @@ func (q *Queries) LockLetterForSender(ctx context.Context, arg LockLetterForSend
 
 const openLetter = `-- name: OpenLetter :one
 UPDATE letters
-SET opened_at = now(), claim_expires_at = NULL
+SET opened_at = clock_timestamp(), claim_expires_at = NULL
 WHERE letters.id = $1
   AND letters.recipient_id = $2
   AND letters.opened_at IS NULL
@@ -522,7 +524,7 @@ func (q *Queries) OpenLetter(ctx context.Context, arg OpenLetterParams) (Letter,
 
 const withdrawLetter = `-- name: WithdrawLetter :one
 UPDATE letters
-SET withdrawn_at = now()
+SET withdrawn_at = clock_timestamp()
 WHERE letters.id = $1
   AND letters.sender_id = $2
   AND letters.recipient_id IS NULL
