@@ -5,6 +5,10 @@ go = "1.27.0"
 description = "Run the TUI"
 run = "go run ./cmd/orifude"
 
+[tasks.postoffice]
+description = "Run the post office with server environment variables"
+run = "go run ./cmd/postoffice"
+
 [tasks.build]
 description = "Build all Go packages"
 run = "go build ./..."
@@ -41,3 +45,11 @@ run = [
 [tasks.vhs]
 description = "Record and verify the offline TUI journey with Docker"
 run = "./testdata/vhs/check.sh"
+
+[tasks.db-generate]
+description = "Generate typed PostgreSQL queries"
+run = "go tool sqlc generate"
+
+[tasks.db-test]
+description = "Run PostgreSQL integration tests in Docker"
+run = "./testdata/postgres/check.sh"

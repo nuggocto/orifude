@@ -341,6 +341,9 @@ messages. The program does not start unmanaged goroutines.
 
 ### Post office
 
+- PostgreSQL 18 is the development and CI compatibility target. The initial
+  schema uses no extensions; production confirms the same major version before
+  provisioning.
 - Chi v5 routes a versioned JSON API on top of `net/http`.
 - `github.com/jackc/pgx/v5/pgxpool` provides PostgreSQL access and pooling.
 - `sqlc` generates typed pgx v5 query code from reviewed SQL in `sql/queries`.
@@ -528,6 +531,10 @@ Generated files are committed so a release build does not need sqlc installed.
 CI runs generation and fails on a diff. Schema changes start in a Goose
 migration, query changes stay in the relevant `.sql` file, and application code
 never embeds an alternate copy of those queries.
+
+Goose Down is supported for local and disposable databases before a migration
+is released. Production never rolls back a released schema with Down; it uses a
+new reviewed forward-repair migration. Released migrations are immutable.
 
 The package split is deliberate:
 
@@ -802,6 +809,10 @@ revoked before redemption. Only restricted operator tooling may issue or revoke
 them. Public registration does not require an invite once moderation, rate
 limits, privacy policy, and operations are ready.
 
+This phase implements invite persistence, redemption, revocation queries, and
+synthetic test seeding. The restricted issuance command and its production
+credential are deployment work and are not exposed by the participant API.
+
 ### `letters`
 
 | Column | Type | Rules |
@@ -844,8 +855,9 @@ Japanese text, while still fitting a terminal viewport and a tightly bounded
 request. The API limits the complete JSON request to 16 KiB before decoding.
 The TUI shows the remaining code-point count and byte validation errors before
 release. Go validates code points and UTF-8 bytes before encryption. Database
-`CHECK` constraints enforce nonce sizes, bounded ciphertext and wrapped-key
-sizes, positive encryption versions, and all-or-none reply fields.
+`CHECK` constraints enforce 12-byte nonce sizes, ciphertext from 17 to 12,304
+bytes, wrapped keys from 1 to 6,144 bytes, KMS key ARNs from 1 to 2,048 bytes,
+positive encryption versions, and all-or-none reply fields.
 
 Each original and reply gets a fresh KMS-generated data key and nonce. AES-GCM
 additional authenticated data and KMS encryption context both bind the schema
@@ -882,6 +894,7 @@ alias and device key cannot return.
 | `reason` | `smallint` | Fixed application enum |
 | `created_at` | `timestamptz` | Required |
 | `reviewed_at` | `timestamptz` | Nullable |
+| `reviewed_by` | `text` | Nullable verified Access `sub`; agrees with `reviewed_at` |
 | `disposition` | `smallint` | Nullable fixed closure enum |
 | `closed_at` | `timestamptz` | Nullable |
 | `evidence_purge_at` | `timestamptz` | Nullable; 90 days after closure |
@@ -909,6 +922,20 @@ Report reasons are fixed values for harassment, hateful content, sexual content,
 threats, spam or scams, exposed personal information, and other unsafe content.
 Closure dispositions are `no_action`, `duplicate`, and `identity_disabled`.
 `identity_disabled` applies only to `reported_identity_id` from the report.
+
+### `rate_limit_events`
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | `bigint generated always as identity` | Primary key |
+| `identity_id` | `bigint` | Required identity foreign key |
+| `kind` | `smallint` | Required fixed successful-operation enum |
+| `created_at` | `timestamptz` | Required, server time |
+
+The table is the durable source for per-identity cooldown, hourly, and daily
+windows. Events are inserted in the same transaction as the successful limited
+operation and deleted after the longest configured window. Deployment-edge IP
+limits remain an edge concern and never store forwarded network data here.
 
 ### `moderation_audit`
 
@@ -959,6 +986,10 @@ only while evidence remains eligible. At or after `evidence_purge_at`, it return
 `evidence_expired` without ciphertext even if the first attempt was authorized;
 the original audit row remains unchanged and edge and access logs record the
 retry.
+
+A `next` review request that finds no eligible report returns the empty-queue
+response without an audit row because no report or evidence was selected for an
+authorization decision.
 
 ### Required indexes
 
@@ -1107,6 +1138,10 @@ Expired unopened claims are released in the same operation or by a small
 scheduled cleanup query. Claims expire after 24 hours. Unclaimed letters expire
 after seven days. There is no background in-memory queue. PostgreSQL is the only
 source of truth.
+
+Cleanup operations are bounded, idempotent database methods in this phase.
+Production scheduling is configured with deployment operations rather than an
+unmanaged goroutine in every server replica.
 
 FIFO ordering is permanent product policy. Matching uses eligibility and queue
 order only; it never ranks content, aliases, or participant behavior.
@@ -1270,10 +1305,11 @@ handler
 ```
 
 Authentication and body limits are mounted at the narrowest route group that
-needs them. Forwarded client IP headers are trusted only when the deployment
-proxy strips user-supplied values. The service does not enable broad CORS
-because the TUI is the only participant API client and the landing page never
-calls it.
+needs them. Forwarded client IP headers are ignored by default. They are trusted
+only when the remote peer belongs to an explicitly configured trusted-proxy
+CIDR and the deployment proxy strips user-supplied values. The service does not
+enable broad CORS because the TUI is the only participant API client and the
+landing page never calls it.
 Moderation routes have a separate chain that validates the Cloudflare Access
 JWT, requires `X-Orifude-Moderation: reported-content-review`, and accepts no
 CORS preflight. Requests whose scheme and authority do not match
@@ -1479,9 +1515,11 @@ operational numbers remain configurable. During private alpha, an identity may
 hold only one unopened claim. Each successful new claim starts a 15-minute
 cooldown and an identity may receive at most three new claims per hour and eight
 per day. Returning an existing active claim does not consume another successful
-claim allowance. Claim requests, reports, identity creation attempts, letters
-per hour, deployment-edge IP traffic, and database pool size start with
-conservative limits and change from observed traffic and abuse.
+claim allowance. Successful per-identity limited operations write durable
+`rate_limit_events` in their state transaction. Claim requests, reports,
+identity creation attempts, letters per hour, deployment-edge IP traffic, and
+database pool size start with conservative limits and change from observed
+traffic and abuse.
 
 ## Visual system
 
@@ -1673,6 +1711,7 @@ Artifact signatures and attestations are not part of the release contract.
 | `LISTEN_ADDR` | HTTP listen address |
 | `PUBLIC_ORIGIN` | Exact origin used to validate DPoP `htu` |
 | `MODERATION_ORIGIN` | Exact Access-protected origin accepted for moderation routes |
+| `TRUSTED_PROXY_CIDRS` | Optional comma-separated deployment-proxy CIDRs allowed to supply forwarded scheme, host, and client IP; required when TLS terminates before the service |
 | `AWS_REGION` | Region containing both KMS keys |
 | `MESSAGE_KMS_KEY_ARN` | Allowed message-key ARN |
 | `EVIDENCE_KMS_KEY_ARN` | Allowed moderation-key ARN; must differ from message key |

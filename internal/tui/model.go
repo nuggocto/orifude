@@ -10,6 +10,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/nuggocto/orifude/internal/textpolicy"
 )
 
 // Screen is one complete TUI destination.
@@ -272,10 +273,10 @@ func newTextarea(placeholder string) textarea.Model {
 	t.Placeholder = placeholder
 	t.Prompt = ""
 	t.ShowLineNumbers = false
-	t.CharLimit = maxBodyBytes
+	t.CharLimit = textpolicy.MaxBodyBytes
 	t.KeyMap.Paste.SetEnabled(false)
 	t.MaxHeight = 8
-	t.MaxContentHeight = maxBodyCodePoints
+	t.MaxContentHeight = textpolicy.MaxBodyCodePoints
 	t.SetWidth(56)
 	t.SetHeight(8)
 	return t
