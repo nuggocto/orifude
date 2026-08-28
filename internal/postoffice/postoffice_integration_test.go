@@ -165,6 +165,15 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 	if _, err := lockTx.Exec(ctx, `LOCK TABLE dpop_replays IN ACCESS EXCLUSIVE MODE`); err != nil {
 		t.Fatal(err)
 	}
+	sessionHash := auth.HashAccessToken(session.AccessToken)
+	if _, err := raw.Exec(ctx, `
+		UPDATE access_sessions
+		SET created_at = deadline - interval '15 minutes', expires_at = deadline
+		FROM (SELECT clock_timestamp() + interval '1 second' AS deadline) AS timing
+		WHERE token_hash = $1
+	`, sessionHash[:]); err != nil {
+		t.Fatal(err)
+	}
 	expiredProof := proof(t, key, "GET", testOrigin+"/v1/me", "resource-proof-3", "", session.AccessToken)
 	expiredResult := make(chan error, 1)
 	go func() {
@@ -172,14 +181,7 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 		expiredResult <- err
 	}()
 	waitForLockWaiters(t, ctx, raw, 1)
-	sessionHash := auth.HashAccessToken(session.AccessToken)
-	if _, err := raw.Exec(ctx, `
-		UPDATE access_sessions
-		SET created_at = now() - interval '15 minutes 1 second', expires_at = now() - interval '1 second'
-		WHERE token_hash = $1
-	`, sessionHash[:]); err != nil {
-		t.Fatal(err)
-	}
+	time.Sleep(1100 * time.Millisecond)
 	if err := lockTx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}

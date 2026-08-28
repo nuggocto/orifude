@@ -15,7 +15,7 @@ const accessSessionExpired = `-- name: AccessSessionExpired :one
 SELECT EXISTS (
     SELECT 1 FROM access_sessions
     WHERE token_hash = $1
-      AND expires_at <= now()
+      AND expires_at <= clock_timestamp()
       AND revoked_at IS NULL
 ) AS expired
 `

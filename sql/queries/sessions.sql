@@ -40,7 +40,7 @@ WHERE access_sessions.token_hash = sqlc.arg(token_hash)
 SELECT EXISTS (
     SELECT 1 FROM access_sessions
     WHERE token_hash = sqlc.arg(token_hash)
-      AND expires_at <= now()
+      AND expires_at <= clock_timestamp()
       AND revoked_at IS NULL
 ) AS expired;
 
