@@ -1720,7 +1720,11 @@ Artifact signatures and attestations are not part of the release contract.
 | `CF_ACCESS_AUDIENCE` | Audience for the moderation application |
 | Invite administration credential | Issue and revoke private-alpha invites |
 | `LATEST_TUI_VERSION` | Passive update notice returned by the post office |
-| Rate-limit settings | Alpha abuse tuning |
+| `SEND_PER_HOUR` | Per-identity hourly send limit; zero disables it |
+| `CLAIM_COOLDOWN_SECONDS` | Per-identity delay between claims; zero disables it |
+| `CLAIM_PER_HOUR`, `CLAIM_PER_DAY` | Per-identity claim limits; zero disables either limit |
+| `REPORT_PER_DAY` | Per-identity daily report limit; zero disables it |
+| `RATE_EVENT_RETENTION_SECONDS` | Positive retention window for rate-limit events |
 | `LOG_LEVEL` | Structured log threshold |
 
 Secrets are injected by the deployment platform. They are never committed,

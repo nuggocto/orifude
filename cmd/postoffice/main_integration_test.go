@@ -40,6 +40,8 @@ func TestRunPassesCanariesAndShutsDown(t *testing.T) {
 		"AWS_ACCESS_KEY_ID":    "test", "AWS_SECRET_ACCESS_KEY": "test", "AWS_ENDPOINT_URL_KMS": kmsServer.URL,
 		"AWS_EC2_METADATA_DISABLED": "true", "CF_ACCESS_ISSUER": "https://team.cloudflareaccess.com",
 		"CF_ACCESS_AUDIENCE": "audience", "LATEST_TUI_VERSION": "v0.2.0-test", "LOG_LEVEL": "error",
+		"SEND_PER_HOUR": "10", "CLAIM_COOLDOWN_SECONDS": "900", "CLAIM_PER_HOUR": "3",
+		"CLAIM_PER_DAY": "8", "REPORT_PER_DAY": "20", "RATE_EVENT_RETENTION_SECONDS": "86400",
 	}
 	for name, value := range values {
 		t.Setenv(name, value)

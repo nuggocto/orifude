@@ -44,6 +44,12 @@ type config struct {
 	accessIssuer     string
 	accessAudience   string
 	latestTUIVersion string
+	sendPerHour      int32
+	claimCooldown    time.Duration
+	claimPerHour     int32
+	claimPerDay      int32
+	reportPerDay     int32
+	rateRetention    time.Duration
 	trustedProxies   []netip.Prefix
 	logLevel         slog.Level
 }
@@ -97,6 +103,12 @@ func run(ctx context.Context, args []string) error {
 
 	serviceConfig := postoffice.DefaultConfig()
 	serviceConfig.LatestTUIVersion = settings.latestTUIVersion
+	serviceConfig.SendPerHour = settings.sendPerHour
+	serviceConfig.ClaimCooldown = settings.claimCooldown
+	serviceConfig.ClaimPerHour = settings.claimPerHour
+	serviceConfig.ClaimPerDay = settings.claimPerDay
+	serviceConfig.ReportPerDay = settings.reportPerDay
+	serviceConfig.RateRetention = settings.rateRetention
 	service, err := postoffice.New(db, verifier, cipher, serviceConfig)
 	if err != nil {
 		return fmt.Errorf("create post office service: %w", err)
@@ -176,6 +188,8 @@ func loadConfig() (config, error) {
 		"DATABASE_URL", "LISTEN_ADDR", "PUBLIC_ORIGIN", "MODERATION_ORIGIN", "AWS_REGION",
 		"MESSAGE_KMS_KEY_ARN", "EVIDENCE_KMS_KEY_ARN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
 		"CF_ACCESS_ISSUER", "CF_ACCESS_AUDIENCE", "LATEST_TUI_VERSION", "LOG_LEVEL",
+		"SEND_PER_HOUR", "CLAIM_COOLDOWN_SECONDS", "CLAIM_PER_HOUR", "CLAIM_PER_DAY",
+		"REPORT_PER_DAY", "RATE_EVENT_RETENTION_SECONDS",
 	} {
 		value, ok := os.LookupEnv(name)
 		if !ok || value == "" || strings.TrimSpace(value) != value {
@@ -198,6 +212,20 @@ func loadConfig() (config, error) {
 	if err := level.UnmarshalText([]byte(values["LOG_LEVEL"])); err != nil {
 		return config{}, errors.New("LOG_LEVEL must be debug, info, warn, or error")
 	}
+	rateValues := make(map[string]int32, 6)
+	for _, name := range []string{
+		"SEND_PER_HOUR", "CLAIM_COOLDOWN_SECONDS", "CLAIM_PER_HOUR", "CLAIM_PER_DAY",
+		"REPORT_PER_DAY", "RATE_EVENT_RETENTION_SECONDS",
+	} {
+		value, err := strconv.ParseInt(values[name], 10, 32)
+		if err != nil || value < 0 {
+			return config{}, fmt.Errorf("%s must be an integer from 0 to %d", name, int64(1<<31-1))
+		}
+		rateValues[name] = int32(value)
+	}
+	if rateValues["RATE_EVENT_RETENTION_SECONDS"] == 0 {
+		return config{}, errors.New("RATE_EVENT_RETENTION_SECONDS must be greater than zero")
+	}
 	proxies, err := trustedProxies(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	if err != nil {
 		return config{}, err
@@ -207,7 +235,12 @@ func loadConfig() (config, error) {
 		publicOrigin: values["PUBLIC_ORIGIN"], moderationOrigin: values["MODERATION_ORIGIN"],
 		awsRegion: values["AWS_REGION"], messageKeyARN: values["MESSAGE_KMS_KEY_ARN"], evidenceKeyARN: values["EVIDENCE_KMS_KEY_ARN"],
 		accessIssuer: values["CF_ACCESS_ISSUER"], accessAudience: values["CF_ACCESS_AUDIENCE"],
-		latestTUIVersion: values["LATEST_TUI_VERSION"], trustedProxies: proxies, logLevel: level,
+		latestTUIVersion: values["LATEST_TUI_VERSION"], sendPerHour: rateValues["SEND_PER_HOUR"],
+		claimCooldown: time.Duration(rateValues["CLAIM_COOLDOWN_SECONDS"]) * time.Second,
+		claimPerHour:  rateValues["CLAIM_PER_HOUR"], claimPerDay: rateValues["CLAIM_PER_DAY"],
+		reportPerDay:   rateValues["REPORT_PER_DAY"],
+		rateRetention:  time.Duration(rateValues["RATE_EVENT_RETENTION_SECONDS"]) * time.Second,
+		trustedProxies: proxies, logLevel: level,
 	}, nil
 }
 

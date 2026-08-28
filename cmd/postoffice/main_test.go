@@ -53,12 +53,19 @@ func TestLoadConfigRejectsInsecureExternalOrigins(t *testing.T) {
 		"AWS_ACCESS_KEY_ID":    "test", "AWS_SECRET_ACCESS_KEY": "test",
 		"CF_ACCESS_ISSUER": "https://team.cloudflareaccess.com", "CF_ACCESS_AUDIENCE": "audience",
 		"LATEST_TUI_VERSION": "v0.2.0", "LOG_LEVEL": "info",
+		"SEND_PER_HOUR": "11", "CLAIM_COOLDOWN_SECONDS": "901", "CLAIM_PER_HOUR": "4",
+		"CLAIM_PER_DAY": "9", "REPORT_PER_DAY": "21", "RATE_EVENT_RETENTION_SECONDS": "86401",
 	}
 	for name, value := range values {
 		t.Setenv(name, value)
 	}
-	if _, err := loadConfig(); err != nil {
+	settings, err := loadConfig()
+	if err != nil {
 		t.Fatalf("valid configuration: %v", err)
+	}
+	if settings.sendPerHour != 11 || settings.claimCooldown != 901*time.Second || settings.claimPerHour != 4 ||
+		settings.claimPerDay != 9 || settings.reportPerDay != 21 || settings.rateRetention != 86401*time.Second {
+		t.Fatalf("rate settings = %+v", settings)
 	}
 	t.Setenv("PUBLIC_ORIGIN", "http://api.example")
 	if _, err := loadConfig(); err == nil {
@@ -67,6 +74,10 @@ func TestLoadConfigRejectsInsecureExternalOrigins(t *testing.T) {
 	t.Setenv("PUBLIC_ORIGIN", "http://127.0.0.1:8080")
 	if _, err := loadConfig(); err != nil {
 		t.Fatalf("loopback development origin: %v", err)
+	}
+	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "0")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("accepted zero rate-event retention")
 	}
 }
 
