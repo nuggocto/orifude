@@ -330,7 +330,11 @@ func TestLetterClaimKeepsakeBlockAndReportQueries(t *testing.T) {
 		t.Fatalf("second reply error = %v, want no rows", err)
 	}
 
-	sent, err := q.ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: sender.ID, PageSize: 10})
+	responseAt, err := q.CurrentDatabaseTime(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent, err := q.ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: sender.ID, ResponseAt: responseAt, PageSize: 10})
 	if err != nil || len(sent) != 1 {
 		t.Fatalf("sent keepsakes = %d, %v", len(sent), err)
 	}
@@ -339,7 +343,8 @@ func TestLetterClaimKeepsakeBlockAndReportQueries(t *testing.T) {
 		t.Fatalf("received keepsakes = %d, %v", len(received), err)
 	}
 	if page, err := q.ListSentKeepsakesAfter(ctx, dbgen.ListSentKeepsakesAfterParams{
-		IdentityID: sender.ID, CursorCreatedAt: sent[0].CreatedAt, CursorID: sent[0].ID, PageSize: 10,
+		IdentityID: sender.ID, ResponseAt: responseAt,
+		CursorCreatedAt: sent[0].CreatedAt, CursorID: sent[0].ID, PageSize: 10,
 	}); err != nil || len(page) != 0 {
 		t.Fatalf("sent cursor page = %d, %v", len(page), err)
 	}
@@ -708,7 +713,11 @@ func TestCleanupAndIdentityDeletionQueries(t *testing.T) {
 	if _, err := q.GetLetterForSender(ctx, dbgen.GetLetterForSenderParams{SenderID: sender.ID, ID: expiredWaiting.ID}); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("expired waiting sender read error = %v, want no rows", err)
 	}
-	if sent, err := q.ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: sender.ID, PageSize: 100}); err != nil {
+	responseAt, err := q.CurrentDatabaseTime(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sent, err := q.ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: sender.ID, ResponseAt: responseAt, PageSize: 100}); err != nil {
 		t.Fatal(err)
 	} else {
 		for _, letter := range sent {

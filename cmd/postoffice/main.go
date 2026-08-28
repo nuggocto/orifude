@@ -28,6 +28,7 @@ import (
 
 const (
 	databaseMaxConns = 10
+	cleanupBatchSize = 1000
 	startupTimeout   = 30 * time.Second
 	shutdownTimeout  = 15 * time.Second
 )
@@ -52,13 +53,16 @@ func main() {
 	slog.SetDefault(logger)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx); err != nil {
+	if err := run(ctx, os.Args[1:]); err != nil {
 		logger.Error("post office stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context, args []string) error {
+	if len(args) > 1 || len(args) == 1 && args[0] != "cleanup" {
+		return errors.New("usage: postoffice [cleanup]")
+	}
 	settings, err := loadConfig()
 	if err != nil {
 		return err
@@ -102,6 +106,18 @@ func run(ctx context.Context) error {
 	service, err := postoffice.New(db, verifier, cipher, serviceConfig)
 	if err != nil {
 		return fmt.Errorf("create post office service: %w", err)
+	}
+	if len(args) == 1 {
+		result, err := service.Cleanup(ctx, cleanupBatchSize)
+		if err != nil {
+			return fmt.Errorf("cleanup: %w", err)
+		}
+		logger.Info("post office cleanup complete",
+			"challenges", result.Challenges, "sessions", result.Sessions, "replays", result.Replays,
+			"claims", result.Claims, "waiting_letters", result.WaitingLetters, "withdrawn", result.Withdrawn,
+			"identities", result.Identities, "evidence", result.Evidence, "reports", result.Reports,
+			"audits", result.Audits, "rate_events", result.RateEvents)
+		return nil
 	}
 	handler, err := httpapi.New(service, db, access, httpapi.Config{
 		Logger: logger, ModerationOrigin: settings.moderationOrigin, TrustedProxies: settings.trustedProxies,

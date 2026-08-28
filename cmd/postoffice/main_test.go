@@ -69,3 +69,9 @@ func TestLoadConfigRejectsInsecureExternalOrigins(t *testing.T) {
 		t.Fatalf("loopback development origin: %v", err)
 	}
 }
+
+func TestRunRejectsUnknownCommand(t *testing.T) {
+	if err := run(t.Context(), []string{"unknown"}); err == nil {
+		t.Fatal("accepted unknown command")
+	}
+}

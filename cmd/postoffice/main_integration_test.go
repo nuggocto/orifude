@@ -47,7 +47,7 @@ func TestRunPassesCanariesAndShutsDown(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- run(ctx) }()
+	go func() { done <- run(ctx, nil) }()
 	client := &http.Client{Timeout: 200 * time.Millisecond}
 	readyDeadline := time.NewTimer(10 * time.Second)
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -84,6 +84,12 @@ shutdown:
 	}
 	if fake.generates.Load() != 2 || fake.decrypts.Load() != 1 {
 		t.Fatalf("startup KMS calls = %d generate, %d decrypt", fake.generates.Load(), fake.decrypts.Load())
+	}
+	if err := run(t.Context(), []string{"cleanup"}); err != nil {
+		t.Fatalf("cleanup command: %v", err)
+	}
+	if fake.generates.Load() != 4 || fake.decrypts.Load() != 2 {
+		t.Fatalf("server and cleanup KMS calls = %d generate, %d decrypt", fake.generates.Load(), fake.decrypts.Load())
 	}
 }
 

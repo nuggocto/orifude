@@ -408,16 +408,21 @@ func (s *Service) ListKeepsakes(ctx context.Context, principal Principal, reques
 		return api.ListKeepsakesResponse{}, ErrInvalid
 	}
 	pageSize := int32(limit + 1)
+	responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
+	if err != nil {
+		return api.ListKeepsakesResponse{}, err
+	}
 	var sent, received []dbgen.Letter
 	if cursor == nil {
-		sent, err = s.db.Queries().ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: principal.IdentityID, PageSize: pageSize})
+		sent, err = s.db.Queries().ListSentKeepsakes(ctx, dbgen.ListSentKeepsakesParams{IdentityID: principal.IdentityID, ResponseAt: responseAt, PageSize: pageSize})
 		if err == nil {
 			received, err = s.db.Queries().ListReceivedKeepsakes(ctx, dbgen.ListReceivedKeepsakesParams{IdentityID: int8(principal.IdentityID), PageSize: pageSize})
 		}
 	} else {
 		at := pgtype.Timestamptz{Time: cursor.createdAt, Valid: true}
 		sent, err = s.db.Queries().ListSentKeepsakesAfter(ctx, dbgen.ListSentKeepsakesAfterParams{
-			IdentityID: principal.IdentityID, CursorCreatedAt: at, CursorID: cursor.id, PageSize: pageSize,
+			IdentityID: principal.IdentityID, ResponseAt: responseAt,
+			CursorCreatedAt: at, CursorID: cursor.id, PageSize: pageSize,
 		})
 		if err == nil {
 			received, err = s.db.Queries().ListReceivedKeepsakesAfter(ctx, dbgen.ListReceivedKeepsakesAfterParams{
@@ -428,11 +433,6 @@ func (s *Service) ListKeepsakes(ctx context.Context, principal Principal, reques
 	if err != nil {
 		return api.ListKeepsakesResponse{}, err
 	}
-	responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
-	if err != nil {
-		return api.ListKeepsakesResponse{}, err
-	}
-
 	type item struct {
 		letter dbgen.Letter
 		role   api.LetterRole

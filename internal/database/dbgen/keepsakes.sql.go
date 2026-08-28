@@ -162,19 +162,20 @@ const listSentKeepsakes = `-- name: ListSentKeepsakes :many
 SELECT letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at FROM letters
 WHERE letters.sender_id = $1
   AND letters.sender_removed_at IS NULL
-  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > clock_timestamp() OR letters.expires_at > clock_timestamp())
+  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > $2 OR letters.expires_at > $2)
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = $1 AND deleted_at IS NULL)
 ORDER BY letters.created_at DESC, letters.id DESC
-LIMIT $2
+LIMIT $3
 `
 
 type ListSentKeepsakesParams struct {
 	IdentityID int64
+	ResponseAt pgtype.Timestamptz
 	PageSize   int32
 }
 
 func (q *Queries) ListSentKeepsakes(ctx context.Context, arg ListSentKeepsakesParams) ([]Letter, error) {
-	rows, err := q.db.Query(ctx, listSentKeepsakes, arg.IdentityID, arg.PageSize)
+	rows, err := q.db.Query(ctx, listSentKeepsakes, arg.IdentityID, arg.ResponseAt, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -224,15 +225,16 @@ const listSentKeepsakesAfter = `-- name: ListSentKeepsakesAfter :many
 SELECT letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at FROM letters
 WHERE letters.sender_id = $1
   AND letters.sender_removed_at IS NULL
-  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > clock_timestamp() OR letters.expires_at > clock_timestamp())
-  AND (letters.created_at, letters.id) < ($2, $3::varchar(22))
+  AND (letters.opened_at IS NOT NULL OR letters.claim_expires_at > $2 OR letters.expires_at > $2)
+  AND (letters.created_at, letters.id) < ($3, $4::varchar(22))
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = $1 AND deleted_at IS NULL)
 ORDER BY letters.created_at DESC, letters.id DESC
-LIMIT $4
+LIMIT $5
 `
 
 type ListSentKeepsakesAfterParams struct {
 	IdentityID      int64
+	ResponseAt      pgtype.Timestamptz
 	CursorCreatedAt pgtype.Timestamptz
 	CursorID        string
 	PageSize        int32
@@ -241,6 +243,7 @@ type ListSentKeepsakesAfterParams struct {
 func (q *Queries) ListSentKeepsakesAfter(ctx context.Context, arg ListSentKeepsakesAfterParams) ([]Letter, error) {
 	rows, err := q.db.Query(ctx, listSentKeepsakesAfter,
 		arg.IdentityID,
+		arg.ResponseAt,
 		arg.CursorCreatedAt,
 		arg.CursorID,
 		arg.PageSize,
