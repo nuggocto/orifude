@@ -436,8 +436,13 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		if message.err != nil {
 			if message.device != nil && temporaryStartupFailure(message.err) {
 				m.connection = connectionOffline
-				m.screen = ScreenBranch
-				m.setStatus(statusError, visibleAPIError(message.err))
+				if message.profile.Active {
+					m.screen = ScreenBranch
+					m.setStatus(statusError, visibleAPIError(message.err))
+				} else {
+					m.screen = ScreenRecovery
+					m.setStatus(statusError, "The post office could not be reached. Identity creation has not been confirmed.")
+				}
 			} else {
 				m.connection = connectionInvalidIdentity
 				m.screen = ScreenRecovery

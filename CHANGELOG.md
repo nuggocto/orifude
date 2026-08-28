@@ -61,3 +61,6 @@ All notable changes to Orifude will be recorded here.
   shown to recipients.
 - Replaced the Windows metadata fallback with native file replacement and made
   the online recording wait on its actual database port and a dynamic HTTP port.
+- Made ambiguous identity creation retryable and quittable without replacing its
+  device key, and kept unconfirmed identities out of the offline branch after a
+  restart.

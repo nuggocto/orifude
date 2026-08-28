@@ -623,6 +623,10 @@ func (m Model) selectionCount() int {
 		if m.runtime != nil {
 			return 3
 		}
+	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			return 1
+		}
 	case ScreenRecovery:
 		if m.device != nil {
 			return 2
@@ -635,6 +639,10 @@ func (m Model) selectionCount() int {
 func (m *Model) back() {
 	if m.screen == ScreenRevocation && m.registration != nil && m.registration.uncertain {
 		m.setStatus(statusInfo, "Retry registration with the same device key before leaving this screen.")
+		return
+	}
+	if m.screen == ScreenRecovery && !m.localIdentity.Active && m.device != nil {
+		m.setStatus(statusInfo, "Check identity creation or delete the pending identity before going back.")
 		return
 	}
 	if m.runtime != nil && m.pending != nil && m.pending.busy && m.pending.mutation {
@@ -696,7 +704,8 @@ func (m *Model) back() {
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
-	if m.runtime != nil && m.pending != nil && m.pending.uncertain {
+	registrationCanResume := m.screen == ScreenRevocation && m.registration != nil && m.registration.uncertain
+	if m.runtime != nil && m.pending != nil && m.pending.uncertain && !registrationCanResume {
 		m.setStatus(statusInfo, "Retry this operation with its original identifier before quitting.")
 		return m, nil
 	}

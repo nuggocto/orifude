@@ -226,8 +226,19 @@ func (m Model) renderScreen() string {
 			m.styles.Label.Render("About") + "       keyboard-only folded letters",
 		}, "\n") + "\n\n[enter] edit display and accessibility"
 	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			if m.pending != nil && m.pending.busy {
+				return title + "\n\nChecking whether identity creation completed..."
+			}
+			return title + "\n\nThe registration result is unknown. Orifude kept the same device key and registration details in memory.\n\n" +
+				m.renderChoices([]string{"Retry registration with the same device key"})
+		}
 		return title + "\n\nPreparing the delete-only credential..."
 	case ScreenRecovery:
+		if !m.localIdentity.Active && m.device != nil {
+			return title + "\n\nIdentity creation could not be confirmed. Orifude kept the original device key. Check again when the post office is available, or delete the pending identity with the credential you saved.\n\n" +
+				m.renderChoices([]string{"Check identity creation", "Delete with revocation credential"})
+		}
 		choices := []string{"Delete with revocation credential"}
 		if m.device != nil {
 			choices = []string{"Retry authentication", "Delete with revocation credential"}
@@ -337,8 +348,20 @@ func (m Model) navigationBindings() []key.Binding {
 			detail = append(detail, binding("enter", "report"))
 		}
 		bindings = append(detail, bindings...)
-	case ScreenSettings, ScreenRecovery:
+	case ScreenSettings:
 		bindings = append(append(selection, binding("b", "back")), bindings...)
+	case ScreenRecovery:
+		if !m.localIdentity.Active && m.device != nil {
+			bindings = append(selection, bindings...)
+		} else {
+			bindings = append(append(selection, binding("b", "back")), bindings...)
+		}
+	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			bindings = append([]key.Binding{binding("enter", "retry registration")}, bindings...)
+		} else {
+			bindings = append([]key.Binding{binding("b", "back")}, bindings...)
+		}
 	default:
 		bindings = append([]key.Binding{binding("b", "back")}, bindings...)
 	}

@@ -27,6 +27,11 @@ development, set `ORIFUDE_API_URL` to an HTTPS origin or a loopback HTTP origin:
 ORIFUDE_API_URL=http://127.0.0.1:8080 mise run dev
 ```
 
+`mise run vhs` owns a disposable test post office and drives the terminal
+journey automatically. Its fixture invite works only during that run, and the
+test post office stops when the recording finishes. It is not an interactive
+backend for a later `mise run dev` session.
+
 Orifude keeps access sessions in memory. It stores the device key in the
 operating-system credential store and offers an explicitly confirmed,
 owner-only file fallback if that store is unavailable. The delete-only

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/nuggocto/orifude/internal/api"
 	"github.com/nuggocto/orifude/internal/identity"
@@ -95,6 +96,38 @@ func TestAmbiguousRegistrationCannotAbandonDeviceKey(t *testing.T) {
 	}
 }
 
+func TestAmbiguousRegistrationOffersRetryAndCanQuit(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.screen = ScreenRevocation
+	m.registration = &pendingRegistration{uncertain: true}
+	pending := m.beginOperation(operationRegister, true)
+	pending.busy = false
+	pending.uncertain = true
+
+	rendered := m.View().Content
+	if !strings.Contains(rendered, "Retry registration with the same device key") || !strings.Contains(rendered, "enter") {
+		t.Fatalf("ambiguous registration does not advertise retry: %q", rendered)
+	}
+	if strings.Contains(rendered, "b back") {
+		t.Fatalf("ambiguous registration advertises blocked back action: %q", rendered)
+	}
+
+	_, command := m.Update(textKey("q"))
+	if command == nil {
+		t.Fatal("ambiguous registration blocked quit")
+	}
+	if _, ok := command().(tea.QuitMsg); !ok {
+		t.Fatal("ambiguous registration q did not emit quit")
+	}
+	_, command = m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))
+	if command == nil {
+		t.Fatal("ambiguous registration blocked control-c")
+	}
+	if _, ok := command().(tea.QuitMsg); !ok {
+		t.Fatal("ambiguous registration control-c did not emit quit")
+	}
+}
+
 func TestConfirmedRegistrationPersistenceFailureCannotBeAbandoned(t *testing.T) {
 	m := NewOnline(&Runtime{})
 	m.screen = ScreenRevocation
@@ -130,6 +163,21 @@ func TestBootstrapTemporaryFailuresKeepStoredIdentityRetryable(t *testing.T) {
 		if next.screen != ScreenBranch || next.connection != connectionOffline || next.device != device {
 			t.Errorf("temporary startup error %v produced screen=%v connection=%v", err, next.screen, next.connection)
 		}
+	}
+}
+
+func TestPendingRegistrationTemporaryStartupRequiresReconciliation(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.screen = ScreenSplash
+	device := new(api.DeviceClient)
+	next, _, _ := m.handleOnlineMessage(bootstrapMsg{
+		profile: identity.Profile{Alias: "willow", Active: false}, device: device, found: true, err: api.ErrTransport,
+	})
+	if next.screen != ScreenRecovery || next.connection != connectionOffline || next.device != device {
+		t.Fatalf("pending startup produced screen=%v connection=%v device=%p", next.screen, next.connection, next.device)
+	}
+	if rendered := next.View().Content; !strings.Contains(rendered, "Identity creation could not be confirmed") || strings.Contains(rendered, "Welcome to the branch") {
+		t.Fatalf("pending startup explanation = %q", rendered)
 	}
 }
 

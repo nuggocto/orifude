@@ -92,6 +92,11 @@ func TestOnlineTUITwoIdentityJourneyAndLostIdentityDeletion(t *testing.T) {
 	terminal.input("\r")
 	terminal.wait("I stored it safely")
 	terminal.input("y")
+	terminal.wait("Retry registration with the same device key")
+	terminal.sendFresh("q")
+	terminal.waitDone()
+
+	terminal = startTUI(t, tui.NewOnline(runtime))
 	terminal.wait("Welcome to the branch, willow")
 	terminal.input("\r")
 	terminal.wait("Text mode. Press esc")
@@ -264,10 +269,65 @@ func newTUIHTTPServer(t *testing.T, db *database.DB) *httptest.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.Config.Handler = handler
+	server.Config.Handler = interruptFirstTUIRegistration(handler)
 	server.Start()
 	t.Cleanup(server.Close)
 	return server
+}
+
+func interruptFirstTUIRegistration(next http.Handler) http.Handler {
+	var mu sync.Mutex
+	registrationSelected := false
+	registrationDropped := false
+	sessionCheckFailed := false
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		dropRegistration := !registrationSelected && !registrationDropped && r.Method == http.MethodPost && r.URL.Path == "/v1/identities"
+		failSessionCheck := registrationDropped && !sessionCheckFailed && r.Method == http.MethodPost && r.URL.Path == "/v1/auth/challenges"
+		if dropRegistration {
+			registrationSelected = true
+		}
+		if failSessionCheck {
+			sessionCheckFailed = true
+		}
+		mu.Unlock()
+
+		if failSessionCheck {
+			writeError(w, api.ErrorCodeServiceUnavailable, "Temporarily unavailable.", http.StatusServiceUnavailable)
+			return
+		}
+		if !dropRegistration {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		response := httptest.NewRecorder()
+		next.ServeHTTP(response, r)
+		if response.Code != http.StatusCreated {
+			mu.Lock()
+			registrationSelected = false
+			mu.Unlock()
+			for name, values := range response.Header() {
+				w.Header()[name] = append([]string(nil), values...)
+			}
+			w.WriteHeader(response.Code)
+			_, _ = w.Write(response.Body.Bytes())
+			return
+		}
+		mu.Lock()
+		registrationSelected = false
+		registrationDropped = true
+		mu.Unlock()
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			panic("test response writer cannot interrupt the registration response")
+		}
+		connection, _, err := hijacker.Hijack()
+		if err != nil {
+			panic(err)
+		}
+		_ = connection.Close()
+	})
 }
 
 type tuiTerminal struct {

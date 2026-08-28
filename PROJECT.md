@@ -1773,6 +1773,10 @@ not match the envelope metadata.
   tries a session challenge with the same key. A successful session proves the
   identity exists; otherwise it retries registration with the same key,
   credential hash, alias, and invite.
+- An exit after an ambiguous registration keeps the pending device key. On
+  restart, the TUI does not enter the branch until a session challenge confirms
+  that identity creation completed. An unavailable post office leaves the TUI
+  on a recovery screen with retry and delete-only credential actions.
 - A release timeout asks the server about the same client-generated letter ID
   before offering another submission.
 - A lost claim response returns the identity's existing active claim on retry.
