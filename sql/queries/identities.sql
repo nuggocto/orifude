@@ -134,13 +134,15 @@ WHERE token_hash = sqlc.arg(token_hash)
 FOR UPDATE;
 
 -- name: RedeemInvite :one
+WITH redemption_time AS (SELECT clock_timestamp() AS value)
 UPDATE invites
-SET redeemed_at = clock_timestamp(), redeemed_by = sqlc.arg(identity_id)
+SET redeemed_at = redemption_time.value, redeemed_by = sqlc.arg(identity_id)
+FROM redemption_time
 WHERE token_hash = sqlc.arg(token_hash)
   AND redeemed_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > clock_timestamp()
-RETURNING *;
+  AND expires_at > redemption_time.value
+RETURNING invites.*;
 
 -- name: RevokeInvite :execrows
 UPDATE invites

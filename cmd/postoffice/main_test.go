@@ -54,7 +54,7 @@ func TestLoadConfigRejectsInsecureExternalOrigins(t *testing.T) {
 		"CF_ACCESS_ISSUER": "https://team.cloudflareaccess.com", "CF_ACCESS_AUDIENCE": "audience",
 		"LATEST_TUI_VERSION": "v0.2.0", "LOG_LEVEL": "info",
 		"SEND_PER_HOUR": "11", "CLAIM_COOLDOWN_SECONDS": "901", "CLAIM_PER_HOUR": "4",
-		"CLAIM_PER_DAY": "9", "REPORT_PER_DAY": "21", "RATE_EVENT_RETENTION_SECONDS": "86401",
+		"CLAIM_PER_DAY": "9", "REPORT_PER_DAY": "21", "RATE_EVENT_RETENTION_SECONDS": "86400",
 	}
 	for name, value := range values {
 		t.Setenv(name, value)
@@ -64,7 +64,7 @@ func TestLoadConfigRejectsInsecureExternalOrigins(t *testing.T) {
 		t.Fatalf("valid configuration: %v", err)
 	}
 	if settings.sendPerHour != 11 || settings.claimCooldown != 901*time.Second || settings.claimPerHour != 4 ||
-		settings.claimPerDay != 9 || settings.reportPerDay != 21 || settings.rateRetention != 86401*time.Second {
+		settings.claimPerDay != 9 || settings.reportPerDay != 21 || settings.rateRetention != 24*time.Hour {
 		t.Fatalf("rate settings = %+v", settings)
 	}
 	t.Setenv("PUBLIC_ORIGIN", "http://api.example")
@@ -78,6 +78,30 @@ func TestLoadConfigRejectsInsecureExternalOrigins(t *testing.T) {
 	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "0")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("accepted zero rate-event retention")
+	}
+	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "86399")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("accepted retention shorter than a daily limit")
+	}
+	t.Setenv("CLAIM_PER_DAY", "0")
+	t.Setenv("REPORT_PER_DAY", "0")
+	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "3600")
+	if _, err := loadConfig(); err != nil {
+		t.Fatalf("exact hourly retention: %v", err)
+	}
+	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "3599")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("accepted retention shorter than an hourly limit")
+	}
+	t.Setenv("SEND_PER_HOUR", "0")
+	t.Setenv("CLAIM_PER_HOUR", "0")
+	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "901")
+	if _, err := loadConfig(); err != nil {
+		t.Fatalf("exact cooldown retention: %v", err)
+	}
+	t.Setenv("RATE_EVENT_RETENTION_SECONDS", "900")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("accepted retention shorter than the claim cooldown")
 	}
 }
 

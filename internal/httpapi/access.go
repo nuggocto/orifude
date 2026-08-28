@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	maxAccessTokenBytes = 16 << 10
-	maxCertsBodyBytes   = 64 << 10
-	accessKeyTTL        = time.Hour
+	maxAccessTokenBytes  = 16 << 10
+	maxCertsBodyBytes    = 64 << 10
+	accessKeyTTL         = time.Hour
+	accessRefreshBackoff = time.Minute
 )
 
 var ErrAccessDenied = errors.New("httpapi: Cloudflare Access denied")
@@ -34,9 +35,11 @@ type AccessVerifier struct {
 	client   *http.Client
 	now      func() time.Time
 
-	mu      sync.Mutex
-	keys    map[string]*rsa.PublicKey
-	expires time.Time
+	mu           sync.Mutex
+	keys         map[string]*rsa.PublicKey
+	expires      time.Time
+	refreshDone  chan struct{}
+	refreshAfter time.Time
 }
 
 func NewAccessVerifier(issuer, audience string) (*AccessVerifier, error) {
@@ -106,48 +109,82 @@ func (v *AccessVerifier) Verify(ctx context.Context, raw string) (string, error)
 }
 
 func (v *AccessVerifier) key(ctx context.Context, kid string) (*rsa.PublicKey, error) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-
-	now := v.now()
-	if now.Before(v.expires) {
-		if key := v.keys[kid]; key != nil {
-			return key, nil
+	for {
+		v.mu.Lock()
+		now := v.now()
+		if now.Before(v.expires) {
+			if key := v.keys[kid]; key != nil {
+				v.mu.Unlock()
+				return key, nil
+			}
 		}
+		if now.Before(v.refreshAfter) {
+			v.mu.Unlock()
+			return nil, ErrAccessDenied
+		}
+		if done := v.refreshDone; done != nil {
+			v.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-done:
+				continue
+			}
+		}
+		done := make(chan struct{})
+		v.refreshDone = done
+		v.mu.Unlock()
+
+		keys, err := v.fetchKeys(ctx)
+		completedAt := v.now()
+		v.mu.Lock()
+		if err == nil {
+			v.keys = keys
+			v.expires = completedAt.Add(accessKeyTTL)
+		}
+		key := keys[kid]
+		if err != nil || key == nil {
+			v.refreshAfter = completedAt.Add(accessRefreshBackoff)
+		} else {
+			v.refreshAfter = time.Time{}
+		}
+		v.refreshDone = nil
+		close(done)
+		v.mu.Unlock()
+
+		if err != nil {
+			return nil, err
+		}
+		if key == nil {
+			return nil, ErrAccessDenied
+		}
+		return key, nil
 	}
-	if err := v.refresh(ctx, now); err != nil {
-		return nil, err
-	}
-	key := v.keys[kid]
-	if key == nil {
-		return nil, ErrAccessDenied
-	}
-	return key, nil
 }
 
-func (v *AccessVerifier) refresh(ctx context.Context, now time.Time) error {
+func (v *AccessVerifier) fetchKeys(ctx context.Context) (map[string]*rsa.PublicKey, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, v.certsURL, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	response, err := v.client.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Access certs status %d", response.StatusCode)
+		return nil, fmt.Errorf("Access certs status %d", response.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxCertsBodyBytes+1))
 	if err != nil || len(data) > maxCertsBodyBytes {
-		return errors.New("httpapi: invalid Cloudflare Access certs response")
+		return nil, errors.New("httpapi: invalid Cloudflare Access certs response")
 	}
 	var set jose.JSONWebKeySet
 	if err := validateUniqueJSON(data); err != nil {
-		return errors.New("httpapi: invalid Cloudflare Access certs response")
+		return nil, errors.New("httpapi: invalid Cloudflare Access certs response")
 	}
 	if err := json.Unmarshal(data, &set); err != nil {
-		return errors.New("httpapi: invalid Cloudflare Access certs response")
+		return nil, errors.New("httpapi: invalid Cloudflare Access certs response")
 	}
 	keys := make(map[string]*rsa.PublicKey, len(set.Keys))
 	for i := range set.Keys {
@@ -155,14 +192,12 @@ func (v *AccessVerifier) refresh(ctx context.Context, now time.Time) error {
 		key, ok := jwk.Key.(*rsa.PublicKey)
 		if !ok || jwk.KeyID == "" || !jwk.Valid() || (jwk.Algorithm != "" && jwk.Algorithm != string(jose.RS256)) ||
 			(jwk.Use != "" && jwk.Use != "sig") || keys[jwk.KeyID] != nil {
-			return errors.New("httpapi: invalid Cloudflare Access certs response")
+			return nil, errors.New("httpapi: invalid Cloudflare Access certs response")
 		}
 		keys[jwk.KeyID] = key
 	}
 	if len(keys) == 0 {
-		return errors.New("httpapi: empty Cloudflare Access certs response")
+		return nil, errors.New("httpapi: empty Cloudflare Access certs response")
 	}
-	v.keys = keys
-	v.expires = now.Add(accessKeyTTL)
-	return nil
+	return keys, nil
 }

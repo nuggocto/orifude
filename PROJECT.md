@@ -1724,7 +1724,7 @@ Artifact signatures and attestations are not part of the release contract.
 | `CLAIM_COOLDOWN_SECONDS` | Per-identity delay between claims; zero disables it |
 | `CLAIM_PER_HOUR`, `CLAIM_PER_DAY` | Per-identity claim limits; zero disables either limit |
 | `REPORT_PER_DAY` | Per-identity daily report limit; zero disables it |
-| `RATE_EVENT_RETENTION_SECONDS` | Positive retention window for rate-limit events |
+| `RATE_EVENT_RETENTION_SECONDS` | Positive retention window at least as long as every enabled cooldown, hourly limit, and daily limit |
 | `LOG_LEVEL` | Structured log threshold |
 
 Secrets are injected by the deployment platform. They are never committed,
@@ -2028,54 +2028,54 @@ be regenerated from a clean checkout.
 
 ### Phase 2: PostgreSQL and post-office API
 
-- [ ] Write `sql/migrations/00001_initial.sql` with Goose Up and Down sections
+- [x] Write `sql/migrations/00001_initial.sql` with Goose Up and Down sections
   for identities, auth challenges, access sessions, DPoP replays, alias
   reservations, invites, letters, blocks, reports, moderation audit, constraints,
   and named indexes.
-- [ ] Verify the migration applies to an empty PostgreSQL database.
-- [ ] Document whether production rollback uses Goose Down or a forward repair
+- [x] Verify the migration applies to an empty PostgreSQL database.
+- [x] Document whether production rollback uses Goose Down or a forward repair
   migration for each released schema change.
-- [ ] Write named sqlc queries under `sql/queries` for identities, letters,
+- [x] Write named sqlc queries under `sql/queries` for identities, letters,
   sessions, DPoP replays, claims, keepsakes, blocks, reports, and moderation
   audit.
-- [ ] Generate and commit package `dbgen` under `internal/database/dbgen`.
-- [ ] Add CI drift detection for generated sqlc files.
-- [ ] Implement pgx pool startup, ping, readiness, sizing, and shutdown in
+- [x] Generate and commit package `dbgen` under `internal/database/dbgen`.
+- [x] Add CI drift detection for generated sqlc files.
+- [x] Implement pgx pool startup, ping, readiness, sizing, and shutdown in
   `internal/database`.
-- [ ] Implement transaction ownership in `internal/postoffice` using generated
+- [x] Implement transaction ownership in `internal/postoffice` using generated
   sqlc queries bound to pgx transactions.
-- [ ] Implement P-256 registration and session challenges, DPoP-bound 15-minute
+- [x] Implement P-256 registration and session challenges, DPoP-bound 15-minute
   access sessions, replay rejection, delete-only revocation credentials, alias
   reservation, invite redemption, and last-seen updates.
-- [ ] Implement AES-256-GCM envelope encryption with fresh KMS data keys,
+- [x] Implement AES-256-GCM envelope encryption with fresh KMS data keys,
   deterministic context, key-ARN allowlists, and no plaintext persistence.
-- [ ] Implement letter creation with client-generated idempotent IDs.
-- [ ] Implement atomic claim reuse and assignment with identity locking and
+- [x] Implement letter creation with client-generated idempotent IDs.
+- [x] Implement atomic claim reuse and assignment with identity locking and
   `FOR UPDATE SKIP LOCKED`.
-- [ ] Implement claim expiry and safe requeue of unopened letters.
-- [ ] Implement seven-day waiting expiry, one-year identity inactivity cleanup,
+- [x] Implement claim expiry and safe requeue of unopened letters.
+- [x] Implement seven-day waiting expiry, one-year identity inactivity cleanup,
   participant keepsake deletion, 90-day evidence cleanup, one-year report
   cleanup, and one-year moderation-audit cleanup.
-- [ ] Implement authorized open, reply, withdraw, report, block, and keepsake
+- [x] Implement authorized open, reply, withdraw, report, block, and keepsake
   operations.
-- [ ] Make reports self-contained across letter and identity deletion and add
+- [x] Make reports self-contained across letter and identity deletion and add
   audited review-claim and idempotent close moderation operations.
-- [ ] Implement the Chi route tree, middleware order, route-specific body
+- [x] Implement the Chi route tree, middleware order, route-specific body
   limits, DPoP authentication, Cloudflare Access validation, and stable error
   responses.
-- [ ] Configure explicit HTTP server timeouts and bounded graceful shutdown.
-- [ ] Enforce 2,000 code points, 12 KiB text, 16 KiB JSON, valid UTF-8, and
+- [x] Configure explicit HTTP server timeouts and bounded graceful shutdown.
+- [x] Enforce 2,000 code points, 12 KiB text, 16 KiB JSON, valid UTF-8, and
   control-character rules before encryption, plus encrypted-envelope constraints
   in PostgreSQL.
-- [ ] Return `404` for unauthorized letter access without leaking ownership.
-- [ ] Add per-identity limits with configuration suitable for private alpha.
-- [ ] Add structured slog output with credential and content redaction.
-- [ ] Add unit tests for validation, authorization, and state transitions.
-- [ ] Add PostgreSQL integration tests for every sqlc query and migration.
-- [ ] Add concurrent claim tests that prove one letter reaches one recipient.
-- [ ] Add router tests for content types, limits, DPoP and Access authentication,
+- [x] Return `404` for unauthorized letter access without leaking ownership.
+- [x] Add per-identity limits with configuration suitable for private alpha.
+- [x] Add structured slog output with credential and content redaction.
+- [x] Add unit tests for validation, authorization, and state transitions.
+- [x] Add PostgreSQL integration tests for every sqlc query and migration.
+- [x] Add concurrent claim tests that prove one letter reaches one recipient.
+- [x] Add router tests for content types, limits, DPoP and Access authentication,
   timeouts, replay rejection, and idempotent retries.
-- [ ] Add one API end-to-end test covering identity, send, claim, open, reply,
+- [x] Add one API end-to-end test covering identity, send, claim, open, reply,
   keepsakes, report, block, review, close, and both deletion paths with synthetic
   data.
 

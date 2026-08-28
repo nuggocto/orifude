@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,6 +62,123 @@ func TestAccessVerifierValidatesClaimsAndRefreshesUnknownKey(t *testing.T) {
 	claims = validAccessClaims(certs.URL, now)
 	if _, err := verifier.Verify(context.Background(), signAccessToken(t, second, "second", jose.RS256, claims)); err != nil || fetches.Load() != 3 {
 		t.Fatalf("expired cache verification error = %v, cert fetches = %d", err, fetches.Load())
+	}
+}
+
+func TestAccessVerifierBoundsUnknownKeyRefreshes(t *testing.T) {
+	key := rsaKey(t)
+	var fetches atomic.Int32
+	certs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fetches.Add(1)
+		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+			Key: &key.PublicKey, KeyID: "known", Algorithm: string(jose.RS256), Use: "sig",
+		}}})
+	}))
+	defer certs.Close()
+
+	now := time.Unix(1_800_000_000, 0).UTC()
+	verifier, err := NewAccessVerifier(certs.URL, "moderation-audience")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier.now = func() time.Time { return now }
+	if _, err := verifier.key(t.Context(), "known"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.key(t.Context(), "missing-first"); err != ErrAccessDenied {
+		t.Fatalf("first unknown key error = %v, want access denied", err)
+	}
+	if _, err := verifier.key(t.Context(), "missing-second"); err != ErrAccessDenied {
+		t.Fatalf("second unknown key error = %v, want access denied", err)
+	}
+	if fetches.Load() != 2 {
+		t.Fatalf("cert fetches during backoff = %d, want 2", fetches.Load())
+	}
+	now = now.Add(accessRefreshBackoff)
+	if _, err := verifier.key(t.Context(), "missing-third"); err != ErrAccessDenied {
+		t.Fatalf("unknown key after backoff error = %v, want access denied", err)
+	}
+	if fetches.Load() != 3 {
+		t.Fatalf("cert fetches after backoff = %d, want 3", fetches.Load())
+	}
+}
+
+func TestAccessVerifierCoalescesRefreshWithoutBlockingCachedKeys(t *testing.T) {
+	key := rsaKey(t)
+	var fetches atomic.Int32
+	refreshStarted := make(chan struct{})
+	releaseRefresh := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseRefresh) }) }
+	certs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if fetches.Add(1) == 2 {
+			close(refreshStarted)
+			<-releaseRefresh
+		}
+		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+			Key: &key.PublicKey, KeyID: "known", Algorithm: string(jose.RS256), Use: "sig",
+		}}})
+	}))
+	defer certs.Close()
+	defer release()
+
+	verifier, err := NewAccessVerifier(certs.URL, "moderation-audience")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.key(t.Context(), "known"); err != nil {
+		t.Fatal(err)
+	}
+
+	firstMiss := make(chan error, 1)
+	go func() {
+		_, err := verifier.key(t.Context(), "missing-first")
+		firstMiss <- err
+	}()
+	select {
+	case <-refreshStarted:
+	case <-time.After(time.Second):
+		t.Fatal("unknown-key refresh did not start")
+	}
+
+	cached := make(chan error, 1)
+	go func() {
+		_, err := verifier.key(t.Context(), "known")
+		cached <- err
+	}()
+	select {
+	case err := <-cached:
+		if err != nil {
+			t.Fatalf("cached key during refresh: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("certificate refresh blocked a cached-key lookup")
+	}
+
+	const waiters = 8
+	var group sync.WaitGroup
+	errorsSeen := make(chan error, waiters)
+	for index := range waiters {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			_, err := verifier.key(t.Context(), fmt.Sprintf("missing-%d", index))
+			errorsSeen <- err
+		}()
+	}
+	release()
+	if err := <-firstMiss; err != ErrAccessDenied {
+		t.Fatalf("first unknown key error = %v, want access denied", err)
+	}
+	group.Wait()
+	close(errorsSeen)
+	for err := range errorsSeen {
+		if err != ErrAccessDenied {
+			t.Fatalf("coalesced unknown key error = %v, want access denied", err)
+		}
+	}
+	if fetches.Load() != 2 {
+		t.Fatalf("coalesced cert fetches = %d, want 2", fetches.Load())
 	}
 }
 

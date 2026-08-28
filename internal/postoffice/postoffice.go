@@ -87,10 +87,23 @@ type Principal struct {
 func New(db *database.DB, verifier *auth.Verifier, cipher *envelope.Cipher, config Config) (*Service, error) {
 	if db == nil || verifier == nil || cipher == nil || config.Random == nil || config.Now == nil ||
 		config.SendPerHour < 0 || config.ClaimPerHour < 0 || config.ClaimPerDay < 0 || config.ReportPerDay < 0 ||
-		!validSeconds(config.ClaimCooldown) || !validSeconds(config.RateRetention) || config.RateRetention <= 0 {
+		!validSeconds(config.ClaimCooldown) || !validSeconds(config.RateRetention) || config.RateRetention <= 0 ||
+		config.RateRetention < RequiredRateRetention(config) {
 		return nil, ErrInvalid
 	}
 	return &Service{db: db, verifier: verifier, cipher: cipher, config: config}, nil
+}
+
+// RequiredRateRetention returns the longest enabled rate-limit window.
+func RequiredRateRetention(config Config) time.Duration {
+	required := config.ClaimCooldown
+	if config.SendPerHour > 0 || config.ClaimPerHour > 0 {
+		required = max(required, time.Hour)
+	}
+	if config.ClaimPerDay > 0 || config.ReportPerDay > 0 {
+		required = max(required, 24*time.Hour)
+	}
+	return required
 }
 
 func validSeconds(duration time.Duration) bool {

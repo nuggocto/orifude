@@ -374,13 +374,15 @@ func (q *Queries) MarkIdentityDeleted(ctx context.Context, id int64) (Identity, 
 }
 
 const redeemInvite = `-- name: RedeemInvite :one
+WITH redemption_time AS (SELECT clock_timestamp() AS value)
 UPDATE invites
-SET redeemed_at = clock_timestamp(), redeemed_by = $1
+SET redeemed_at = redemption_time.value, redeemed_by = $1
+FROM redemption_time
 WHERE token_hash = $2
   AND redeemed_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > clock_timestamp()
-RETURNING token_hash, created_at, expires_at, redeemed_at, redeemed_by, revoked_at
+  AND expires_at > redemption_time.value
+RETURNING invites.token_hash, invites.created_at, invites.expires_at, invites.redeemed_at, invites.redeemed_by, invites.revoked_at
 `
 
 type RedeemInviteParams struct {

@@ -15,13 +15,15 @@ WHERE id = sqlc.arg(id)
 FOR UPDATE;
 
 -- name: ConsumeAuthChallenge :one
+WITH consumed_at AS (SELECT clock_timestamp() AS value)
 UPDATE auth_challenges
-SET used_at = clock_timestamp()
+SET used_at = consumed_at.value
+FROM consumed_at
 WHERE id = sqlc.arg(id)
   AND purpose = sqlc.arg(purpose)
   AND used_at IS NULL
-  AND expires_at > clock_timestamp()
-RETURNING *;
+  AND expires_at > consumed_at.value
+RETURNING auth_challenges.*;
 
 -- name: CreateAccessSession :one
 WITH issuance AS (SELECT clock_timestamp() AS value)

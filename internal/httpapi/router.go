@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/nuggocto/orifude/internal/api"
@@ -401,6 +402,12 @@ func validateExactJSONFields(data []byte, target reflect.Type) error {
 }
 
 func validateUniqueJSON(data []byte) error {
+	if !utf8.Valid(data) {
+		return errors.New("invalid UTF-8")
+	}
+	if err := validateJSONSurrogates(data); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := uniqueJSON(decoder); err != nil {
 		return err
@@ -412,6 +419,63 @@ func validateUniqueJSON(data []byte) error {
 		return errors.New("trailing JSON value")
 	}
 	return nil
+}
+
+func validateJSONSurrogates(data []byte) error {
+	for index := 0; index < len(data); index++ {
+		if data[index] != '"' {
+			continue
+		}
+		for index++; index < len(data) && data[index] != '"'; index++ {
+			if data[index] != '\\' {
+				continue
+			}
+			index++
+			if index >= len(data) || data[index] != 'u' {
+				continue
+			}
+			value, ok := jsonHexQuad(data, index+1)
+			if !ok {
+				continue
+			}
+			index += 4
+			switch {
+			case value >= 0xd800 && value <= 0xdbff:
+				if index+6 >= len(data) || data[index+1] != '\\' || data[index+2] != 'u' {
+					return errors.New("unpaired high surrogate")
+				}
+				low, ok := jsonHexQuad(data, index+3)
+				if !ok || low < 0xdc00 || low > 0xdfff {
+					return errors.New("unpaired high surrogate")
+				}
+				index += 6
+			case value >= 0xdc00 && value <= 0xdfff:
+				return errors.New("unpaired low surrogate")
+			}
+		}
+	}
+	return nil
+}
+
+func jsonHexQuad(data []byte, start int) (uint16, bool) {
+	if start+4 > len(data) {
+		return 0, false
+	}
+	var value uint16
+	for _, digit := range data[start : start+4] {
+		value <<= 4
+		switch {
+		case digit >= '0' && digit <= '9':
+			value |= uint16(digit - '0')
+		case digit >= 'a' && digit <= 'f':
+			value |= uint16(digit-'a') + 10
+		case digit >= 'A' && digit <= 'F':
+			value |= uint16(digit-'A') + 10
+		default:
+			return 0, false
+		}
+	}
+	return value, true
 }
 
 func uniqueJSON(decoder *json.Decoder) error {

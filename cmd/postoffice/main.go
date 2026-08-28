@@ -226,6 +226,17 @@ func loadConfig() (config, error) {
 	if rateValues["RATE_EVENT_RETENTION_SECONDS"] == 0 {
 		return config{}, errors.New("RATE_EVENT_RETENTION_SECONDS must be greater than zero")
 	}
+	rateConfig := postoffice.Config{
+		SendPerHour:   rateValues["SEND_PER_HOUR"],
+		ClaimCooldown: time.Duration(rateValues["CLAIM_COOLDOWN_SECONDS"]) * time.Second,
+		ClaimPerHour:  rateValues["CLAIM_PER_HOUR"],
+		ClaimPerDay:   rateValues["CLAIM_PER_DAY"],
+		ReportPerDay:  rateValues["REPORT_PER_DAY"],
+		RateRetention: time.Duration(rateValues["RATE_EVENT_RETENTION_SECONDS"]) * time.Second,
+	}
+	if rateConfig.RateRetention < postoffice.RequiredRateRetention(rateConfig) {
+		return config{}, errors.New("RATE_EVENT_RETENTION_SECONDS must cover the longest enabled rate-limit window")
+	}
 	proxies, err := trustedProxies(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	if err != nil {
 		return config{}, err

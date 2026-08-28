@@ -84,7 +84,8 @@ func TestAPIJourney(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cipher, err := envelope.New(newHTTPKMS(), rand.Reader, httpMessageKeyARN, httpEvidenceKeyARN)
+	fakeKMS := newHTTPKMS()
+	cipher, err := envelope.New(fakeKMS, rand.Reader, httpMessageKeyARN, httpEvidenceKeyARN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +113,64 @@ func TestAPIJourney(t *testing.T) {
 	senderToken := registerHTTPIdentity(t, db, server, senderKey, "HTTP Sender", senderRevocation, 21)
 	recipientToken := registerHTTPIdentity(t, db, server, recipientKey, "HTTP Recipient", recipientRevocation, 22)
 
+	invalidLetterID := httpID(30)
+	invalidUTF8 := append([]byte(`{"letter_id":"`+invalidLetterID+`","body":"`), 0xff)
+	invalidUTF8 = append(invalidUTF8, []byte(`"}`)...)
+	invalidBodies := [][]byte{
+		invalidUTF8,
+		[]byte(`{"letter_id":"` + invalidLetterID + `","body":"\ud800"}`),
+	}
+	for index, body := range invalidBodies {
+		var lettersBefore, eventsBefore int
+		if err := raw.QueryRow(ctx, `SELECT (SELECT count(*) FROM letters), (SELECT count(*) FROM rate_limit_events)`).Scan(&lettersBefore, &eventsBefore); err != nil {
+			t.Fatal(err)
+		}
+		generatedBefore := fakeKMS.generated()
+		response := httpCallRaw[api.ErrorResponse](t, server, http.MethodPost, "/v1/letters", body,
+			senderToken, senderKey, fmt.Sprintf("invalid-unicode-%02d", index), nil, http.StatusBadRequest)
+		if response.Error.Code != api.ErrorCodeInvalidRequest {
+			t.Fatalf("invalid Unicode error = %q, want %q", response.Error.Code, api.ErrorCodeInvalidRequest)
+		}
+		var lettersAfter, eventsAfter int
+		if err := raw.QueryRow(ctx, `SELECT (SELECT count(*) FROM letters), (SELECT count(*) FROM rate_limit_events)`).Scan(&lettersAfter, &eventsAfter); err != nil {
+			t.Fatal(err)
+		}
+		if fakeKMS.generated() != generatedBefore || lettersAfter != lettersBefore || eventsAfter != eventsBefore {
+			t.Fatalf("invalid Unicode reached letter persistence or KMS: KMS %d to %d, letters %d to %d, events %d to %d",
+				generatedBefore, fakeKMS.generated(), lettersBefore, lettersAfter, eventsBefore, eventsAfter)
+		}
+	}
+
+	replayProof := httpDPoPProof(t, senderKey, http.MethodGet, server.URL+"/v1/me", "journey-replay-proof", "", senderToken)
+	replayHeaders := map[string]string{"DPoP": replayProof}
+	httpCall[api.GetMeResponse](t, server, http.MethodGet, "/v1/me", nil, senderToken, senderKey, "unused-replay-jti", replayHeaders, http.StatusOK)
+	replayed := httpCall[api.ErrorResponse](t, server, http.MethodGet, "/v1/me", nil, senderToken, senderKey, "unused-replay-jti", replayHeaders, http.StatusUnauthorized)
+	if replayed.Error.Code != api.ErrorCodeDPoPReplay {
+		t.Fatalf("replayed proof error = %q, want %q", replayed.Error.Code, api.ErrorCodeDPoPReplay)
+	}
+
 	letterID := httpID(31)
-	httpCall[api.CreateLetterResponse](t, server, http.MethodPost, "/v1/letters", api.CreateLetterRequest{
+	released := httpCall[api.CreateLetterResponse](t, server, http.MethodPost, "/v1/letters", api.CreateLetterRequest{
 		LetterID: letterID, Body: "journey original plaintext",
 	}, senderToken, senderKey, "journey-send-0001", nil, http.StatusCreated)
+	generatedAfterSend := fakeKMS.generated()
+	releasedAgain := httpCall[api.CreateLetterResponse](t, server, http.MethodPost, "/v1/letters", api.CreateLetterRequest{
+		LetterID: letterID, Body: "ignored retry plaintext",
+	}, senderToken, senderKey, "journey-send-retry", nil, http.StatusCreated)
+	if releasedAgain != released || fakeKMS.generated() != generatedAfterSend {
+		t.Fatalf("send retry = %+v, want %+v; KMS calls %d to %d", releasedAgain, released, generatedAfterSend, fakeKMS.generated())
+	}
+	var letterRows, senderRateEvents int
+	if err := raw.QueryRow(ctx, `
+		SELECT (SELECT count(*) FROM letters WHERE id = $1),
+		       (SELECT count(*) FROM rate_limit_events
+		        WHERE identity_id = (SELECT id FROM identities WHERE alias = 'HTTP Sender'))
+	`, letterID).Scan(&letterRows, &senderRateEvents); err != nil {
+		t.Fatal(err)
+	}
+	if letterRows != 1 || senderRateEvents != 1 {
+		t.Fatalf("send retry durable state = %d letters, %d sender rate events", letterRows, senderRateEvents)
+	}
 	claim := httpCall[api.ClaimLetterResponse](t, server, http.MethodPost, "/v1/letters/claim", api.ClaimLetterRequest{}, recipientToken, recipientKey, "journey-claim-0002", nil, http.StatusOK)
 	if claim.LetterID != letterID {
 		t.Fatalf("claimed letter = %q, want %q", claim.LetterID, letterID)
@@ -125,9 +180,16 @@ func TestAPIJourney(t *testing.T) {
 		t.Fatalf("opened body = %q", opened.Original.Body)
 	}
 	replyID := httpID(32)
-	httpCall[api.ReplyToLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/reply", api.ReplyToLetterRequest{
+	replied := httpCall[api.ReplyToLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/reply", api.ReplyToLetterRequest{
 		ReplyID: replyID, Body: "journey reply plaintext",
 	}, recipientToken, recipientKey, "journey-reply-0004", nil, http.StatusCreated)
+	generatedAfterReply := fakeKMS.generated()
+	repliedAgain := httpCall[api.ReplyToLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/reply", api.ReplyToLetterRequest{
+		ReplyID: replyID, Body: "ignored reply retry plaintext",
+	}, recipientToken, recipientKey, "journey-reply-retry", nil, http.StatusCreated)
+	if repliedAgain != replied || fakeKMS.generated() != generatedAfterReply {
+		t.Fatalf("reply retry = %+v, want %+v; KMS calls %d to %d", repliedAgain, replied, generatedAfterReply, fakeKMS.generated())
+	}
 	completed := httpCall[api.GetLetterResponse](t, server, http.MethodGet, "/v1/letters/"+letterID, nil, senderToken, senderKey, "journey-read-00005", nil, http.StatusOK)
 	if completed.Reply == nil || completed.Reply.Body != "journey reply plaintext" {
 		t.Fatalf("completed keepsake = %+v", completed)
@@ -138,9 +200,29 @@ func TestAPIJourney(t *testing.T) {
 	}
 	httpCall[api.BlockLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/block", api.BlockLetterRequest{}, recipientToken, recipientKey, "journey-block-0007", nil, http.StatusOK)
 	reportID := httpID(33)
-	httpCall[api.ReportLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/report", api.ReportLetterRequest{
+	reported := httpCall[api.ReportLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/report", api.ReportLetterRequest{
 		ReportID: reportID, Target: api.ReportTargetReply, Reason: api.ReportReasonThreats,
 	}, senderToken, senderKey, "journey-report-008", nil, http.StatusCreated)
+	generatedAfterReport := fakeKMS.generated()
+	reportedAgain := httpCall[api.ReportLetterResponse](t, server, http.MethodPost, "/v1/letters/"+letterID+"/report", api.ReportLetterRequest{
+		ReportID: reportID, Target: api.ReportTargetOriginal, Reason: api.ReportReasonSpamOrScams,
+	}, senderToken, senderKey, "journey-report-retry", nil, http.StatusCreated)
+	if reportedAgain != reported || fakeKMS.generated() != generatedAfterReport {
+		t.Fatalf("report retry = %+v, want %+v; KMS calls %d to %d", reportedAgain, reported, generatedAfterReport, fakeKMS.generated())
+	}
+	var reportRows int
+	if err := raw.QueryRow(ctx, `SELECT count(*) FROM reports WHERE id = $1`, reportID).Scan(&reportRows); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.QueryRow(ctx, `
+		SELECT count(*) FROM rate_limit_events
+		WHERE identity_id = (SELECT id FROM identities WHERE alias = 'HTTP Sender')
+	`).Scan(&senderRateEvents); err != nil {
+		t.Fatal(err)
+	}
+	if reportRows != 1 || senderRateEvents != 2 {
+		t.Fatalf("report retry durable state = %d reports, %d sender rate events", reportRows, senderRateEvents)
+	}
 
 	var bodyCiphertext, replyCiphertext, evidenceCiphertext []byte
 	if err := raw.QueryRow(ctx, `SELECT body_ciphertext, reply_ciphertext FROM letters WHERE id = $1`, letterID).Scan(&bodyCiphertext, &replyCiphertext); err != nil {
@@ -219,6 +301,7 @@ func registerHTTPIdentity(t *testing.T, db *database.DB, server *httptest.Server
 func httpCall[T any](t *testing.T, server *httptest.Server, method, path string, body any, token string, key *ecdsa.PrivateKey, jti string, headers map[string]string, wantStatus int) T {
 	t.Helper()
 	var reader io.Reader
+	hasBody := body != nil
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
@@ -226,11 +309,21 @@ func httpCall[T any](t *testing.T, server *httptest.Server, method, path string,
 		}
 		reader = bytes.NewReader(encoded)
 	}
-	request, err := http.NewRequestWithContext(t.Context(), method, server.URL+path, reader)
+	return doHTTPCall[T](t, server, method, path, reader, hasBody, token, key, jti, headers, wantStatus)
+}
+
+func httpCallRaw[T any](t *testing.T, server *httptest.Server, method, path string, body []byte, token string, key *ecdsa.PrivateKey, jti string, headers map[string]string, wantStatus int) T {
+	t.Helper()
+	return doHTTPCall[T](t, server, method, path, bytes.NewReader(body), true, token, key, jti, headers, wantStatus)
+}
+
+func doHTTPCall[T any](t *testing.T, server *httptest.Server, method, path string, body io.Reader, hasBody bool, token string, key *ecdsa.PrivateKey, jti string, headers map[string]string, wantStatus int) T {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), method, server.URL+path, body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if body != nil {
+	if hasBody {
 		request.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -355,6 +448,12 @@ type httpKMS struct {
 
 func newHTTPKMS() *httpKMS {
 	return &httpKMS{keys: make(map[string][]byte)}
+}
+
+func (k *httpKMS) generated() uint64 {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.counter
 }
 
 func (k *httpKMS) GenerateDataKey(_ context.Context, input *kms.GenerateDataKeyInput, _ ...func(*kms.Options)) (*kms.GenerateDataKeyOutput, error) {

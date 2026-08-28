@@ -113,6 +113,69 @@ func TestRouterRejectsInvalidJSONBeforeService(t *testing.T) {
 	}
 }
 
+func TestDecodeRejectsInvalidJSONUnicodeBeforeDownstreamHandling(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+	}{
+		{name: "invalid UTF-8", body: append([]byte(`{"value":"`), append([]byte{0xff}, []byte(`"}`)...)...)},
+		{name: "lone high surrogate", body: []byte(`{"value":"\ud800"}`)},
+		{name: "lone low surrogate", body: []byte(`{"value":"\udc00"}`)},
+		{name: "high surrogate followed by non-low surrogate", body: []byte(`{"value":"\ud800\u0041"}`)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(test.body))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			var target struct {
+				Value string `json:"value"`
+			}
+			if decode(response, request, &target) {
+				t.Fatalf("accepted invalid Unicode as %q", target.Value)
+			}
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body %s", response.Code, response.Body.String())
+			}
+			var body api.ErrorResponse
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Error.Code != api.ErrorCodeInvalidRequest {
+				t.Fatalf("error code = %q, want %q", body.Error.Code, api.ErrorCodeInvalidRequest)
+			}
+		})
+	}
+}
+
+func TestDecodeAcceptsValidJSONUnicode(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "paired surrogates", body: `{"value":"\ud83c\udf38"}`, want: "🌸"},
+		{name: "escaped surrogate text", body: `{"value":"\\ud800"}`, want: `\ud800`},
+		{name: "replacement character", body: `{"value":"�"}`, want: "�"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(test.body))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			var target struct {
+				Value string `json:"value"`
+			}
+			if !decode(response, request, &target) {
+				t.Fatalf("valid Unicode rejected: status %d, body %s", response.Code, response.Body.String())
+			}
+			if target.Value != test.want {
+				t.Fatalf("decoded value = %q, want %q", target.Value, test.want)
+			}
+		})
+	}
+}
+
 func TestRouterRejectsDuplicateCredentialHeaders(t *testing.T) {
 	router := testRouter(t, readyFunc(func(context.Context) error { return nil }), Config{})
 	for _, header := range []string{"Authorization", "DPoP", "Cf-Access-Jwt-Assertion"} {
