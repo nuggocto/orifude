@@ -176,12 +176,18 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 			if err != nil || !roleHasAccess(locked, principal.IdentityID, role) {
 				return ErrNotFound
 			}
+			databaseTime, err := q.CurrentDatabaseTime(ctx)
+			if err != nil {
+				return err
+			}
+			responseAt = databaseTime.Time
+			if role == api.LetterRoleSender && !senderCanReadAt(locked, responseAt) {
+				return ErrNotFound
+			}
 			if !sameReadableVersion(letter, locked) {
 				return errRetryRead
 			}
-			databaseTime, err := q.CurrentDatabaseTime(ctx)
-			responseAt = databaseTime.Time
-			return err
+			return nil
 		})
 		if errors.Is(err, errRetryRead) {
 			clear(original)
@@ -560,6 +566,10 @@ func roleHasAccess(letter dbgen.Letter, identityID int64, role api.LetterRole) b
 		return letter.SenderID == identityID && !letter.SenderRemovedAt.Valid
 	}
 	return letter.RecipientID.Valid && letter.RecipientID.Int64 == identityID && letter.OpenedAt.Valid && !letter.RecipientRemovedAt.Valid
+}
+
+func senderCanReadAt(letter dbgen.Letter, responseAt time.Time) bool {
+	return letter.OpenedAt.Valid || claimActive(letter, responseAt) || letter.ExpiresAt.Time.After(responseAt)
 }
 
 func sameOriginalEnvelope(a, b dbgen.Letter) bool {

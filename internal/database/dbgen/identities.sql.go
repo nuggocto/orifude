@@ -399,13 +399,21 @@ func (q *Queries) RedeemInvite(ctx context.Context, arg RedeemInviteParams) (Inv
 }
 
 const releaseIdentityUnopenedClaims = `-- name: ReleaseIdentityUnopenedClaims :execrows
+WITH deleted AS (
+    DELETE FROM letters
+    WHERE recipient_id = $1
+      AND opened_at IS NULL
+      AND sender_removed_at IS NOT NULL
+)
 UPDATE letters
 SET recipient_id = NULL,
     recipient_alias = NULL,
     claimed_at = NULL,
     claim_expires_at = NULL,
     recipient_removed_at = NULL
-WHERE recipient_id = $1 AND opened_at IS NULL
+WHERE letters.recipient_id = $1
+  AND letters.opened_at IS NULL
+  AND letters.sender_removed_at IS NULL
 `
 
 func (q *Queries) ReleaseIdentityUnopenedClaims(ctx context.Context, identityID pgtype.Int8) (int64, error) {

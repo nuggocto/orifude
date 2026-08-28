@@ -74,13 +74,21 @@ FOR NO KEY UPDATE SKIP LOCKED
 LIMIT 1;
 
 -- name: ReleaseIdentityUnopenedClaims :execrows
+WITH deleted AS (
+    DELETE FROM letters
+    WHERE recipient_id = sqlc.arg(identity_id)
+      AND opened_at IS NULL
+      AND sender_removed_at IS NOT NULL
+)
 UPDATE letters
 SET recipient_id = NULL,
     recipient_alias = NULL,
     claimed_at = NULL,
     claim_expires_at = NULL,
     recipient_removed_at = NULL
-WHERE recipient_id = sqlc.arg(identity_id) AND opened_at IS NULL;
+WHERE letters.recipient_id = sqlc.arg(identity_id)
+  AND letters.opened_at IS NULL
+  AND letters.sender_removed_at IS NULL;
 
 -- name: DeleteIdentityWaitingLetters :execrows
 DELETE FROM letters

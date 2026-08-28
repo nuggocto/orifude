@@ -1124,6 +1124,61 @@ func TestDeletionWinsWhileBodyReadDecrypts(t *testing.T) {
 	}
 }
 
+func TestExpiryWinsWhileBodyReadDecrypts(t *testing.T) {
+	service, db, raw, fake, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 105, "Read Expiry Sender")
+	letterID := publicID('h')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	var deadline time.Time
+	if err := raw.QueryRow(ctx, `
+		UPDATE letters
+		SET created_at = deadline - interval '7 days', expires_at = deadline
+		FROM (SELECT clock_timestamp() + interval '1 second' AS deadline) AS timing
+		WHERE id = $1
+		RETURNING expires_at
+	`, letterID).Scan(&deadline); err != nil {
+		t.Fatal(err)
+	}
+	fake.decryptStarted = make(chan struct{})
+	fake.decryptRelease = make(chan struct{})
+	readErr := make(chan error, 1)
+	go func() {
+		_, err := service.GetLetter(ctx, Principal{IdentityID: sender.ID}, letterID)
+		readErr <- err
+	}()
+	<-fake.decryptStarted
+	waitPast(deadline)
+	close(fake.decryptRelease)
+	if err := <-readErr; !errors.Is(err, ErrNotFound) {
+		t.Fatalf("body read after expiry = %v, want not found", err)
+	}
+}
+
+func TestParticipantDeletionPurgesUnopenedClaim(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 106, "Claim Delete Sender")
+	recipient := seedIdentity(t, ctx, db, 107, "Claim Delete Recipient")
+	letterID := publicID('i')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ClaimLetter(ctx, Principal{IdentityID: recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DeleteIdentity(ctx, Principal{IdentityID: sender.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DeleteIdentity(ctx, Principal{IdentityID: recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := raw.QueryRow(ctx, `SELECT count(*) FROM letters WHERE id = $1`, letterID).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("letter count after participant deletion = %d, %v", count, err)
+	}
+}
+
 func TestDeletionWinsWhileReplyEncrypts(t *testing.T) {
 	service, db, raw, fake, ctx := openPostOffice(t)
 	sender := seedIdentity(t, ctx, db, 95, "Reply Delete Sender")
