@@ -94,12 +94,6 @@ func run(ctx context.Context, args []string) error {
 		return errors.New("database startup check failed")
 	}
 	defer db.Close()
-	if err := cipher.CheckMessageKey(startupCtx); err != nil {
-		return errors.New("message KMS startup canary failed")
-	}
-	if err := cipher.CheckEvidenceKey(startupCtx); err != nil {
-		return errors.New("evidence KMS startup canary failed")
-	}
 
 	serviceConfig := postoffice.DefaultConfig()
 	serviceConfig.LatestTUIVersion = settings.latestTUIVersion
@@ -118,6 +112,12 @@ func run(ctx context.Context, args []string) error {
 			"identities", result.Identities, "evidence", result.Evidence, "reports", result.Reports,
 			"audits", result.Audits, "rate_events", result.RateEvents)
 		return nil
+	}
+	if err := cipher.CheckMessageKey(startupCtx); err != nil {
+		return errors.New("message KMS startup canary failed")
+	}
+	if err := cipher.CheckEvidenceKey(startupCtx); err != nil {
+		return errors.New("evidence KMS startup canary failed")
 	}
 	handler, err := httpapi.New(service, db, access, httpapi.Config{
 		Logger: logger, ModerationOrigin: settings.moderationOrigin, TrustedProxies: settings.trustedProxies,

@@ -88,8 +88,8 @@ shutdown:
 	if err := run(t.Context(), []string{"cleanup"}); err != nil {
 		t.Fatalf("cleanup command: %v", err)
 	}
-	if fake.generates.Load() != 4 || fake.decrypts.Load() != 2 {
-		t.Fatalf("server and cleanup KMS calls = %d generate, %d decrypt", fake.generates.Load(), fake.decrypts.Load())
+	if fake.generates.Load() != 2 || fake.decrypts.Load() != 1 {
+		t.Fatalf("cleanup made KMS calls: total = %d generate, %d decrypt", fake.generates.Load(), fake.decrypts.Load())
 	}
 }
 
