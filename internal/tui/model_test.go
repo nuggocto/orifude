@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/nuggocto/orifude/internal/textpolicy"
 )
 
 func TestPrintableNavigationKeysRemainTextWhileComposerIsFocused(t *testing.T) {
@@ -302,13 +303,13 @@ func TestTypedInputStopsAtCodePointLimit(t *testing.T) {
 	m := New()
 	m.screen = ScreenCompose
 	m.mode = ModeText
-	m.draft.SetValue(strings.Repeat("界", maxBodyCodePoints))
+	m.draft.SetValue(strings.Repeat("界", textpolicy.MaxBodyCodePoints))
 	m = updateModel(t, m, textKey("界"))
-	if got := utf8.RuneCountInString(m.draft.Value()); got != maxBodyCodePoints {
-		t.Fatalf("draft has %d code points, want %d", got, maxBodyCodePoints)
+	if got := utf8.RuneCountInString(m.draft.Value()); got != textpolicy.MaxBodyCodePoints {
+		t.Fatalf("draft has %d code points, want %d", got, textpolicy.MaxBodyCodePoints)
 	}
-	if m.status != errBodyCodePoints.Error() {
-		t.Fatalf("status = %q, want %q", m.status, errBodyCodePoints)
+	if m.status != textpolicy.ErrBodyCodePoints.Error() {
+		t.Fatalf("status = %q, want %q", m.status, textpolicy.ErrBodyCodePoints)
 	}
 }
 
@@ -520,7 +521,7 @@ func TestKeepsakeDetailKeepsLongReplyInsideViewport(t *testing.T) {
 		Letter: Letter{
 			SenderAlias: "sora",
 			Body:        "original",
-			Reply:       strings.Repeat("reply\n", maxBodyCodePoints/6) + "last reply line",
+			Reply:       strings.Repeat("reply\n", textpolicy.MaxBodyCodePoints/6) + "last reply line",
 		},
 	}}
 	m.setKeepsake(0)
@@ -626,14 +627,14 @@ func TestEnterCannotExceedCodePointLimit(t *testing.T) {
 	m := New()
 	m.screen = ScreenCompose
 	m.mode = ModeText
-	m.draft.SetValue(strings.Repeat("a", maxBodyCodePoints))
+	m.draft.SetValue(strings.Repeat("a", textpolicy.MaxBodyCodePoints))
 	m.draft.Focus()
 	m = updateModel(t, m, specialKey(tea.KeyEnter))
-	if got := utf8.RuneCountInString(m.draft.Value()); got != maxBodyCodePoints {
-		t.Fatalf("enter produced %d code points, want %d", got, maxBodyCodePoints)
+	if got := utf8.RuneCountInString(m.draft.Value()); got != textpolicy.MaxBodyCodePoints {
+		t.Fatalf("enter produced %d code points, want %d", got, textpolicy.MaxBodyCodePoints)
 	}
-	if m.status != errBodyCodePoints.Error() {
-		t.Fatalf("enter status = %q, want %q", m.status, errBodyCodePoints)
+	if m.status != textpolicy.ErrBodyCodePoints.Error() {
+		t.Fatalf("enter status = %q, want %q", m.status, textpolicy.ErrBodyCodePoints)
 	}
 }
 
@@ -643,7 +644,7 @@ func TestPasteCanReplaceSelectionAtLimit(t *testing.T) {
 	m := New()
 	m.screen = ScreenCompose
 	m.mode = ModeText
-	m.draft.SetValue(strings.Repeat("a", maxBodyCodePoints))
+	m.draft.SetValue(strings.Repeat("a", textpolicy.MaxBodyCodePoints))
 	m.draft.Focus()
 	m.draft.SelectAll()
 	if err := m.validatePaste("x"); err != nil {

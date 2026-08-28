@@ -11,6 +11,7 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/nuggocto/orifude/internal/textpolicy"
 )
 
 type searchDoneMsg struct{ id uint64 }
@@ -351,7 +352,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.screen = ScreenSettings
 		}
 	case ScreenCompose:
-		if err := validateBody(m.draft.Value()); err != nil {
+		if err := textpolicy.ValidateBody(m.draft.Value()); err != nil {
 			m.setStatus(statusError, err.Error())
 			return m, nil
 		}
@@ -398,7 +399,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.setStatus(statusInfo, "The exchange was discarded.")
 		}
 	case ScreenReply:
-		if err := validateBody(m.replyDraft.Value()); err != nil {
+		if err := textpolicy.ValidateBody(m.replyDraft.Value()); err != nil {
 			m.setStatus(statusError, err.Error())
 			return m, nil
 		}
@@ -618,11 +619,11 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 		aliasInput := huh.NewInput().
 			Title("Choose a private alias").
 			Description("2-24 characters, one writing system, never searchable").
-			CharLimit(4 * maxAliasPoints).
+			CharLimit(4 * textpolicy.MaxAliasCodePoints).
 			Value(&data.alias)
 		if m.accessible {
 			aliasInput.Validate(func(value string) error {
-				_, _, err := normalizeAlias(value)
+				_, _, err := textpolicy.NormalizeAlias(value)
 				return err
 			})
 		}
@@ -646,7 +647,7 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 						if !confirmed {
 							return nil
 						}
-						_, _, err := normalizeAlias(data.alias)
+						_, _, err := textpolicy.NormalizeAlias(data.alias)
 						return err
 					}),
 			),
@@ -766,7 +767,7 @@ func (m Model) huhTheme() huh.Theme {
 func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 	switch kind {
 	case formOnboarding:
-		alias, _, err := normalizeAlias(data.alias)
+		alias, _, err := textpolicy.NormalizeAlias(data.alias)
 		if err != nil || !data.confirmed {
 			m.setStatus(statusInfo, "Identity creation was not completed.")
 			m.screen = ScreenSplash
@@ -908,11 +909,11 @@ func (m Model) keepsakeReportTarget() string {
 
 func (m Model) validatePaste(content string) error {
 	if !utf8.ValidString(content) {
-		return errBodyUTF8
+		return textpolicy.ErrBodyUTF8
 	}
 	for _, r := range content {
 		if unsafeTextRune(r) && (r != '\n' || m.form != nil) {
-			return errBodyControl
+			return textpolicy.ErrBodyControl
 		}
 	}
 	if m.form != nil {
@@ -928,11 +929,11 @@ func (m Model) validatePaste(content string) error {
 	} else {
 		return nil
 	}
-	if len(current)-len(selected)+len(content) > maxBodyBytes {
-		return errBodyBytes
+	if len(current)-len(selected)+len(content) > textpolicy.MaxBodyBytes {
+		return textpolicy.ErrBodyBytes
 	}
-	if utf8.RuneCountInString(current)-utf8.RuneCountInString(selected)+utf8.RuneCountInString(content) > maxBodyCodePoints {
-		return errBodyCodePoints
+	if utf8.RuneCountInString(current)-utf8.RuneCountInString(selected)+utf8.RuneCountInString(content) > textpolicy.MaxBodyCodePoints {
+		return textpolicy.ErrBodyCodePoints
 	}
 	return nil
 }
@@ -947,7 +948,7 @@ func incomingFixture() Letter {
 }
 
 func bodyCounter(body string) string {
-	return fmt.Sprintf("%d/%d code points", utf8.RuneCountInString(body), maxBodyCodePoints)
+	return fmt.Sprintf("%d/%d code points", utf8.RuneCountInString(body), textpolicy.MaxBodyCodePoints)
 }
 
 func onOff(value bool) string {

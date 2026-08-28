@@ -25,6 +25,7 @@ Available tasks:
 | Command | Purpose |
 | --- | --- |
 | `mise run dev` | Run the TUI. |
+| `mise run postoffice` | Run the post office using the server variables in `PROJECT.md`. |
 | `mise run build` | Build all Go packages. |
 | `mise run fmt` | Format all Go packages. |
 | `mise run test` | Run the test suite. |
