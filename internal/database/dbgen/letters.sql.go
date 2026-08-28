@@ -382,6 +382,59 @@ func (q *Queries) GetLetterForSender(ctx context.Context, arg GetLetterForSender
 	return i, err
 }
 
+const getLetterForSenderAt = `-- name: GetLetterForSenderAt :one
+SELECT letters.id, letters.sender_id, letters.recipient_id, letters.sender_alias, letters.recipient_alias, letters.body_ciphertext, letters.body_nonce, letters.body_wrapped_key, letters.body_kms_key_id, letters.body_encryption_version, letters.fold_seed, letters.created_at, letters.claimed_at, letters.claim_expires_at, letters.opened_at, letters.reply_id, letters.reply_ciphertext, letters.reply_nonce, letters.reply_wrapped_key, letters.reply_kms_key_id, letters.reply_encryption_version, letters.replied_at, letters.withdrawn_at, letters.expires_at, letters.sender_removed_at, letters.recipient_removed_at FROM letters
+JOIN identities ON identities.id = $1 AND identities.deleted_at IS NULL
+WHERE letters.id = $2
+  AND letters.sender_id = $1
+  AND letters.sender_removed_at IS NULL
+  AND (
+    letters.opened_at IS NOT NULL
+    OR letters.claim_expires_at > $3
+    OR letters.expires_at > $3
+  )
+`
+
+type GetLetterForSenderAtParams struct {
+	SenderID   int64
+	ID         string
+	ResponseAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetLetterForSenderAt(ctx context.Context, arg GetLetterForSenderAtParams) (Letter, error) {
+	row := q.db.QueryRow(ctx, getLetterForSenderAt, arg.SenderID, arg.ID, arg.ResponseAt)
+	var i Letter
+	err := row.Scan(
+		&i.ID,
+		&i.SenderID,
+		&i.RecipientID,
+		&i.SenderAlias,
+		&i.RecipientAlias,
+		&i.BodyCiphertext,
+		&i.BodyNonce,
+		&i.BodyWrappedKey,
+		&i.BodyKmsKeyID,
+		&i.BodyEncryptionVersion,
+		&i.FoldSeed,
+		&i.CreatedAt,
+		&i.ClaimedAt,
+		&i.ClaimExpiresAt,
+		&i.OpenedAt,
+		&i.ReplyID,
+		&i.ReplyCiphertext,
+		&i.ReplyNonce,
+		&i.ReplyWrappedKey,
+		&i.ReplyKmsKeyID,
+		&i.ReplyEncryptionVersion,
+		&i.RepliedAt,
+		&i.WithdrawnAt,
+		&i.ExpiresAt,
+		&i.SenderRemovedAt,
+		&i.RecipientRemovedAt,
+	)
+	return i, err
+}
+
 const lockLetterForRecipient = `-- name: LockLetterForRecipient :one
 SELECT id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at FROM letters
 WHERE id = $1 AND recipient_id = $2

@@ -25,11 +25,13 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 	if err := textpolicy.ValidateBody(request.Body); err != nil {
 		return api.CreateLetterResponse{}, errors.Join(ErrInvalid, err)
 	}
-	if existing, err := s.db.Queries().GetLetterForSender(ctx, dbgen.GetLetterForSenderParams{SenderID: principal.IdentityID, ID: request.LetterID}); err == nil {
-		responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
-		if err != nil {
-			return api.CreateLetterResponse{}, err
-		}
+	responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
+	if err != nil {
+		return api.CreateLetterResponse{}, err
+	}
+	if existing, err := s.db.Queries().GetLetterForSenderAt(ctx, dbgen.GetLetterForSenderAtParams{
+		SenderID: principal.IdentityID, ID: request.LetterID, ResponseAt: responseAt,
+	}); err == nil {
 		return createLetterResponse(existing, responseAt.Time), nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return api.CreateLetterResponse{}, err
@@ -63,7 +65,13 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 		if err != nil {
 			return err
 		}
-		letter, err = q.GetLetterForSender(ctx, dbgen.GetLetterForSenderParams{SenderID: identity.ID, ID: request.LetterID})
+		responseAt, err = q.CurrentDatabaseTime(ctx)
+		if err != nil {
+			return err
+		}
+		letter, err = q.GetLetterForSenderAt(ctx, dbgen.GetLetterForSenderAtParams{
+			SenderID: identity.ID, ID: request.LetterID, ResponseAt: responseAt,
+		})
 		if err == nil {
 			return nil
 		}
@@ -87,10 +95,6 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 		_, err = q.RecordRateLimitEvent(ctx, dbgen.RecordRateLimitEventParams{IdentityID: identity.ID, Kind: rateSend})
 		return err
 	})
-	if err != nil {
-		return api.CreateLetterResponse{}, err
-	}
-	responseAt, err := s.db.Queries().CurrentDatabaseTime(ctx)
 	if err != nil {
 		return api.CreateLetterResponse{}, err
 	}

@@ -23,6 +23,18 @@ WHERE letters.id = sqlc.arg(id)
     OR letters.expires_at > clock_timestamp()
   );
 
+-- name: GetLetterForSenderAt :one
+SELECT letters.* FROM letters
+JOIN identities ON identities.id = sqlc.arg(sender_id) AND identities.deleted_at IS NULL
+WHERE letters.id = sqlc.arg(id)
+  AND letters.sender_id = sqlc.arg(sender_id)
+  AND letters.sender_removed_at IS NULL
+  AND (
+    letters.opened_at IS NOT NULL
+    OR letters.claim_expires_at > sqlc.arg(response_at)
+    OR letters.expires_at > sqlc.arg(response_at)
+  );
+
 -- name: CurrentDatabaseTime :one
 SELECT clock_timestamp()::timestamptz;
 

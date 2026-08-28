@@ -553,6 +553,52 @@ func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
 	}
 }
 
+func TestSendRetryUsesSelectionTimeAtExpiry(t *testing.T) {
+	service, db, raw, fake, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 24, "Expiry Sender")
+	letterID := publicID('E')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	generateAfterSend := fake.generated()
+
+	lock, err := raw.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lock.Rollback(context.Background()) })
+	if _, err := lock.Exec(ctx, `LOCK TABLE letters IN ACCESS EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	var deadline time.Time
+	if err := lock.QueryRow(ctx, `
+		WITH deadline AS (SELECT clock_timestamp() + interval '200 milliseconds' AS value)
+		UPDATE letters SET created_at = deadline.value - interval '7 days', expires_at = deadline.value
+		FROM deadline WHERE id = $1 RETURNING expires_at`, letterID).Scan(&deadline); err != nil {
+		t.Fatal(err)
+	}
+
+	type sendResult struct {
+		response api.CreateLetterResponse
+		err      error
+	}
+	done := make(chan sendResult, 1)
+	go func() {
+		response, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: "retry"})
+		done <- sendResult{response: response, err: err}
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	waitPast(deadline)
+	if err := lock.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	retried := <-done
+	if retried.err != nil || retried.response.State != api.LetterStateWaiting || fake.generated() != generateAfterSend {
+		t.Fatalf("send retry across expiry = %+v, calls %d, error %v", retried.response, fake.generated(), retried.err)
+	}
+}
+
 func TestConcurrentClaimHasOneWinner(t *testing.T) {
 	service, db, _, _, ctx := openPostOffice(t)
 	sender := seedIdentity(t, ctx, db, 31, "Claim Sender")
