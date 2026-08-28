@@ -188,6 +188,41 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 	if err := <-expiredResult; !errors.Is(err, ErrSessionExpired) {
 		t.Fatalf("expired session error = %v, want session expired", err)
 	}
+	retryChallenge, err := service.CreateChallenge(ctx, api.CreateChallengeRequest{Purpose: api.ChallengePurposeRegistration, PublicJWK: publicJWK(key)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryProof := proof(t, key, "POST", testOrigin+"/v1/identities", "registration-delete-race", retryChallenge.Nonce, "")
+	deleteConn := connectPostgres(t, ctx)
+	deleteTx, err := deleteConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleting, err := dbgen.New(deleteTx).LockActiveIdentity(ctx, identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryResult := make(chan error, 1)
+	go func() {
+		_, err := service.Register(ctx, api.CreateIdentityRequest{
+			ChallengeID: retryChallenge.ChallengeID, Alias: "Maple Finch", InviteCode: invite, RevocationHash: revocationHash,
+		}, retryProof)
+		retryResult <- err
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	if err := deleteIdentity(ctx, dbgen.New(deleteTx), deleting); err != nil {
+		t.Fatal(err)
+	}
+	if err := deleteTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-retryResult; !errors.Is(err, ErrInviteInvalid) {
+		t.Fatalf("registration retry after deletion = %v, want invite invalid", err)
+	}
+	var activeSessions int
+	if err := raw.QueryRow(ctx, `SELECT count(*) FROM access_sessions WHERE identity_id = $1 AND revoked_at IS NULL`, identity.ID).Scan(&activeSessions); err != nil || activeSessions != 0 {
+		t.Fatalf("active sessions after registration deletion race = %d, %v", activeSessions, err)
+	}
 	if err := service.RevokeIdentity(ctx, revocationCredential); err != nil {
 		t.Fatalf("revoke identity: %v", err)
 	}

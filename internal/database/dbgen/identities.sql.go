@@ -134,6 +134,7 @@ func (q *Queries) DeleteIdentityWaitingLetters(ctx context.Context, identityID i
 const getActiveIdentityByPublicKey = `-- name: GetActiveIdentityByPublicKey :one
 SELECT id, public_key, key_thumbprint, revocation_hash, alias, alias_key, created_at, last_seen_at, deleted_at FROM identities
 WHERE public_key = $1 AND deleted_at IS NULL
+FOR NO KEY UPDATE
 `
 
 func (q *Queries) GetActiveIdentityByPublicKey(ctx context.Context, publicKey []byte) (Identity, error) {

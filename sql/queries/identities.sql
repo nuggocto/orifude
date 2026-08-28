@@ -23,7 +23,8 @@ SELECT pg_advisory_xact_lock(hashtextextended(encode(sqlc.arg(key_thumbprint)::b
 
 -- name: GetActiveIdentityByPublicKey :one
 SELECT * FROM identities
-WHERE public_key = sqlc.arg(public_key) AND deleted_at IS NULL;
+WHERE public_key = sqlc.arg(public_key) AND deleted_at IS NULL
+FOR NO KEY UPDATE;
 
 -- name: GetActiveIdentityByThumbprint :one
 SELECT * FROM identities
