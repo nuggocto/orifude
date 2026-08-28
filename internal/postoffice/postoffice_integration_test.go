@@ -727,6 +727,61 @@ func TestClaimLimitsAndExpiredClaimRelease(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsClaimExpiringWhileLocked(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 67, "Expiry Lock Sender")
+	recipient := seedIdentity(t, ctx, db, 68, "Expiry Lock Recipient")
+	letterID := publicID('u')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ClaimLetter(ctx, Principal{IdentityID: recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	var deadline time.Time
+	if err := raw.QueryRow(ctx, `
+		WITH deadline AS (SELECT clock_timestamp() + interval '500 milliseconds' AS value)
+		UPDATE letters
+		SET created_at = deadline.value - interval '1 day',
+		    expires_at = deadline.value + interval '6 days',
+		    claimed_at = deadline.value - interval '24 hours',
+		    claim_expires_at = deadline.value
+		FROM deadline
+		WHERE id = $1
+		RETURNING claim_expires_at
+	`, letterID).Scan(&deadline); err != nil {
+		t.Fatal(err)
+	}
+	lockConn := connectPostgres(t, ctx)
+	lockTx, err := lockConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockTx.Rollback(context.Background())
+	if _, err := lockTx.Exec(ctx, `SELECT 1 FROM letters WHERE id = $1 FOR UPDATE`, letterID); err != nil {
+		t.Fatal(err)
+	}
+	openResult := make(chan error, 1)
+	go func() {
+		_, err := service.OpenLetter(ctx, Principal{IdentityID: recipient.ID}, letterID)
+		openResult <- err
+	}()
+	waitForLockWaiters(t, ctx, raw, 1)
+	if wait := time.Until(deadline.Add(20 * time.Millisecond)); wait > 0 {
+		time.Sleep(wait)
+	}
+	if err := lockTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-openResult; !errors.Is(err, ErrClaimExpired) {
+		t.Fatalf("open after locked claim expiry = %v, want claim expired", err)
+	}
+	var opened bool
+	if err := raw.QueryRow(ctx, `SELECT opened_at IS NOT NULL FROM letters WHERE id = $1`, letterID).Scan(&opened); err != nil || opened {
+		t.Fatalf("expired claim opened = %t, %v", opened, err)
+	}
+}
+
 func TestRejectedWritesDoNotReachKMS(t *testing.T) {
 	service, db, raw, fake, ctx := openPostOffice(t)
 	limitedSender := seedIdentity(t, ctx, db, 71, "Limited Sender")

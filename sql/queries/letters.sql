@@ -68,7 +68,7 @@ SET opened_at = now(), claim_expires_at = NULL
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id = sqlc.arg(recipient_id)
   AND letters.opened_at IS NULL
-  AND letters.claim_expires_at > now()
+  AND letters.claim_expires_at > clock_timestamp()
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(recipient_id) AND deleted_at IS NULL)
 RETURNING *;
 
