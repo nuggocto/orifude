@@ -179,6 +179,7 @@ type pendingOperation struct {
 	screen     Screen
 	busy       bool
 	mutation   bool
+	uncertain  bool
 	clientID   string
 	body       string
 	target     api.ReportTarget
@@ -192,6 +193,7 @@ type pendingRegistration struct {
 	credential string
 	key        *auth.DeviceKey
 	device     *api.DeviceClient
+	confirmed  bool
 	uncertain  bool
 }
 
@@ -227,7 +229,9 @@ type Model struct {
 	ascii         bool
 	identity      Identity
 	draft         textarea.Model
+	draftID       string
 	replyDraft    textarea.Model
+	replyDraftID  string
 	viewport      viewport.Model
 	help          help.Model
 	form          *huh.Form
@@ -436,10 +440,25 @@ func formHeight(kind formKind, terminalHeight int) int {
 }
 
 func (m *Model) setCurrent(letter Letter) {
+	if m.replyDraftID != "" && m.replyDraftID != letter.ID {
+		m.clearReplyDraft()
+	}
 	m.current = &letter
 	m.keepsakeIndex = -1
 	m.refreshLetterViewport()
 	m.viewport.GotoTop()
+}
+
+func (m *Model) bindReplyDraft(letterID string) {
+	if m.replyDraftID != "" && m.replyDraftID != letterID {
+		m.replyDraft.Reset()
+	}
+	m.replyDraftID = letterID
+}
+
+func (m *Model) clearReplyDraft() {
+	m.replyDraft.Reset()
+	m.replyDraftID = ""
 }
 
 func (m *Model) setKeepsake(index int) {

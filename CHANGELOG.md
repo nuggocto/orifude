@@ -24,7 +24,8 @@ All notable changes to Orifude will be recorded here.
   reconnect and deletion handling, passive update notices, and durable display
   preferences.
 - Strict, bounded participant API client coverage and a real post-office terminal
-  journey for onboarding, release, and lost-identity deletion.
+  journey for two isolated identities through onboarding, release, claim,
+  unfold, reply, keepsakes, report, block, restart, and lost-identity deletion.
 
 ### Changed
 
@@ -50,3 +51,13 @@ All notable changes to Orifude will be recorded here.
   the key-cache lock across network I/O.
 - Used one PostgreSQL timestamp when consuming challenges and redeeming invites
   so eligibility and recorded consumption cannot cross an expiry boundary.
+- Prevented missing metadata, concurrent onboarding, and post-registration local
+  failures from replacing or orphaning a surviving device key.
+- Kept ambiguous mutation identifiers until their original operation is
+  reconciled, and renewed suspended sessions against wall-clock deadlines.
+- Restored persisted ASCII presentation, kept update notices visible, scoped
+  reply drafts to one exchange, and hid actions the server would reject.
+- Bound fold previews to the same stable seed stored by the post office and
+  shown to recipients.
+- Replaced the Windows metadata fallback with native file replacement and made
+  the online recording wait on its actual database port and a dynamic HTTP port.

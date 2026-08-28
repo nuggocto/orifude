@@ -26,6 +26,7 @@ var (
 	ErrFallbackApproval = errors.New("identity: owner-only file fallback requires approval")
 	ErrUnsafeStorage    = errors.New("identity: local identity storage is unsafe")
 	ErrInvalidRecord    = errors.New("identity: invalid local identity")
+	ErrAlreadyExists    = errors.New("identity: local identity already exists")
 )
 
 type keyringBackend interface {
@@ -93,6 +94,20 @@ func (s *Store) SavePending(alias string, device *auth.DeviceKey, allowFallback 
 	if s == nil || s.keyring == nil || alias == "" || device == nil {
 		return Profile{}, ErrInvalidRecord
 	}
+	unlock, err := s.lockIdentity()
+	if err != nil {
+		return Profile{}, err
+	}
+	defer unlock()
+	if _, err := s.readRecord(); err == nil {
+		return Profile{}, ErrAlreadyExists
+	} else if !errors.Is(err, ErrNotFound) {
+		return Profile{}, err
+	}
+	_, keyringErr := s.keyring.Get(keyringService, keyringAccount)
+	if keyringErr == nil {
+		return Profile{}, ErrAlreadyExists
+	}
 	encoded, err := device.MarshalPKCS8()
 	if err != nil {
 		return Profile{}, err
@@ -101,7 +116,10 @@ func (s *Store) SavePending(alias string, device *auth.DeviceKey, allowFallback 
 	thumbprint := auth.EncodeHash(device.Thumbprint())
 	record := identityRecord{Version: recordVersion, Alias: alias, Thumbprint: thumbprint, Status: "pending", KeyStorage: "keyring"}
 	secret := base64.RawStdEncoding.EncodeToString(encoded)
-	if err := s.keyring.Set(keyringService, keyringAccount, secret); err == nil {
+	if errors.Is(keyringErr, keyring.ErrNotFound) {
+		keyringErr = s.keyring.Set(keyringService, keyringAccount, secret)
+	}
+	if keyringErr == nil {
 		if err := s.writeRecord(record); err != nil {
 			_ = s.keyring.Delete(keyringService, keyringAccount)
 			return Profile{}, err
@@ -124,6 +142,11 @@ func (s *Store) SavePending(alias string, device *auth.DeviceKey, allowFallback 
 
 // Activate records that registration or session recovery confirmed the identity.
 func (s *Store) Activate(alias string) (Profile, error) {
+	unlock, err := s.lockIdentity()
+	if err != nil {
+		return Profile{}, err
+	}
+	defer unlock()
 	record, err := s.readRecord()
 	if err != nil {
 		return Profile{}, err
@@ -141,7 +164,17 @@ func (s *Store) Activate(alias string) (Profile, error) {
 
 // Load returns validated identity metadata and its P-256 private key.
 func (s *Store) Load() (Profile, *auth.DeviceKey, error) {
+	unlock, err := s.lockIdentity()
+	if err != nil {
+		return Profile{}, nil, err
+	}
+	defer unlock()
 	record, err := s.readRecord()
+	if errors.Is(err, ErrNotFound) {
+		if _, keyErr := s.keyring.Get(keyringService, keyringAccount); keyErr == nil {
+			return Profile{}, nil, ErrInvalidRecord
+		}
+	}
 	if err != nil {
 		return Profile{}, nil, err
 	}
@@ -174,8 +207,19 @@ func (s *Store) Load() (Profile, *auth.DeviceKey, error) {
 
 // Delete removes local identity material without changing display settings.
 func (s *Store) Delete() error {
+	unlock, err := s.lockIdentity()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	record, err := s.readRecord()
 	if errors.Is(err, ErrNotFound) {
+		if _, keyErr := s.keyring.Get(keyringService, keyringAccount); keyErr != nil {
+			return nil
+		}
+		if err := s.keyring.Delete(keyringService, keyringAccount); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+			return fmt.Errorf("delete device key: %w", err)
+		}
 		return nil
 	}
 	if err != nil {
@@ -261,6 +305,17 @@ func profile(record identityRecord) Profile {
 
 func (s *Store) identityPath() string { return filepath.Join(s.directory, "identity.json") }
 func (s *Store) settingsPath() string { return filepath.Join(s.directory, "settings.json") }
+func (s *Store) lockPath() string     { return filepath.Join(s.directory, "identity.lock") }
+
+func (s *Store) lockIdentity() (func(), error) {
+	if s == nil || s.directory == "" {
+		return nil, ErrInvalidRecord
+	}
+	if err := ensureDirectory(s.directory); err != nil {
+		return nil, err
+	}
+	return lockFile(s.lockPath())
+}
 
 func (s *Store) readFile(path string) ([]byte, error) {
 	if s == nil || s.directory == "" {
@@ -348,6 +403,13 @@ func ensureDirectory(directory string) error {
 	}
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
+	}
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() || !pathOwnerMatches(directory, info) {
+		return ErrUnsafeStorage
 	}
 	if err := os.Chmod(directory, 0o700); err != nil {
 		return err

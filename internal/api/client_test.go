@@ -26,6 +26,7 @@ func TestDeviceClientCreatesAndRenewsSessionWithFreshProofs(t *testing.T) {
 	var verifier *auth.Verifier
 	var thumbprint [32]byte
 	var sessions int
+	var resourceRequests int
 	var proofs []string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +78,8 @@ func TestDeviceClientCreatesAndRenewsSessionWithFreshProofs(t *testing.T) {
 			proof := r.Header.Get("DPoP")
 			mu.Lock()
 			proofs = append(proofs, proof)
+			resourceRequests++
+			currentRequest := resourceRequests
 			currentSessions := sessions
 			currentThumbprint := thumbprint
 			mu.Unlock()
@@ -91,6 +94,11 @@ func TestDeviceClientCreatesAndRenewsSessionWithFreshProofs(t *testing.T) {
 			if currentSessions == 1 {
 				w.WriteHeader(http.StatusUnauthorized)
 				_ = json.NewEncoder(w).Encode(ErrorResponse{Error: APIError{Code: ErrorCodeSessionExpired, Message: "expired"}})
+				return
+			}
+			if currentRequest == 2 {
+				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(ErrorResponse{Error: APIError{Code: ErrorCodeDPoPReplay, Message: "replayed"}})
 				return
 			}
 			_ = json.NewEncoder(w).Encode(GetMeResponse{Alias: "Maple Finch", LatestTUIVersion: "v0.3.0"})
@@ -115,10 +123,15 @@ func TestDeviceClientCreatesAndRenewsSessionWithFreshProofs(t *testing.T) {
 	if err != nil || me.Alias != "Maple Finch" {
 		t.Fatalf("Me = %+v, %v", me, err)
 	}
+	advanced := time.Now().Add(16 * time.Minute)
+	bound.now = func() time.Time { return advanced }
+	if _, err := bound.Me(t.Context()); err != nil {
+		t.Fatalf("Me after suspend = %v", err)
+	}
 	mu.Lock()
 	defer mu.Unlock()
-	if sessions != 2 {
-		t.Fatalf("session creations = %d, want 2", sessions)
+	if sessions != 3 {
+		t.Fatalf("session creations = %d, want 3", sessions)
 	}
 	seen := make(map[string]struct{}, len(proofs))
 	for _, proof := range proofs {

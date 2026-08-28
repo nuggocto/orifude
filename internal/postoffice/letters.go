@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"io"
 	"sort"
 	"time"
 
@@ -51,10 +50,7 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 	if err != nil {
 		return api.CreateLetterResponse{}, err
 	}
-	foldSeed, err := s.foldSeed()
-	if err != nil {
-		return api.CreateLetterResponse{}, err
-	}
+	foldSeed := api.FoldSeedForLetterID(request.LetterID)
 
 	var letter dbgen.Letter
 	err = s.db.InTx(ctx, func(q *dbgen.Queries) error {
@@ -538,19 +534,6 @@ func (s *Service) checkRate(ctx context.Context, q *dbgen.Queries, identityID in
 		return ErrRateLimited
 	}
 	return nil
-}
-
-func (s *Service) foldSeed() (int64, error) {
-	var seed int64
-	err := s.randomCall(func(random io.Reader) error {
-		var bytes [8]byte
-		if _, err := io.ReadFull(random, bytes[:]); err != nil {
-			return err
-		}
-		seed = int64(binary.BigEndian.Uint64(bytes[:]) & (1<<63 - 1))
-		return nil
-	})
-	return seed, err
 }
 
 func (s *Service) readableLetter(ctx context.Context, identityID int64, letterID string) (dbgen.Letter, api.LetterRole, error) {

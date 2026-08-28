@@ -43,8 +43,16 @@ func main() {
 	databaseURL := os.Getenv("DATABASE_URL")
 	listenAddress := os.Getenv("LISTEN_ADDR")
 	publicOrigin := os.Getenv("PUBLIC_ORIGIN")
-	if databaseURL == "" || listenAddress == "" || publicOrigin == "" {
-		log.Fatal("DATABASE_URL, LISTEN_ADDR, and PUBLIC_ORIGIN are required")
+	if databaseURL == "" || listenAddress == "" {
+		log.Fatal("DATABASE_URL and LISTEN_ADDR are required")
+	}
+	listener, err := net.Listen("tcp", listenAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
+	if publicOrigin == "" {
+		publicOrigin = "http://" + listener.Addr().String()
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -79,15 +87,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := &http.Server{Addr: listenAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	fmt.Println("ready")
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	fmt.Println("ready " + publicOrigin)
+	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }

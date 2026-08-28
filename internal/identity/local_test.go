@@ -2,11 +2,13 @@ package identity
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nuggocto/orifude/internal/auth"
@@ -120,6 +122,76 @@ func TestStoreDoesNotTreatMissingKeyringKeyAsFirstRun(t *testing.T) {
 	}
 }
 
+func TestStoreDoesNotTreatMissingMetadataAsFirstRun(t *testing.T) {
+	backend := &memoryKeyring{}
+	store := newStore(t.TempDir(), backend)
+	original := testDevice(t)
+	if _, err := store.SavePending("River Stone", original, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(store.identityPath()); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Load(); !errors.Is(err, ErrInvalidRecord) {
+		t.Fatalf("missing metadata error = %v, want invalid record", err)
+	}
+	if _, err := store.SavePending("Maple Finch", testDevice(t), false); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("replacement error = %v, want existing identity", err)
+	}
+	encoded, err := base64.RawStdEncoding.DecodeString(backend.secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := auth.ParseDeviceKey(encoded)
+	clear(encoded)
+	if err != nil || stored.Thumbprint() != original.Thumbprint() {
+		t.Fatal("replacement attempt changed the surviving device key")
+	}
+	if err := store.Delete(); err != nil || backend.secret != "" {
+		t.Fatalf("orphaned key cleanup = %v, retained=%t", err, backend.secret != "")
+	}
+}
+
+func TestConcurrentStoresCannotReplacePendingIdentity(t *testing.T) {
+	backend := &memoryKeyring{}
+	directory := t.TempDir()
+	stores := []*Store{newStore(directory, backend), newStore(directory, backend)}
+	devices := []*auth.DeviceKey{testDevice(t), testDevice(t)}
+	start := make(chan struct{})
+	errorsByStore := make(chan error, len(stores))
+	var wait sync.WaitGroup
+	for index := range stores {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, err := stores[index].SavePending("River Stone", devices[index], false)
+			errorsByStore <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(errorsByStore)
+	var succeeded, rejected int
+	for err := range errorsByStore {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, ErrAlreadyExists):
+			rejected++
+		default:
+			t.Fatalf("concurrent SavePending error = %v", err)
+		}
+	}
+	if succeeded != 1 || rejected != 1 {
+		t.Fatalf("concurrent saves = %d succeeded, %d rejected", succeeded, rejected)
+	}
+	profile, loaded, err := stores[0].Load()
+	if err != nil || profile.Alias != "River Stone" || loaded == nil {
+		t.Fatalf("stored identity = %+v, %v", profile, err)
+	}
+}
+
 func TestStoreRejectsSymlinkAndBroadPermissions(t *testing.T) {
 	directory := t.TempDir()
 	store := newStore(directory, &memoryKeyring{})
@@ -141,6 +213,32 @@ func TestStoreRejectsSymlinkAndBroadPermissions(t *testing.T) {
 	}
 	if _, _, err := store.Load(); !errors.Is(err, ErrUnsafeStorage) {
 		t.Fatalf("broad-permission load error = %v", err)
+	}
+}
+
+func TestLoadRejectsConfigurationDirectorySymlinkWithoutChangingTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ordinary Windows test users cannot create symlinks")
+	}
+	parent := t.TempDir()
+	target := filepath.Join(parent, "target")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(parent, "config-link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	store := newStore(link, &memoryKeyring{})
+	if _, _, err := store.Load(); !errors.Is(err, ErrUnsafeStorage) {
+		t.Fatalf("directory symlink error = %v", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("symlink target permissions changed to %o", info.Mode().Perm())
 	}
 }
 

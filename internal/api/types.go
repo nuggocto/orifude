@@ -1,6 +1,10 @@
 package api
 
-import "time"
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"time"
+)
 
 type ChallengePurpose string
 
@@ -170,6 +174,13 @@ type DeleteIdentityResponse struct{}
 type CreateLetterRequest struct {
 	LetterID string `json:"letter_id"`
 	Body     string `json:"body"`
+}
+
+// FoldSeedForLetterID returns the stable presentation seed bound to an opaque
+// letter identifier. The post office persists and returns this exact value.
+func FoldSeedForLetterID(letterID string) int64 {
+	digest := sha256.Sum256([]byte(letterID))
+	return int64(binary.BigEndian.Uint64(digest[:8]) & (1<<63 - 1))
 }
 
 type CreateLetterResponse struct {

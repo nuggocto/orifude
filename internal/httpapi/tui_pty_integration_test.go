@@ -31,7 +31,7 @@ import (
 	"github.com/nuggocto/orifude/internal/tui"
 )
 
-func TestOnlineTUIFirstRunReleaseAndLostIdentityDeletion(t *testing.T) {
+func TestOnlineTUITwoIdentityJourneyAndLostIdentityDeletion(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL is set by testdata/postgres/check.sh")
@@ -63,7 +63,8 @@ func TestOnlineTUIFirstRunReleaseAndLostIdentityDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	senderConfig := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", senderConfig)
 	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/dev/null")
 	store, err := identity.NewStore()
 	if err != nil {
@@ -108,11 +109,102 @@ func TestOnlineTUIFirstRunReleaseAndLostIdentityDeletion(t *testing.T) {
 	terminal.sendFresh("q")
 	terminal.waitDone()
 
-	if err := store.Delete(); err != nil {
+	recipientInvite := httpSecret(74)
+	recipientInviteHash := auth.HashOpaque(recipientInvite)
+	if _, err := db.Queries().CreateInvite(ctx, recipientInviteHash[:]); err != nil {
 		t.Fatal(err)
 	}
+	recipientConfig := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", recipientConfig)
+	recipientStore, err := identity.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipientRuntime := &tui.Runtime{Client: client, Store: recipientStore, Version: "v0.3.0-test"}
+	terminal = startTUI(t, tui.NewOnline(recipientRuntime))
+	terminal.wait("Create an identity")
+	terminal.input("\r")
+	terminal.wait("A quiet post office")
+	terminal.input("\r")
+	terminal.wait("invite code")
+	terminal.input(recipientInvite)
+	terminal.input("\r")
+	terminal.input("cedar")
+	terminal.input("\r")
+	terminal.input("y")
+	if terminal.waitAny("owner-only local file", "Save this delete-only credential") == 0 {
+		terminal.input("y")
+		terminal.wait("Save this delete-only credential")
+	}
+	terminal.wait("I saved it")
+	terminal.input("\r")
+	terminal.wait("I stored it safely")
+	terminal.input("y")
+	terminal.wait("Welcome to the branch, cedar")
+	terminal.input("j")
+	terminal.input("\r")
+	terminal.wait("A folded letter arrived")
+	terminal.input("\r")
+	terminal.wait("A real post office letter.")
+	terminal.input("\r")
+	terminal.wait("Text mode. Press esc")
+	terminal.input("A reply from the second installation.")
+	terminal.input("\x1b")
+	terminal.input("\r")
+	terminal.wait("Release this one reply")
+	terminal.input("y")
+	terminal.wait("reply was folded into the keepsake")
+	terminal.input("\r")
+	terminal.input("j")
+	terminal.input("j")
+	terminal.input("\r")
+	terminal.wait("willow")
+	terminal.sendFresh("q")
+	terminal.waitDone()
+
+	t.Setenv("XDG_CONFIG_HOME", senderConfig)
+	store, err = identity.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.Store = store
+	terminal = startTUI(t, tui.NewOnline(runtime))
+	terminal.wait("Welcome to the branch, willow")
+	terminal.input("j")
+	terminal.input("j")
+	terminal.input("\r")
+	terminal.wait("cedar")
+	terminal.input("\r")
+	terminal.wait("A reply from the second installation.")
+	terminal.input("j")
+	terminal.input("\r")
+	terminal.wait("Block future matching permanently")
+	terminal.input("y")
+	terminal.wait("blocked permanently")
+	terminal.input("k")
+	terminal.input("\r")
+	terminal.wait("Why are you reporting")
+	terminal.input("\r")
+	terminal.wait("Report and burn")
+	terminal.input("y")
+	terminal.wait("reported, burned, and blocked")
+	terminal.sendFresh("q")
+	terminal.waitDone()
+
+	t.Setenv("XDG_CONFIG_HOME", recipientConfig)
+	recipientStore, err = identity.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipientRuntime.Store = recipientStore
+	terminal = startTUI(t, tui.NewOnline(recipientRuntime))
+	terminal.wait("Welcome to the branch, cedar")
+	terminal.sendFresh("q")
+	terminal.waitDone()
+
 	credential := httpSecret(72)
 	registerHTTPIdentity(t, db, server, httpDeviceKey(t), "lostwillow", credential, 73)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	store, err = identity.NewStore()
 	if err != nil {
 		t.Fatal(err)

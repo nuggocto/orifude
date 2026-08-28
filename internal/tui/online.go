@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/nuggocto/orifude/internal/api"
 	"github.com/nuggocto/orifude/internal/auth"
 	"github.com/nuggocto/orifude/internal/identity"
@@ -47,11 +48,13 @@ type prepareIdentityMsg struct {
 }
 
 type registerMsg struct {
-	id      uint64
-	profile identity.Profile
-	device  *api.DeviceClient
-	me      api.GetMeResponse
-	err     error
+	id        uint64
+	profile   identity.Profile
+	device    *api.DeviceClient
+	me        api.GetMeResponse
+	confirmed bool
+	uncertain bool
+	err       error
 }
 
 type reconnectMsg struct {
@@ -173,13 +176,6 @@ func (m Model) bootstrapCommand() tea.Cmd {
 		_, err = device.CreateSession(ctx)
 		cancel()
 		if err != nil {
-			var httpError *api.HTTPError
-			if !profile.Active && errors.As(err, &httpError) && httpError.API.Code == api.ErrorCodeAuthenticationFailed {
-				if deleteErr := runtime.Store.Delete(); deleteErr != nil {
-					return bootstrapMsg{profile: profile, settings: settings, settingsErr: settingsErr, found: true, err: deleteErr}
-				}
-				return bootstrapMsg{settings: settings, settingsErr: settingsErr}
-			}
 			return bootstrapMsg{profile: profile, device: device, settings: settings, settingsErr: settingsErr, found: true, err: err}
 		}
 		ctx, cancel = startupContext()
@@ -244,29 +240,58 @@ func (m Model) registerCommand(id uint64) tea.Cmd {
 			_, err = registration.device.Register(ctx, challenge, request)
 			return err
 		}
-		err := register()
-		if err != nil && ambiguousRegistration(err) {
+		confirmed := registration.confirmed
+		uncertain := registration.uncertain
+		var err error
+		if !confirmed && uncertain {
 			ctx, cancel := commandContext()
-			if _, sessionErr := registration.device.CreateSession(ctx); sessionErr != nil {
+			_, err = registration.device.CreateSession(ctx)
+			cancel()
+			if err == nil {
+				confirmed = true
+			} else if !registrationMissing(err) {
+				return registerMsg{id: id, device: registration.device, confirmed: false, uncertain: true, err: err}
+			}
+		}
+		if !confirmed {
+			err = register()
+			if err == nil {
+				confirmed = true
+			} else if ambiguousRegistration(err) {
+				uncertain = true
+				ctx, cancel := commandContext()
+				_, sessionErr := registration.device.CreateSession(ctx)
 				cancel()
-				err = register()
-			} else {
-				cancel()
-				err = nil
+				if sessionErr == nil {
+					confirmed = true
+					err = nil
+				} else if registrationMissing(sessionErr) {
+					err = register()
+					if err == nil {
+						confirmed = true
+					}
+				} else {
+					err = sessionErr
+				}
 			}
 		}
 		if err != nil {
-			return registerMsg{id: id, device: registration.device, err: err}
+			return registerMsg{id: id, device: registration.device, confirmed: confirmed, uncertain: uncertain, err: err}
 		}
 		ctx, cancel := commandContext()
 		me, err := registration.device.Me(ctx)
 		cancel()
 		if err != nil {
-			return registerMsg{id: id, device: registration.device, err: err}
+			return registerMsg{id: id, device: registration.device, confirmed: confirmed, uncertain: uncertain, err: err}
 		}
 		profile, err := runtime.Store.Activate(me.Alias)
-		return registerMsg{id: id, profile: profile, device: registration.device, me: me, err: err}
+		return registerMsg{id: id, profile: profile, device: registration.device, me: me, confirmed: confirmed, uncertain: uncertain, err: err}
 	}
+}
+
+func registrationMissing(err error) bool {
+	var httpError *api.HTTPError
+	return errors.As(err, &httpError) && httpError.API.Code == api.ErrorCodeAuthenticationFailed
 }
 
 func ambiguousRegistration(err error) bool {
@@ -327,6 +352,7 @@ func (m Model) operationCurrent(id uint64, kind operationKind) bool {
 func (m *Model) operationFailed(err error) {
 	if m.pending != nil {
 		m.pending.busy = false
+		m.pending.uncertain = m.pending.uncertain || m.pending.mutation && mutationOutcomeUnknown(err)
 	}
 	if errors.Is(err, api.ErrTransport) {
 		m.connection = connectionOffline
@@ -339,6 +365,10 @@ func (m *Model) operationFailed(err error) {
 		m.screen = ScreenRecovery
 	}
 	m.setStatus(statusError, visibleAPIError(err))
+}
+
+func mutationOutcomeUnknown(err error) bool {
+	return errors.Is(err, api.ErrTransport) || errors.Is(err, api.ErrProtocol) || errors.Is(err, api.ErrResponseTooLarge)
 }
 
 func visibleAPIError(err error) string {
@@ -404,7 +434,7 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		m.localIdentity, m.device = message.profile, message.device
 		m.identity = Identity{Alias: message.profile.Alias, Thumbprint: message.profile.Thumbprint}
 		if message.err != nil {
-			if message.device != nil && errors.Is(message.err, api.ErrTransport) {
+			if message.device != nil && temporaryStartupFailure(message.err) {
 				m.connection = connectionOffline
 				m.screen = ScreenBranch
 				m.setStatus(statusError, visibleAPIError(message.err))
@@ -427,6 +457,12 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		m.pending = nil
 		m.registration = message.registration
 		if message.err != nil {
+			if errors.Is(message.err, identity.ErrAlreadyExists) {
+				m.registration = nil
+				m.screen = ScreenSplash
+				m.setStatus(statusInfo, "Another process created local identity state. Loading that identity...")
+				return m, m.bootstrapCommand(), true
+			}
 			m.setStatus(statusError, visibleAPIError(message.err))
 			return m, nil, true
 		}
@@ -444,7 +480,8 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		if message.err != nil {
 			if m.registration != nil {
-				m.registration.uncertain = ambiguousRegistration(message.err)
+				m.registration.confirmed = m.registration.confirmed || message.confirmed
+				m.registration.uncertain = m.registration.uncertain || message.uncertain || message.confirmed || ambiguousRegistration(message.err)
 			}
 			m.operationFailed(message.err)
 			return m, nil, true
@@ -456,8 +493,9 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 			m.registration.invite = ""
 		}
 		m.registration = nil
-		m.connected(message.me)
-		m.setStatus(statusSuccess, "Welcome, "+message.me.Alias+".")
+		if !m.connected(message.me) {
+			m.setStatus(statusSuccess, "Welcome, "+message.me.Alias+".")
+		}
 		return m, nil, true
 	case reconnectMsg:
 		if !m.operationCurrent(message.id, operationReconnect) {
@@ -470,8 +508,9 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		m.localIdentity, m.device = message.profile, message.device
 		m.pending = nil
-		m.connected(message.me)
-		m.setStatus(statusSuccess, "Connected to the post office.")
+		if !m.connected(message.me) {
+			m.setStatus(statusSuccess, "Connected to the post office.")
+		}
 		return m, nil, true
 	case sendMsg:
 		if !m.operationCurrent(message.id, operationSend) {
@@ -484,9 +523,10 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		m.connection = connectionOnline
 		body := m.pending.body
 		m.pending = nil
-		m.current = &Letter{ID: message.response.LetterID, Role: api.LetterRoleSender, State: message.response.State,
-			SenderAlias: m.identity.Alias, Body: body, FoldSeed: uint64(message.response.FoldSeed), CreatedAt: message.response.CreatedAt}
+		m.setCurrent(Letter{ID: message.response.LetterID, Role: api.LetterRoleSender, State: message.response.State,
+			SenderAlias: m.identity.Alias, Body: body, FoldSeed: uint64(message.response.FoldSeed), CreatedAt: message.response.CreatedAt})
 		m.draft.Reset()
+		m.draftID = ""
 		m.deliveryReply = false
 		m.screen = ScreenDelivery
 		m.setStatus(statusSuccess, "The letter was released into the quiet.")
@@ -512,9 +552,9 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		m.connection = connectionOnline
 		m.pending = nil
-		m.current = &Letter{ID: message.response.LetterID, Role: api.LetterRoleRecipient, State: api.LetterStateClaimed,
+		m.setCurrent(Letter{ID: message.response.LetterID, Role: api.LetterRoleRecipient, State: api.LetterStateClaimed,
 			FoldSeed: uint64(message.response.FoldSeed), CreatedAt: message.response.CreatedAt, ClaimExpiry: message.response.ClaimExpiresAt,
-			Age: humanAge(message.response.CreatedAt)}
+			Age: humanAge(message.response.CreatedAt)})
 		m.screen = ScreenFoldedDelivery
 		m.setStatus(statusInfo, "A folded letter is waiting.")
 		return m, nil, true
@@ -553,7 +593,7 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 			m.current.Reply = body
 			m.current.State = api.LetterStateReplied
 		}
-		m.replyDraft.Reset()
+		m.clearReplyDraft()
 		m.deliveryReply = true
 		m.screen = ScreenDelivery
 		m.setStatus(statusSuccess, "Your reply was folded into the keepsake.")
@@ -626,7 +666,15 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 	}
 }
 
-func (m *Model) connected(me api.GetMeResponse) {
+func temporaryStartupFailure(err error) bool {
+	if errors.Is(err, api.ErrTransport) {
+		return true
+	}
+	var httpError *api.HTTPError
+	return errors.As(err, &httpError) && (httpError.API.Code == api.ErrorCodeServiceUnavailable || httpError.API.Code == api.ErrorCodeClockSkew)
+}
+
+func (m *Model) connected(me api.GetMeResponse) bool {
 	m.connection = connectionOnline
 	m.identity = Identity{Alias: me.Alias, Thumbprint: m.localIdentity.Thumbprint}
 	m.latestVersion = me.LatestTUIVersion
@@ -634,9 +682,11 @@ func (m *Model) connected(me api.GetMeResponse) {
 	m.cursor = 0
 	if m.runtime != nil && semver.IsValid(m.runtime.Version) && semver.IsValid(me.LatestTUIVersion) && semver.Compare(me.LatestTUIVersion, m.runtime.Version) > 0 {
 		m.setStatus(statusInfo, "A newer Orifude release is available: "+me.LatestTUIVersion+".")
+		return true
 	} else {
 		m.setStatus(statusInfo, "")
 	}
+	return false
 }
 
 func (m *Model) applySettings(settings identity.Settings) {
@@ -646,6 +696,7 @@ func (m *Model) applySettings(settings identity.Settings) {
 	m.reducedMotion = settings.ReducedMotion
 	m.asciiFallback = settings.ASCIIFallback
 	m.accessible = settings.Accessible
+	m.ascii = m.asciiFallback || m.theme == "mono" || m.profile == colorprofile.Ascii || m.profile == colorprofile.NoTTY
 	m.refreshPresentation()
 }
 
@@ -702,7 +753,7 @@ func (m Model) detailActions() []detailAction {
 	if m.keepsakeReportable() {
 		actions = append(actions, detailReport)
 	}
-	if m.current.SenderAlias != "" && m.current.State != api.LetterStateWaiting && m.current.State != api.LetterStateWithdrawn {
+	if m.current.SenderAlias != "" && (m.current.State == api.LetterStateOpened || m.current.State == api.LetterStateReplied) {
 		actions = append(actions, detailBlock)
 	}
 	return append(actions, detailRemove)
@@ -733,13 +784,12 @@ func (m *Model) startSend() tea.Cmd {
 		m.pending.id, m.pending.busy = m.requestID, true
 	} else {
 		pending := m.beginOperation(operationSend, true)
-		id, err := auth.GenerateClientID(rand.Reader)
-		if err != nil {
+		if m.draftID == "" {
 			m.pending = nil
-			m.setStatus(statusError, "A release identifier could not be created.")
+			m.setStatus(statusError, "The release identifier is missing. Preview the letter again.")
 			return nil
 		}
-		pending.clientID, pending.body = id, m.draft.Value()
+		pending.clientID, pending.body = m.draftID, m.draft.Value()
 	}
 	pending := *m.pending
 	device := m.device
@@ -749,6 +799,18 @@ func (m *Model) startSend() tea.Cmd {
 		response, err := device.CreateLetter(ctx, api.CreateLetterRequest{LetterID: pending.clientID, Body: pending.body})
 		return sendMsg{id: pending.id, response: response, err: err}
 	}
+}
+
+func (m *Model) prepareLetterPreview() error {
+	if m.runtime == nil || m.draftID != "" {
+		return nil
+	}
+	id, err := auth.GenerateClientID(rand.Reader)
+	if err != nil {
+		return err
+	}
+	m.draftID = id
+	return nil
 }
 
 func (m *Model) startClaim() tea.Cmd {
@@ -966,6 +1028,7 @@ func (m Model) handleReport(message reportMsg) Model {
 	m.pending = nil
 	m.removeCurrentSummary()
 	m.current = nil
+	m.clearReplyDraft()
 	m.screen = ScreenBranch
 	m.cursor = 0
 	m.setStatus(statusSuccess, "The exchange was reported, burned, and blocked from future matching.")
@@ -1016,6 +1079,7 @@ func (m Model) handleDeleteKeepsake(message deleteKeepsakeMsg) Model {
 	m.pending = nil
 	m.removeCurrentSummary()
 	m.current = nil
+	m.clearReplyDraft()
 	m.screen = ScreenKeepsakes
 	if returnScreen == ScreenRead {
 		m.screen = ScreenBranch
@@ -1087,6 +1151,7 @@ func (m *Model) resetIdentity() {
 	m.registration = nil
 	m.pending = nil
 	m.current = nil
+	m.clearReplyDraft()
 	m.keepsakes = nil
 	m.nextCursor = ""
 	m.connection = connectionOffline

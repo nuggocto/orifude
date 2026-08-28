@@ -97,6 +97,7 @@ type DeviceClient struct {
 	client *Client
 	device *auth.DeviceKey
 	prover *auth.Prover
+	now    func() time.Time
 
 	mu        sync.Mutex
 	token     string
@@ -114,7 +115,7 @@ func (c *Client) ForDevice(device *auth.DeviceKey) (*DeviceClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DeviceClient{client: c, device: device, prover: prover}, nil
+	return &DeviceClient{client: c, device: device, prover: prover, now: time.Now}, nil
 }
 
 // PublicJWK returns the registration and session challenge key.
@@ -185,7 +186,8 @@ func (d *DeviceClient) acceptSession(tokenType TokenType, token string, expiresI
 	defer clear(decoded)
 	d.mu.Lock()
 	d.token = token
-	d.expiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second)
+	// Strip the monotonic reading so suspend time advances the session deadline.
+	d.expiresAt = d.now().Round(0).Add(time.Duration(expiresIn) * time.Second)
 	d.renewErr = nil
 	d.mu.Unlock()
 	return nil
@@ -214,7 +216,7 @@ func (d *DeviceClient) ClearSession() {
 func (d *DeviceClient) session(ctx context.Context) (string, error) {
 	for {
 		d.mu.Lock()
-		if d.token != "" && time.Until(d.expiresAt) > sessionRenewalMargin {
+		if d.token != "" && d.expiresAt.Sub(d.now().Round(0)) > sessionRenewalMargin {
 			token := d.token
 			d.mu.Unlock()
 			return token, nil
@@ -342,7 +344,9 @@ func doProtected[T any](ctx context.Context, device *DeviceClient, method, path 
 	if index := strings.IndexByte(escapedPath, '?'); index >= 0 {
 		escapedPath = escapedPath[:index]
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	renewed := false
+	replayed := false
+	for attempt := 0; attempt < 3; attempt++ {
 		token, err := device.session(ctx)
 		if err != nil {
 			return zero, err
@@ -356,9 +360,18 @@ func doProtected[T any](ctx context.Context, device *DeviceClient, method, path 
 			"DPoP":          proof,
 		})
 		var httpError *HTTPError
-		if attempt == 0 && errors.As(err, &httpError) && httpError.API.Code == ErrorCodeSessionExpired {
-			device.invalidateToken(token)
-			continue
+		if errors.As(err, &httpError) {
+			switch {
+			case httpError.API.Code == ErrorCodeSessionExpired && !renewed:
+				device.invalidateToken(token)
+				renewed = true
+				continue
+			case httpError.API.Code == ErrorCodeDPoPReplay && !replayed:
+				// net/http can transparently replay an idempotent request on a
+				// stale reused connection. Repeat it explicitly with a new proof.
+				replayed = true
+				continue
+			}
 		}
 		return response, err
 	}

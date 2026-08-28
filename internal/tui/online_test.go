@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/colorprofile"
 	"github.com/nuggocto/orifude/internal/api"
+	"github.com/nuggocto/orifude/internal/identity"
 )
 
 func TestOnlineMutationIgnoresDuplicatesAndStaleResults(t *testing.T) {
@@ -52,6 +55,36 @@ func TestOnlineFailuresPreserveDraftAndRetryIdentifier(t *testing.T) {
 	}
 }
 
+func TestAmbiguousReleaseCannotLoseItsRetryIdentifier(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.screen = ScreenFoldPreview
+	m.draft.SetValue("preserve me")
+	pending := m.beginOperation(operationSend, true)
+	pending.clientID = "same-client-id"
+	pending.body = m.draft.Value()
+
+	m, _, _ = m.handleOnlineMessage(sendMsg{id: pending.id, err: api.ErrTransport})
+	m.back()
+	if m.screen != ScreenFoldPreview || m.pending == nil || m.pending.clientID != "same-client-id" || !m.pending.uncertain {
+		t.Fatalf("back abandoned ambiguous release: screen=%v pending=%+v", m.screen, m.pending)
+	}
+	next, command := m.requestQuit()
+	m = next.(Model)
+	if command != nil || m.pending == nil || !strings.Contains(m.status, "original identifier") {
+		t.Fatalf("quit abandoned ambiguous release: pending=%+v status=%q", m.pending, m.status)
+	}
+	m.device = new(api.DeviceClient)
+	if retry := m.startSend(); retry == nil || m.pending == nil || !m.pending.busy || m.pending.clientID != "same-client-id" {
+		t.Fatalf("release retry did not reuse original state: pending=%+v", m.pending)
+	}
+	m, _, _ = m.handleOnlineMessage(sendMsg{id: m.pending.id, response: api.CreateLetterResponse{
+		LetterID: "same-client-id", State: api.LetterStateWaiting, FoldSeed: api.FoldSeedForLetterID("same-client-id"), CreatedAt: time.Now(),
+	}})
+	if m.screen != ScreenDelivery || m.current == nil || m.current.ID != "same-client-id" || m.draft.Value() != "" {
+		t.Fatalf("reconciled release = screen %v current %+v draft %q", m.screen, m.current, m.draft.Value())
+	}
+}
+
 func TestAmbiguousRegistrationCannotAbandonDeviceKey(t *testing.T) {
 	m := NewOnline(&Runtime{})
 	m.screen = ScreenRevocation
@@ -59,6 +92,54 @@ func TestAmbiguousRegistrationCannotAbandonDeviceKey(t *testing.T) {
 	m.back()
 	if m.screen != ScreenRevocation || m.registration == nil {
 		t.Fatal("ambiguous registration abandoned its device state")
+	}
+}
+
+func TestConfirmedRegistrationPersistenceFailureCannotBeAbandoned(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.screen = ScreenRevocation
+	m.registration = &pendingRegistration{}
+	pending := m.beginOperation(operationRegister, true)
+	m, _, _ = m.handleOnlineMessage(registerMsg{id: pending.id, confirmed: true, err: errors.New("disk full")})
+	if m.registration == nil || !m.registration.confirmed || !m.registration.uncertain {
+		t.Fatalf("confirmed registration state = %+v", m.registration)
+	}
+	m.back()
+	if m.screen != ScreenRevocation || m.registration == nil {
+		t.Fatal("confirmed registration persistence failure was abandoned")
+	}
+	next, command := m.activate()
+	m = next.(Model)
+	if command == nil || m.pending == nil || m.pending.kind != operationRegister || !m.pending.busy {
+		t.Fatalf("confirmed registration retry = command %v pending %+v", command != nil, m.pending)
+	}
+}
+
+func TestBootstrapTemporaryFailuresKeepStoredIdentityRetryable(t *testing.T) {
+	for _, err := range []error{
+		api.ErrTransport,
+		&api.HTTPError{API: api.APIError{Code: api.ErrorCodeServiceUnavailable}},
+		&api.HTTPError{API: api.APIError{Code: api.ErrorCodeClockSkew}},
+	} {
+		m := NewOnline(&Runtime{})
+		m.screen = ScreenSplash
+		device := new(api.DeviceClient)
+		next, _, _ := m.handleOnlineMessage(bootstrapMsg{
+			profile: identity.Profile{Alias: "willow", Active: true}, device: device, found: true, err: err,
+		})
+		if next.screen != ScreenBranch || next.connection != connectionOffline || next.device != device {
+			t.Errorf("temporary startup error %v produced screen=%v connection=%v", err, next.screen, next.connection)
+		}
+	}
+}
+
+func TestApplySettingsRecomputesASCIIFromPersistedPreference(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.profile = colorprofile.TrueColor
+	m.ascii = false
+	m.applySettings(identity.Settings{Theme: "auto", ASCIIFallback: true})
+	if !m.ascii || m.help.ShortSeparator != " | " {
+		t.Fatalf("persisted ASCII setting produced ascii=%t separator=%q", m.ascii, m.help.ShortSeparator)
 	}
 }
 
@@ -80,6 +161,21 @@ func TestOnlineOpenUsesRealResponseAndReducedMotion(t *testing.T) {
 	}
 	if next.current == nil || next.current.Body != response.Original.Body || next.current.SenderAlias != response.Original.Alias {
 		t.Fatalf("opened letter = %+v", next.current)
+	}
+}
+
+func TestOnlinePreviewUsesDurableLetterSeed(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.screen = ScreenCompose
+	m.reducedMotion = true
+	m.draft.SetValue("same fold for both readers")
+	next, _ := m.activate()
+	m = next.(Model)
+	if m.draftID == "" || m.current == nil || m.current.ID != m.draftID {
+		t.Fatalf("preview identity = draft %q current %+v", m.draftID, m.current)
+	}
+	if m.current.FoldSeed != uint64(api.FoldSeedForLetterID(m.draftID)) {
+		t.Fatalf("preview seed = %d, want durable seed", m.current.FoldSeed)
 	}
 }
 
@@ -119,6 +215,29 @@ func TestOnlineKeepsakeDetailRetainsSelectionAndActions(t *testing.T) {
 	}
 }
 
+func TestClaimedSenderDoesNotSeeBlockAction(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.current = &Letter{ID: "letter", Role: api.LetterRoleSender, State: api.LetterStateClaimed, SenderAlias: "mori"}
+	for _, action := range m.detailActions() {
+		if action == detailBlock {
+			t.Fatal("claimed sender was offered a block action the server rejects")
+		}
+	}
+}
+
+func TestOnlineExchangeEndClearsBoundReplyDraft(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.screen = ScreenRead
+	m.current = &Letter{ID: "letter", Role: api.LetterRoleRecipient}
+	m.bindReplyDraft("letter")
+	m.replyDraft.SetValue("unfinished")
+	pending := m.beginOperation(operationDeleteKeepsake, true)
+	next := m.handleDeleteKeepsake(deleteKeepsakeMsg{id: pending.id})
+	if next.replyDraft.Value() != "" || next.replyDraftID != "" {
+		t.Fatalf("removed exchange retained reply draft %q for %q", next.replyDraft.Value(), next.replyDraftID)
+	}
+}
+
 func TestDiscardedOnlineLetterReturnsToBranch(t *testing.T) {
 	m := NewOnline(&Runtime{})
 	m.screen = ScreenRead
@@ -146,6 +265,25 @@ func TestUpdateNoticeOnlyShowsForNewerSemanticVersion(t *testing.T) {
 		m.connected(api.GetMeResponse{Alias: "willow", LatestTUIVersion: test.latest})
 		if shown := strings.Contains(m.status, "newer Orifude release"); shown != test.shown {
 			t.Errorf("current %q latest %q notice = %v", test.current, test.latest, shown)
+		}
+	}
+}
+
+func TestConnectionSuccessDoesNotOverwriteUpdateNotice(t *testing.T) {
+	for _, reconnect := range []bool{false, true} {
+		m := NewOnline(&Runtime{Version: "v0.3.0"})
+		m.screen = ScreenRevocation
+		m.localIdentity = identity.Profile{Thumbprint: "thumbprint"}
+		if reconnect {
+			pending := m.beginOperation(operationReconnect, false)
+			m, _, _ = m.handleOnlineMessage(reconnectMsg{id: pending.id, me: api.GetMeResponse{Alias: "willow", LatestTUIVersion: "v0.3.1"}})
+		} else {
+			m.registration = &pendingRegistration{}
+			pending := m.beginOperation(operationRegister, true)
+			m, _, _ = m.handleOnlineMessage(registerMsg{id: pending.id, confirmed: true, me: api.GetMeResponse{Alias: "willow", LatestTUIVersion: "v0.3.1"}})
+		}
+		if !strings.Contains(m.status, "newer Orifude release") {
+			t.Errorf("reconnect=%t status = %q", reconnect, m.status)
 		}
 	}
 }

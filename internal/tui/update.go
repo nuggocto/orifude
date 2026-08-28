@@ -386,7 +386,15 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.setStatus(statusError, err.Error())
 			return m, nil
 		}
-		letter := Letter{SenderAlias: m.identity.Alias, Body: m.draft.Value(), Age: "just now", FoldSeed: 0x6f726966756465}
+		if err := m.prepareLetterPreview(); err != nil {
+			m.setStatus(statusError, "A release identifier could not be created.")
+			return m, nil
+		}
+		seed := uint64(0x6f726966756465)
+		if m.runtime != nil {
+			seed = uint64(api.FoldSeedForLetterID(m.draftID))
+		}
+		letter := Letter{ID: m.draftID, SenderAlias: m.identity.Alias, Body: m.draft.Value(), Age: "just now", FoldSeed: seed}
 		m.setCurrent(letter)
 		command := m.startAnimation(ScreenFoldPreview, false)
 		return m, command
@@ -408,6 +416,9 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case ScreenRead:
 		switch m.cursor {
 		case 0:
+			if m.current != nil {
+				m.bindReplyDraft(m.current.ID)
+			}
 			m.screen = ScreenReply
 			m.mode = ModeText
 			m.setStatus(statusInfo, "")
@@ -415,14 +426,14 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		case 1:
 			if m.runtime != nil {
 				m.current = nil
-				m.replyDraft.Reset()
+				m.clearReplyDraft()
 				m.screen = ScreenBranch
 				m.setStatus(statusSuccess, "The opened exchange is in keepsakes.")
 				return m, nil
 			}
 			m.keepCurrent()
 			m.consumeCurrentFixture()
-			m.replyDraft.Reset()
+			m.clearReplyDraft()
 			m.screen = ScreenBranch
 			m.setStatus(statusSuccess, "The exchange is now a keepsake.")
 		case 2:
@@ -437,7 +448,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			}
 			m.consumeCurrentFixture()
 			m.current = nil
-			m.replyDraft.Reset()
+			m.clearReplyDraft()
 			m.screen = ScreenBranch
 			m.cursor = 0
 			m.setStatus(statusInfo, "The exchange was discarded.")
@@ -512,6 +523,11 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		}
 		return m, m.beginForm(formDeleteIdentity)
 	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			m.setStatus(statusInfo, "Retrying registration with the same device key...")
+			pending := m.beginOperation(operationRegister, true)
+			return m, m.registerCommand(pending.id)
+		}
 		return m, m.beginForm(formRevocation)
 	case ScreenRecovery:
 		if m.cursor == 0 && m.device != nil {
@@ -625,6 +641,10 @@ func (m *Model) back() {
 		m.setStatus(statusInfo, "Wait for the current operation to finish.")
 		return
 	}
+	if m.runtime != nil && m.pending != nil && m.pending.uncertain {
+		m.setStatus(statusInfo, "Retry this operation with its original identifier before leaving.")
+		return
+	}
 	if m.runtime != nil && m.pending != nil {
 		if m.pending.kind == operationReconnect {
 			m.connection = m.pending.connection
@@ -652,7 +672,10 @@ func (m *Model) back() {
 		m.screen = ScreenBranch
 	case ScreenFoldPreview:
 		m.screen = ScreenCompose
-	case ScreenDelivery, ScreenFoldedDelivery, ScreenRead, ScreenKeepsakes, ScreenSettings:
+	case ScreenDelivery, ScreenFoldedDelivery, ScreenKeepsakes, ScreenSettings:
+		m.screen = ScreenBranch
+	case ScreenRead:
+		m.clearReplyDraft()
 		m.screen = ScreenBranch
 	case ScreenSearching:
 		m.screen = ScreenBranch
@@ -673,6 +696,10 @@ func (m *Model) back() {
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
+	if m.runtime != nil && m.pending != nil && m.pending.uncertain {
+		m.setStatus(statusInfo, "Retry this operation with its original identifier before quitting.")
+		return m, nil
+	}
 	if m.draft.Value() == "" && m.replyDraft.Value() == "" {
 		return m, tea.Quit
 	}
@@ -994,6 +1021,7 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 			m.keepsakes = append(m.keepsakes, LetterSummary{Direction: "sent", Alias: "waiting for a stranger", Letter: *m.current})
 		}
 		m.draft.Reset()
+		m.draftID = ""
 		m.deliveryReply = false
 		m.screen = ScreenDelivery
 		m.setStatus(statusSuccess, "The letter was released into the quiet.")
@@ -1011,7 +1039,7 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 			m.keepCurrent()
 			m.consumeCurrentFixture()
 		}
-		m.replyDraft.Reset()
+		m.clearReplyDraft()
 		m.deliveryReply = true
 		m.screen = ScreenDelivery
 		m.setStatus(statusSuccess, "Your reply was folded into the keepsake.")
@@ -1028,7 +1056,7 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 		if m.reportIndex >= 0 && m.reportIndex < len(m.keepsakes) {
 			m.keepsakes = append(m.keepsakes[:m.reportIndex], m.keepsakes[m.reportIndex+1:]...)
 		} else {
-			m.replyDraft.Reset()
+			m.clearReplyDraft()
 		}
 		m.consumeCurrentFixture()
 		m.current = nil

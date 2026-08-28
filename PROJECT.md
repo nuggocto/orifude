@@ -274,8 +274,9 @@ moderator tool -- Cloudflare Access --> moderation API
 ### Runtime responsibilities
 
 The TUI owns presentation, keyboard input, the device private key, DPoP proofs,
-in-memory access tokens, request timeouts, retry prompts, and rendering a fold
-from a server-provided seed.
+in-memory access tokens, request timeouts, retry prompts, and previewing the
+stable fold seed derived from its random opaque letter ID. The post office
+derives the same seed, persists it, and returns it for later rendering.
 
 The post office owns device-key authentication, DPoP validation, authorization,
 plaintext validation, envelope encryption, bounded decryption, letter state
@@ -311,7 +312,8 @@ that talks to the post office.
 - `github.com/go-chi/chi/v5` provides routing and narrowly scoped middleware
   while preserving standard `http.Handler` contracts.
 - `crypto/rand` creates P-256 device keys, access and revocation credentials,
-  data nonces, public IDs, and fold seeds.
+  data nonces, and public IDs. A letter's random opaque ID deterministically
+  derives its non-secret fold seed so pre-release and delivered folds agree.
 - `crypto/aes` and `cipher.AEAD` provide AES-256-GCM message encryption.
 - `crypto/sha256` hashes opaque credentials and DPoP access tokens.
 - `github.com/go-jose/go-jose/v4` handles JWK, JWS, JWT, DPoP, and Cloudflare
