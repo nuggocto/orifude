@@ -191,3 +191,39 @@ func (q *Queries) HideReportedLetter(ctx context.Context, arg HideReportedLetter
 	}
 	return result.RowsAffected(), nil
 }
+
+const listReportedLetterIDs = `-- name: ListReportedLetterIDs :many
+SELECT DISTINCT letter_id FROM reports
+WHERE letter_id = ANY($1::varchar(22)[])
+`
+
+func (q *Queries) ListReportedLetterIDs(ctx context.Context, letterIds []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, listReportedLetterIDs, letterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var letter_id string
+		if err := rows.Scan(&letter_id); err != nil {
+			return nil, err
+		}
+		items = append(items, letter_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportExistsForLetter = `-- name: ReportExistsForLetter :one
+SELECT EXISTS (SELECT 1 FROM reports WHERE letter_id = $1) AS reported
+`
+
+func (q *Queries) ReportExistsForLetter(ctx context.Context, letterID string) (bool, error) {
+	row := q.db.QueryRow(ctx, reportExistsForLetter, letterID)
+	var reported bool
+	err := row.Scan(&reported)
+	return reported, err
+}

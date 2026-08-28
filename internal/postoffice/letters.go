@@ -177,6 +177,7 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 		}
 		var locked dbgen.Letter
 		var responseAt time.Time
+		var reported bool
 		err = s.db.InTx(ctx, func(q *dbgen.Queries) error {
 			if _, err := q.LockActiveIdentity(ctx, principal.IdentityID); err != nil {
 				return ErrNotFound
@@ -196,7 +197,8 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 			if !sameReadableVersion(letter, locked) {
 				return errRetryRead
 			}
-			return nil
+			reported, err = q.ReportExistsForLetter(ctx, letterID)
+			return err
 		})
 		if errors.Is(err, errRetryRead) {
 			clear(original)
@@ -208,7 +210,7 @@ func (s *Service) GetLetter(ctx context.Context, principal Principal, letterID s
 			clear(reply)
 			return api.GetLetterResponse{}, err
 		}
-		response := letterResponse(locked, role, string(original), string(reply), responseAt)
+		response := letterResponse(locked, role, string(original), string(reply), responseAt, reported)
 		clear(original)
 		clear(reply)
 		return response, nil
@@ -348,13 +350,20 @@ func (s *Service) WithdrawLetter(ctx context.Context, principal Principal, lette
 		if letter.WithdrawnAt.Valid {
 			return nil
 		}
-		if letter.RecipientID.Valid {
-			return ErrConflict
-		}
-		letter, err = q.WithdrawLetter(ctx, dbgen.WithdrawLetterParams{ID: letterID, SenderID: principal.IdentityID})
+		withdrawn, err := q.WithdrawLetter(ctx, dbgen.WithdrawLetterParams{ID: letterID, SenderID: principal.IdentityID})
 		if errors.Is(err, pgx.ErrNoRows) {
+			if letter.RecipientID.Valid {
+				databaseTime, timeErr := q.CurrentDatabaseTime(ctx)
+				if timeErr != nil {
+					return timeErr
+				}
+				if claimActive(letter, databaseTime.Time) {
+					return ErrConflict
+				}
+			}
 			return ErrNotFound
 		}
+		letter = withdrawn
 		return err
 	})
 	if err != nil {
@@ -458,9 +467,23 @@ func (s *Service) ListKeepsakes(ctx context.Context, principal Principal, reques
 	if more {
 		items = items[:limit]
 	}
+	reportedLetters := make(map[string]bool)
+	if len(items) > 0 {
+		letterIDs := make([]string, len(items))
+		for i, item := range items {
+			letterIDs[i] = item.letter.ID
+		}
+		reportedIDs, err := s.db.Queries().ListReportedLetterIDs(ctx, letterIDs)
+		if err != nil {
+			return api.ListKeepsakesResponse{}, err
+		}
+		for _, id := range reportedIDs {
+			reportedLetters[id] = true
+		}
+	}
 	response := api.ListKeepsakesResponse{Keepsakes: make([]api.LetterSummary, 0, len(items))}
 	for _, item := range items {
-		response.Keepsakes = append(response.Keepsakes, letterSummary(item.letter, item.role, responseAt.Time))
+		response.Keepsakes = append(response.Keepsakes, letterSummary(item.letter, item.role, responseAt.Time, reportedLetters[item.letter.ID]))
 	}
 	if more {
 		last := items[len(items)-1].letter
@@ -596,7 +619,7 @@ func sameReadableVersion(a, b dbgen.Letter) bool {
 
 func createLetterResponse(letter dbgen.Letter, responseAt time.Time) api.CreateLetterResponse {
 	return api.CreateLetterResponse{
-		LetterID: letter.ID, State: letterState(letter, responseAt), FoldSeed: letter.FoldSeed,
+		LetterID: letter.ID, State: letterState(letter, responseAt, false), FoldSeed: letter.FoldSeed,
 		CreatedAt: letter.CreatedAt.Time, ExpiresAt: letter.ExpiresAt.Time,
 	}
 }
@@ -605,9 +628,9 @@ func replyResponse(letter dbgen.Letter) api.ReplyToLetterResponse {
 	return api.ReplyToLetterResponse{LetterID: letter.ID, ReplyID: letter.ReplyID.String, RepliedAt: letter.RepliedAt.Time}
 }
 
-func letterResponse(letter dbgen.Letter, role api.LetterRole, original, reply string, responseAt time.Time) api.GetLetterResponse {
+func letterResponse(letter dbgen.Letter, role api.LetterRole, original, reply string, responseAt time.Time, reported bool) api.GetLetterResponse {
 	response := api.GetLetterResponse{
-		LetterID: letter.ID, Role: role, State: letterState(letter, responseAt), FoldSeed: letter.FoldSeed,
+		LetterID: letter.ID, Role: role, State: letterState(letter, responseAt, reported), FoldSeed: letter.FoldSeed,
 		CreatedAt: letter.CreatedAt.Time,
 		Original:  &api.Message{Body: original, Alias: letter.SenderAlias, CreatedAt: letter.CreatedAt.Time},
 	}
@@ -629,9 +652,9 @@ func letterResponse(letter dbgen.Letter, role api.LetterRole, original, reply st
 	return response
 }
 
-func letterSummary(letter dbgen.Letter, role api.LetterRole, responseAt time.Time) api.LetterSummary {
+func letterSummary(letter dbgen.Letter, role api.LetterRole, responseAt time.Time, reported bool) api.LetterSummary {
 	summary := api.LetterSummary{
-		LetterID: letter.ID, Role: role, State: letterState(letter, responseAt), FoldSeed: letter.FoldSeed,
+		LetterID: letter.ID, Role: role, State: letterState(letter, responseAt, reported), FoldSeed: letter.FoldSeed,
 		CreatedAt: letter.CreatedAt.Time,
 		OpenedAt:  timePointer(letter.OpenedAt), RepliedAt: timePointer(letter.RepliedAt),
 	}
@@ -648,8 +671,10 @@ func letterSummary(letter dbgen.Letter, role api.LetterRole, responseAt time.Tim
 	return summary
 }
 
-func letterState(letter dbgen.Letter, responseAt time.Time) api.LetterState {
+func letterState(letter dbgen.Letter, responseAt time.Time, reported bool) api.LetterState {
 	switch {
+	case reported:
+		return api.LetterStateReported
 	case letter.WithdrawnAt.Valid:
 		return api.LetterStateWithdrawn
 	case letter.ReplyID.Valid:

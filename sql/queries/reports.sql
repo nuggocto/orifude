@@ -38,6 +38,13 @@ WHERE reports.letter_id = sqlc.arg(letter_id)
   AND reports.reporter_id = sqlc.arg(reporter_id)
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(reporter_id) AND deleted_at IS NULL);
 
+-- name: ReportExistsForLetter :one
+SELECT EXISTS (SELECT 1 FROM reports WHERE letter_id = sqlc.arg(letter_id)) AS reported;
+
+-- name: ListReportedLetterIDs :many
+SELECT DISTINCT letter_id FROM reports
+WHERE letter_id = ANY(sqlc.arg(letter_ids)::varchar(22)[]);
+
 -- name: HideReportedLetter :execrows
 UPDATE letters
 SET recipient_removed_at = CASE WHEN reports.target = 1 THEN clock_timestamp() ELSE letters.recipient_removed_at END,

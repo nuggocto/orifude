@@ -75,15 +75,23 @@ WHERE id = sqlc.arg(id) AND recipient_id = sqlc.arg(recipient_id)
 FOR UPDATE;
 
 -- name: WithdrawLetter :one
+WITH withdrawal AS (SELECT clock_timestamp() AS value)
 UPDATE letters
-SET withdrawn_at = clock_timestamp()
+SET withdrawn_at = withdrawal.value,
+    recipient_id = NULL,
+    recipient_alias = NULL,
+    claimed_at = NULL,
+    claim_expires_at = NULL,
+    recipient_removed_at = NULL
+FROM withdrawal
 WHERE letters.id = sqlc.arg(id)
   AND letters.sender_id = sqlc.arg(sender_id)
-  AND letters.recipient_id IS NULL
+  AND letters.opened_at IS NULL
+  AND (letters.recipient_id IS NULL OR letters.claim_expires_at <= withdrawal.value)
   AND letters.withdrawn_at IS NULL
-  AND letters.expires_at > clock_timestamp()
+  AND letters.expires_at > withdrawal.value
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = sqlc.arg(sender_id) AND deleted_at IS NULL)
-RETURNING *;
+RETURNING letters.*;
 
 -- name: OpenLetter :one
 UPDATE letters

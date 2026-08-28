@@ -40,6 +40,10 @@ func (s *Service) CreateChallenge(ctx context.Context, request api.CreateChallen
 	}); err != nil {
 		return api.CreateChallengeResponse{}, err
 	}
+	serverTime, err := s.db.Queries().CurrentDatabaseTime(ctx)
+	if err != nil {
+		return api.CreateChallengeResponse{}, err
+	}
 
 	purpose := challengeRegistration
 	identityID := pgtype.Int8{}
@@ -49,8 +53,7 @@ func (s *Service) CreateChallenge(ctx context.Context, request api.CreateChallen
 		purpose = challengeSession
 		identity, lookupErr := s.db.Queries().GetActiveIdentityByThumbprint(ctx, key.Thumbprint[:])
 		if errors.Is(lookupErr, pgx.ErrNoRows) {
-			now := s.config.Now().UTC()
-			return api.CreateChallengeResponse{ChallengeID: challenge.ID, Nonce: challenge.Nonce, ExpiresIn: 300, ServerTime: now}, nil
+			return api.CreateChallengeResponse{ChallengeID: challenge.ID, Nonce: challenge.Nonce, ExpiresIn: 300, ServerTime: serverTime.Time}, nil
 		}
 		if lookupErr != nil {
 			return api.CreateChallengeResponse{}, lookupErr
@@ -60,7 +63,7 @@ func (s *Service) CreateChallenge(ctx context.Context, request api.CreateChallen
 		return api.CreateChallengeResponse{}, ErrInvalid
 	}
 
-	created, err := s.db.Queries().CreateAuthChallenge(ctx, dbgen.CreateAuthChallengeParams{
+	_, err = s.db.Queries().CreateAuthChallenge(ctx, dbgen.CreateAuthChallengeParams{
 		ID: challenge.ID, IdentityID: identityID, PublicKey: key.Uncompressed,
 		KeyThumbprint: key.Thumbprint[:], Purpose: purpose, NonceHash: challenge.NonceHash[:],
 	})
@@ -68,10 +71,10 @@ func (s *Service) CreateChallenge(ctx context.Context, request api.CreateChallen
 		return api.CreateChallengeResponse{}, err
 	}
 	return api.CreateChallengeResponse{
-		ChallengeID: created.ID,
+		ChallengeID: challenge.ID,
 		Nonce:       challenge.Nonce,
 		ExpiresIn:   300,
-		ServerTime:  created.CreatedAt.Time,
+		ServerTime:  serverTime.Time,
 	}, nil
 }
 

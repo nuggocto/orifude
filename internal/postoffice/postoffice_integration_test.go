@@ -105,6 +105,9 @@ func TestRegistrationSessionAndConcurrentReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if delta := unknownChallenge.ServerTime.Sub(challenge.ServerTime).Abs(); delta > time.Second {
+		t.Fatalf("known and unknown challenge server times differ by %v", delta)
+	}
 	if _, err := service.CreateSession(ctx, api.CreateSessionRequest{ChallengeID: challenge.ChallengeID}, "invalid"); !errors.Is(err, ErrAuthentication) || errors.Is(err, auth.ErrInvalidProof) {
 		t.Fatalf("known-key session error = %v, want authentication", err)
 	}
@@ -471,6 +474,14 @@ func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
 	}
 	if _, err := service.GetLetter(ctx, Principal{IdentityID: recipient.ID}, letterID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("reported letter remained visible: %v", err)
+	}
+	senderReported, err := service.GetLetter(ctx, Principal{IdentityID: sender.ID}, letterID)
+	if err != nil || senderReported.State != api.LetterStateReported {
+		t.Fatalf("sender reported detail = %+v, %v", senderReported, err)
+	}
+	reportedKeepsakes, err := service.ListKeepsakes(ctx, Principal{IdentityID: sender.ID}, api.ListKeepsakesRequest{Limit: 10})
+	if err != nil || len(reportedKeepsakes.Keepsakes) != 1 || reportedKeepsakes.Keepsakes[0].State != api.LetterStateReported {
+		t.Fatalf("sender reported keepsakes = %+v, %v", reportedKeepsakes, err)
 	}
 	if err := service.DeleteKeepsake(ctx, Principal{IdentityID: sender.ID}, letterID); err != nil {
 		t.Fatalf("delete sender keepsake: %v", err)
@@ -1051,6 +1062,37 @@ func TestWithdrawRejectsExpiredWaitingLetter(t *testing.T) {
 	var withdrawn bool
 	if err := raw.QueryRow(ctx, `SELECT withdrawn_at IS NOT NULL FROM letters WHERE id = $1`, letterID).Scan(&withdrawn); err != nil || withdrawn {
 		t.Fatalf("expired waiting letter withdrawn = %t, %v", withdrawn, err)
+	}
+}
+
+func TestWithdrawReleasesExpiredClaim(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 110, "Withdraw Claim Sender")
+	recipient := seedIdentity(t, ctx, db, 111, "Withdraw Claim Recipient")
+	letterID := publicID('k')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ClaimLetter(ctx, Principal{IdentityID: recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.WithdrawLetter(ctx, Principal{IdentityID: sender.ID}, letterID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("withdraw active claim = %v, want conflict", err)
+	}
+	if _, err := raw.Exec(ctx, `
+		UPDATE letters
+		SET created_at = now() - interval '2 days', expires_at = now() + interval '5 days',
+		    claimed_at = now() - interval '25 hours', claim_expires_at = now() - interval '1 hour'
+		WHERE id = $1`, letterID); err != nil {
+		t.Fatal(err)
+	}
+	withdrawn, err := service.WithdrawLetter(ctx, Principal{IdentityID: sender.ID}, letterID)
+	if err != nil || withdrawn.WithdrawnAt.IsZero() {
+		t.Fatalf("withdraw expired claim = %+v, %v", withdrawn, err)
+	}
+	var released, persisted bool
+	if err := raw.QueryRow(ctx, `SELECT recipient_id IS NULL, withdrawn_at IS NOT NULL FROM letters WHERE id = $1`, letterID).Scan(&released, &persisted); err != nil || !released || !persisted {
+		t.Fatalf("withdrawn expired claim = released %t, persisted %t, %v", released, persisted, err)
 	}
 }
 
