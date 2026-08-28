@@ -57,16 +57,27 @@ WITH expired AS (
     ORDER BY claim_expires_at, id
     FOR UPDATE SKIP LOCKED
     LIMIT sqlc.arg(batch_size)
+), deleted AS (
+    DELETE FROM letters
+    USING expired
+    WHERE letters.id = expired.id
+      AND letters.sender_removed_at IS NOT NULL
+    RETURNING letters.id
+), released AS (
+    UPDATE letters
+    SET recipient_id = NULL,
+        recipient_alias = NULL,
+        claimed_at = NULL,
+        claim_expires_at = NULL,
+        recipient_removed_at = NULL
+    FROM expired
+    WHERE letters.id = expired.id
+      AND letters.sender_removed_at IS NULL
+    RETURNING letters.id
 )
-UPDATE letters
-SET recipient_id = NULL,
-    recipient_alias = NULL,
-    claimed_at = NULL,
-    claim_expires_at = NULL,
-    recipient_removed_at = NULL
-FROM expired
-WHERE letters.id = expired.id
-RETURNING letters.id;
+SELECT id FROM deleted
+UNION ALL
+SELECT id FROM released;
 
 -- name: DeleteExpiredWaitingLetters :many
 WITH expired AS (

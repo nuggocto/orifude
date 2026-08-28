@@ -907,6 +907,39 @@ func TestWithdrawRejectsExpiredWaitingLetter(t *testing.T) {
 	}
 }
 
+func TestExpiredDiscardedClaimCannotBeReclaimed(t *testing.T) {
+	service, db, raw, _, ctx := openPostOffice(t)
+	sender := seedIdentity(t, ctx, db, 108, "Discarded Claim Sender")
+	recipient := seedIdentity(t, ctx, db, 109, "Discard Recipient")
+	letterID := publicID('j')
+	if _, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ClaimLetter(ctx, Principal{IdentityID: recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DeleteKeepsake(ctx, Principal{IdentityID: sender.ID}, letterID); err != nil {
+		t.Fatal(err)
+	}
+	var senderRemoved bool
+	if err := raw.QueryRow(ctx, `SELECT sender_removed_at IS NOT NULL FROM letters WHERE id = $1`, letterID).Scan(&senderRemoved); err != nil || !senderRemoved {
+		t.Fatalf("sender removal before claim expiry = %t, %v", senderRemoved, err)
+	}
+	if _, err := raw.Exec(ctx, `UPDATE letters SET created_at = now() - interval '2 days', expires_at = now() + interval '5 days', claimed_at = now() - interval '25 hours', claim_expires_at = now() - interval '1 hour' WHERE id = $1`, letterID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(ctx, `UPDATE rate_limit_events SET created_at = now() - interval '16 minutes' WHERE identity_id = $1 AND kind = $2`, recipient.ID, rateClaim); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ClaimLetter(ctx, Principal{IdentityID: recipient.ID}); !errors.Is(err, ErrNoLetters) {
+		t.Fatalf("claim after discarded claim expiry = %v, want no letters", err)
+	}
+	var count int
+	if err := raw.QueryRow(ctx, `SELECT count(*) FROM letters WHERE id = $1`, letterID).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("discarded letter count after claim expiry = %d, %v", count, err)
+	}
+}
+
 func TestOpenRejectsClaimExpiringWhileLocked(t *testing.T) {
 	service, db, raw, _, ctx := openPostOffice(t)
 	sender := seedIdentity(t, ctx, db, 67, "Expiry Lock Sender")

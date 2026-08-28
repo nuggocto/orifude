@@ -8,20 +8,29 @@ ORDER BY claimed_at, id
 FOR UPDATE;
 
 -- name: ReleaseExpiredClaimsForIdentity :execrows
+WITH deleted AS (
+    DELETE FROM letters
+    WHERE recipient_id = sqlc.arg(recipient_id)
+      AND opened_at IS NULL
+      AND claim_expires_at <= clock_timestamp()
+      AND sender_removed_at IS NOT NULL
+)
 UPDATE letters
 SET recipient_id = NULL,
     recipient_alias = NULL,
     claimed_at = NULL,
     claim_expires_at = NULL,
     recipient_removed_at = NULL
-WHERE recipient_id = sqlc.arg(recipient_id)
-  AND opened_at IS NULL
-  AND claim_expires_at <= clock_timestamp();
+WHERE letters.recipient_id = sqlc.arg(recipient_id)
+  AND letters.opened_at IS NULL
+  AND letters.claim_expires_at <= clock_timestamp()
+  AND letters.sender_removed_at IS NULL;
 
 -- name: SelectEligibleLetterForClaim :one
 SELECT * FROM letters
 WHERE recipient_id IS NULL
   AND withdrawn_at IS NULL
+  AND sender_removed_at IS NULL
   AND expires_at > clock_timestamp()
   AND sender_id <> sqlc.arg(recipient_id)
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = letters.sender_id AND identities.deleted_at IS NULL)
@@ -46,6 +55,7 @@ FROM claim_time
 WHERE letters.id = sqlc.arg(id)
   AND letters.recipient_id IS NULL
   AND letters.withdrawn_at IS NULL
+  AND letters.sender_removed_at IS NULL
   AND letters.expires_at > claim_time.value
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = letters.sender_id AND identities.deleted_at IS NULL)
   AND NOT EXISTS (SELECT 1 FROM reports WHERE reports.letter_id = letters.id)

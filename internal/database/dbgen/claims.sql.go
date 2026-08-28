@@ -22,6 +22,7 @@ FROM claim_time
 WHERE letters.id = $3
   AND letters.recipient_id IS NULL
   AND letters.withdrawn_at IS NULL
+  AND letters.sender_removed_at IS NULL
   AND letters.expires_at > claim_time.value
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = letters.sender_id AND identities.deleted_at IS NULL)
   AND NOT EXISTS (SELECT 1 FROM reports WHERE reports.letter_id = letters.id)
@@ -118,15 +119,23 @@ func (q *Queries) GetActiveClaimForUpdate(ctx context.Context, recipientID pgtyp
 }
 
 const releaseExpiredClaimsForIdentity = `-- name: ReleaseExpiredClaimsForIdentity :execrows
+WITH deleted AS (
+    DELETE FROM letters
+    WHERE recipient_id = $1
+      AND opened_at IS NULL
+      AND claim_expires_at <= clock_timestamp()
+      AND sender_removed_at IS NOT NULL
+)
 UPDATE letters
 SET recipient_id = NULL,
     recipient_alias = NULL,
     claimed_at = NULL,
     claim_expires_at = NULL,
     recipient_removed_at = NULL
-WHERE recipient_id = $1
-  AND opened_at IS NULL
-  AND claim_expires_at <= clock_timestamp()
+WHERE letters.recipient_id = $1
+  AND letters.opened_at IS NULL
+  AND letters.claim_expires_at <= clock_timestamp()
+  AND letters.sender_removed_at IS NULL
 `
 
 func (q *Queries) ReleaseExpiredClaimsForIdentity(ctx context.Context, recipientID pgtype.Int8) (int64, error) {
@@ -141,6 +150,7 @@ const selectEligibleLetterForClaim = `-- name: SelectEligibleLetterForClaim :one
 SELECT id, sender_id, recipient_id, sender_alias, recipient_alias, body_ciphertext, body_nonce, body_wrapped_key, body_kms_key_id, body_encryption_version, fold_seed, created_at, claimed_at, claim_expires_at, opened_at, reply_id, reply_ciphertext, reply_nonce, reply_wrapped_key, reply_kms_key_id, reply_encryption_version, replied_at, withdrawn_at, expires_at, sender_removed_at, recipient_removed_at FROM letters
 WHERE recipient_id IS NULL
   AND withdrawn_at IS NULL
+  AND sender_removed_at IS NULL
   AND expires_at > clock_timestamp()
   AND sender_id <> $1
   AND EXISTS (SELECT 1 FROM identities WHERE identities.id = letters.sender_id AND identities.deleted_at IS NULL)

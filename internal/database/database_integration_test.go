@@ -678,6 +678,20 @@ func TestCleanupAndIdentityDeletionQueries(t *testing.T) {
 	if ids, err := q.ReleaseExpiredClaims(ctx, 10); err != nil || len(ids) != 1 || ids[0] != expiredClaim.ID {
 		t.Fatalf("release expired claims = %v, %v", ids, err)
 	}
+	orphanedClaim := mustCreateLetter(t, ctx, q, sender, id('O'))
+	if _, err := q.AssignLetterClaim(ctx, dbgen.AssignLetterClaimParams{RecipientID: int8(recipient.ID), RecipientAlias: recipient.Alias, ID: orphanedClaim.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.pool.Exec(ctx, `UPDATE letters SET created_at = now() - interval '2 days', expires_at = now() + interval '5 days', claimed_at = now() - interval '25 hours', claim_expires_at = now() - interval '1 hour', sender_removed_at = now() WHERE id = $1`, orphanedClaim.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := q.ReleaseExpiredClaims(ctx, 10); err != nil || len(ids) != 1 || ids[0] != orphanedClaim.ID {
+		t.Fatalf("purge orphaned expired claims = %v, %v", ids, err)
+	}
+	var orphanedCount int
+	if err := db.pool.QueryRow(ctx, `SELECT count(*) FROM letters WHERE id = $1`, orphanedClaim.ID).Scan(&orphanedCount); err != nil || orphanedCount != 0 {
+		t.Fatalf("orphaned expired claim count = %d, %v", orphanedCount, err)
+	}
 
 	identityClaim := mustCreateLetter(t, ctx, q, sender, id('I'))
 	if _, err := q.AssignLetterClaim(ctx, dbgen.AssignLetterClaimParams{RecipientID: int8(recipient.ID), RecipientAlias: recipient.Alias, ID: identityClaim.ID}); err != nil {

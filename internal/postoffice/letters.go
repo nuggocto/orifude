@@ -99,6 +99,7 @@ func (s *Service) SendLetter(ctx context.Context, principal Principal, request a
 
 func (s *Service) ClaimLetter(ctx context.Context, principal Principal) (api.ClaimLetterResponse, error) {
 	var letter dbgen.Letter
+	var noLetters bool
 	err := s.db.InTx(ctx, func(q *dbgen.Queries) error {
 		identity, err := q.LockActiveIdentity(ctx, principal.IdentityID)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -122,7 +123,8 @@ func (s *Service) ClaimLetter(ctx context.Context, principal Principal) (api.Cla
 		}
 		candidate, err := q.SelectEligibleLetterForClaim(ctx, identity.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNoLetters
+			noLetters = true
+			return nil
 		}
 		if err != nil {
 			return err
@@ -138,6 +140,9 @@ func (s *Service) ClaimLetter(ctx context.Context, principal Principal) (api.Cla
 	})
 	if err != nil {
 		return api.ClaimLetterResponse{}, err
+	}
+	if noLetters {
+		return api.ClaimLetterResponse{}, ErrNoLetters
 	}
 	return api.ClaimLetterResponse{
 		LetterID: letter.ID, FoldSeed: letter.FoldSeed,
