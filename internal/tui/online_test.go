@@ -56,8 +56,32 @@ func TestOnlineWaitKeepsBranchStableWhenNoLetterIsAvailable(t *testing.T) {
 
 	notFound := &api.HTTPError{Status: 404, API: api.APIError{Code: api.ErrorCodeNotFound}}
 	m, _, _ = m.handleOnlineMessage(claimMsg{id: m.pending.id, err: notFound})
-	if m.screen != ScreenBranch || m.pending != nil || m.status != "No letter is waiting right now." {
+	if m.screen != ScreenBranch || m.pending != nil || m.status != noLetterStatus {
 		t.Fatalf("empty wait ended with screen=%v pending=%+v status=%q", m.screen, m.pending, m.status)
+	}
+
+	emptyView := m.View().Content
+	next, command = m.activate()
+	m = next.(Model)
+	if command == nil || m.pending == nil {
+		t.Fatal("retry did not check for another letter")
+	}
+	if rendered := m.View().Content; rendered != emptyView {
+		t.Fatalf("retry changed the empty branch view:\nwant %q\n got %q", emptyView, rendered)
+	}
+
+	next, command = m.activate()
+	m = next.(Model)
+	if command != nil {
+		t.Fatal("duplicate wait started another request")
+	}
+	if rendered := m.View().Content; rendered != emptyView {
+		t.Fatalf("duplicate wait changed the empty branch view:\nwant %q\n got %q", emptyView, rendered)
+	}
+
+	m, _, _ = m.handleOnlineMessage(claimMsg{id: m.pending.id, err: notFound})
+	if rendered := m.View().Content; rendered != emptyView {
+		t.Fatalf("empty retry result changed the branch view:\nwant %q\n got %q", emptyView, rendered)
 	}
 }
 

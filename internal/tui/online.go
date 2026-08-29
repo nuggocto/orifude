@@ -546,7 +546,7 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 			if errors.As(message.err, &httpError) && httpError.API.Code == api.ErrorCodeNotFound {
 				m.connection = connectionOnline
 				m.screen = ScreenBranch
-				m.setStatus(statusInfo, "No letter is waiting right now.")
+				m.setStatus(statusInfo, noLetterStatus)
 				return m, nil, true
 			}
 			m.operationFailed(message.err)

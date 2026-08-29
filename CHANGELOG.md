@@ -66,5 +66,5 @@ All notable changes to Orifude will be recorded here.
 - Made ambiguous identity creation retryable and quittable without replacing its
   device key, and kept unconfirmed identities out of the offline branch after a
   restart.
-- Kept empty online waits on the branch screen and made both owner-only file
-  confirmation actions visible.
+- Kept empty online waits and repeated checks static on the branch screen, and
+  made both owner-only file confirmation actions visible.

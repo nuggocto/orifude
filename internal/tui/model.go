@@ -113,6 +113,8 @@ const (
 	statusError
 )
 
+const noLetterStatus = "No letter is waiting right now."
+
 type Identity struct {
 	Alias      string
 	Thumbprint string

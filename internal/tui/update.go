@@ -85,7 +85,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.incomingState == fixtureConsumed {
 			m.screen = ScreenBranch
-			m.setStatus(statusInfo, "No letter is waiting right now.")
+			m.setStatus(statusInfo, noLetterStatus)
 			return m, nil
 		}
 		letter := incomingFixture()
@@ -339,7 +339,9 @@ func scopeFormCommand(id uint64, command tea.Cmd) tea.Cmd {
 
 func (m Model) activate() (tea.Model, tea.Cmd) {
 	if m.runtime != nil && m.pending != nil && m.pending.busy && m.pending.mutation {
-		m.setStatus(statusInfo, "That operation is already in progress.")
+		if m.pending.kind != operationClaim || m.screen != ScreenBranch || m.cursor != 1 {
+			m.setStatus(statusInfo, "That operation is already in progress.")
+		}
 		return m, nil
 	}
 	switch m.screen {
@@ -363,7 +365,9 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			return m, m.draft.Focus()
 		case 1:
 			if m.runtime != nil {
-				m.setStatus(statusInfo, "Waiting by the branch...")
+				if m.status != noLetterStatus {
+					m.setStatus(statusInfo, "Waiting by the branch...")
+				}
 				return m, m.startClaim()
 			}
 			m.screen = ScreenSearching
