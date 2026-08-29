@@ -178,6 +178,33 @@ func TestResizeChoosesEverySupportedLayoutWithoutLosingDraft(t *testing.T) {
 	}
 }
 
+func TestFallbackFormKeepsBothActionsVisibleAtSupportedSizes(t *testing.T) {
+	t.Parallel()
+
+	for _, size := range []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{name: "wide", width: 120, height: 30},
+		{name: "minimum", width: 56, height: 18},
+	} {
+		t.Run(size.name, func(t *testing.T) {
+			m := NewOnline(&Runtime{})
+			m.screen = ScreenOnboarding
+			m.resize(size.width, size.height)
+			m.beginForm(formFallback)
+
+			rendered := m.View().Content
+			for _, action := range []string{"Use owner-only file", "Cancel"} {
+				if !strings.Contains(rendered, action) {
+					t.Fatalf("fallback form at %dx%d does not show %q: %q", size.width, size.height, action, rendered)
+				}
+			}
+		})
+	}
+}
+
 func TestEveryScreenFitsMinimumSupportedTerminal(t *testing.T) {
 	t.Parallel()
 

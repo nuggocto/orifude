@@ -859,8 +859,8 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 	case formFallback:
 		form = huh.NewForm(huh.NewGroup(
 			huh.NewConfirm().
-				Title("Store the device key in an owner-only local file?").
-				Description("The operating-system credential store is unavailable. Orifude will restrict this file to your user account.\nPress y to use the file, or n to cancel.").
+				Title("Use an owner-only local file?").
+				Description("The operating-system credential store is unavailable. Orifude will restrict the device-key file to your user account.").
 				Affirmative("Use owner-only file").Negative("Cancel").Value(&data.confirmed),
 		))
 	case formRevocation:

@@ -430,6 +430,8 @@ func (m *Model) resize(width, height int) {
 func formHeight(kind formKind, terminalHeight int) int {
 	height := max(terminalHeight-8, 4)
 	switch kind {
+	case formFallback:
+		return min(height, 10)
 	case formReport:
 		return min(height, 11)
 	case formSettings:
