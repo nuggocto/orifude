@@ -1,0 +1,32 @@
+class Orifude < Formula
+  desc "A quiet, pseudonymous one-to-one letter exchange for the terminal"
+  homepage "https://orifude.com"
+  version "@VERSION@"
+  license "Apache-2.0"
+
+  if OS.mac?
+    if Hardware::CPU.arm?
+      url "https://github.com/nuggocto/orifude/releases/download/v@VERSION@/orifude_@VERSION@_darwin_arm64.tar.gz"
+      sha256 "@DARWIN_ARM64@"
+    else
+      url "https://github.com/nuggocto/orifude/releases/download/v@VERSION@/orifude_@VERSION@_darwin_amd64.tar.gz"
+      sha256 "@DARWIN_AMD64@"
+    end
+  elsif OS.linux?
+    if Hardware::CPU.arm?
+      url "https://github.com/nuggocto/orifude/releases/download/v@VERSION@/orifude_@VERSION@_linux_arm64.tar.gz"
+      sha256 "@LINUX_ARM64@"
+    else
+      url "https://github.com/nuggocto/orifude/releases/download/v@VERSION@/orifude_@VERSION@_linux_amd64.tar.gz"
+      sha256 "@LINUX_AMD64@"
+    end
+  end
+
+  def install
+    bin.install "orifude"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/orifude --version")
+  end
+end

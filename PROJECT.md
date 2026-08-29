@@ -2135,38 +2135,38 @@ restart authentication succeeds from each stored device key.
 
 ### Phase 4: landing page and release distribution
 
-- [ ] Scaffold `orifude-front` with Astro, strict TypeScript, and pnpm.
-- [ ] Pin pnpm through `packageManager` and commit the frontend lockfile.
-- [ ] Add Tailwind CSS 4 through `@tailwindcss/vite`.
-- [ ] Add and configure Oxlint, Oxfmt, Astro Check, and project scripts.
-- [ ] Add frontend CI for formatting, linting, Astro checks, and production
+- [x] Scaffold `orifude-front` with Astro, strict TypeScript, and pnpm.
+- [x] Pin pnpm through `packageManager` and commit the frontend lockfile.
+- [x] Add Tailwind CSS 4 through `@tailwindcss/vite`.
+- [x] Add and configure Oxlint, Oxfmt, Astro Check, and project scripts.
+- [x] Add frontend CI for formatting, linting, Astro checks, and production
   builds without production secrets.
-- [ ] Document frontend prerequisites, local commands, and environment variables.
-- [ ] Build the base layout with metadata, canonical URL, favicon, social card,
+- [x] Document frontend prerequisites, local commands, and environment variables.
+- [x] Build the base layout with metadata, canonical URL, favicon, social card,
   design tokens, skip link, and reduced-motion handling.
-- [ ] Build the hero with the real Orifude wordmark, tagline, and primary
+- [x] Build the hero with the real Orifude wordmark, tagline, and primary
   download action.
-- [ ] Add the VHS-generated terminal recording with a poster and text fallback.
-- [ ] Add how-it-works, principles, privacy, safety, downloads, FAQ, source, and
+- [x] Add the VHS-generated terminal recording with a poster and text fallback.
+- [x] Add how-it-works, principles, privacy, safety, downloads, FAQ, source, and
   contact sections.
-- [ ] Validate checked-in release metadata and checksums with Zod at build time.
-- [ ] Keep Ky uninstalled unless a real HTTP fetch becomes necessary; document
+- [x] Validate checked-in release metadata and checksums with Zod at build time.
+- [x] Keep Ky uninstalled unless a real HTTP fetch becomes necessary; document
   the request and failure behavior before adding it.
-- [ ] Build responsive mobile and desktop layouts without generic dashboard
+- [x] Build responsive mobile and desktop layouts without generic dashboard
   cards or fake application controls.
-- [ ] Optimize copies of the supplied logo, icon, watermark, and monochrome
+- [x] Optimize copies of the supplied logo, icon, watermark, and monochrome
   assets without modifying the originals; optimize video, reserve dimensions,
   and lazy-load below the fold.
-- [ ] Make the page usable by keyboard, screen reader, mouse, and touch.
-- [ ] Add a restrictive content security policy and other static security
+- [x] Make the page usable by keyboard, screen reader, mouse, and touch.
+- [x] Add a restrictive content security policy and other static security
   headers.
-- [ ] Connect the `orifude-front` repository to Cloudflare Pages with
+- [x] Connect the `orifude-front` repository to Cloudflare Pages with
   `pnpm build` and `dist` as its build settings.
-- [ ] Confirm Cloudflare Pages creates preview deployments for pull requests.
+- [x] Confirm Cloudflare Pages creates preview deployments for pull requests.
 - [ ] Attach `orifude.com` as the canonical custom domain.
 - [ ] Redirect `www.orifude.com` to `https://orifude.com`.
-- [ ] Confirm the landing deployment has no post-office or database secret.
-- [ ] Build Linux, macOS, and Windows artifacts for the approved architecture
+- [x] Confirm the landing deployment has no post-office or database secret.
+- [x] Build Linux, macOS, and Windows artifacts for the approved architecture
   matrix.
 - [ ] Add GoReleaser after `cmd/orifude` exists and publish archives and
   checksums through GitHub Releases.
