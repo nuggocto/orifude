@@ -19,6 +19,15 @@ All notable changes to Orifude will be recorded here.
   strict authorization and redacted structured logging.
 - Disposable PostgreSQL integration coverage for migrations, generated queries,
   concurrency, complete API behavior, and rollback.
+- Online participant TUI integration with invite onboarding, device-bound DPoP
+  sessions, keyring-first local identity storage, real letter and safety flows,
+  reconnect and deletion handling, passive update notices, and durable display
+  preferences.
+- Strict, bounded participant API client coverage and a real post-office terminal
+  journey for two isolated identities through onboarding, release, claim,
+  unfold, reply, keepsakes, report, block, restart, and lost-identity deletion.
+- Interactive online development with a disposable PostgreSQL database,
+  synthetic KMS, test post office, and isolated local identity.
 
 ### Changed
 
@@ -31,6 +40,8 @@ All notable changes to Orifude will be recorded here.
   landing-page delivery.
 - Required rate-event retention to cover every enabled cooldown, hourly window,
   and daily window.
+- Made the participant binary use the online post office by default while
+  retaining an explicit fixture-backed demo for recordings and development.
 
 ### Fixed
 
@@ -42,3 +53,18 @@ All notable changes to Orifude will be recorded here.
   the key-cache lock across network I/O.
 - Used one PostgreSQL timestamp when consuming challenges and redeeming invites
   so eligibility and recorded consumption cannot cross an expiry boundary.
+- Prevented missing metadata, concurrent onboarding, and post-registration local
+  failures from replacing or orphaning a surviving device key.
+- Kept ambiguous mutation identifiers until their original operation is
+  reconciled, and renewed suspended sessions against wall-clock deadlines.
+- Restored persisted ASCII presentation, kept update notices visible, scoped
+  reply drafts to one exchange, and hid actions the server would reject.
+- Bound fold previews to the same stable seed stored by the post office and
+  shown to recipients.
+- Replaced the Windows metadata fallback with native file replacement and made
+  the online recording wait on its actual database port and a dynamic HTTP port.
+- Made ambiguous identity creation retryable and quittable without replacing its
+  device key, and kept unconfirmed identities out of the offline branch after a
+  restart.
+- Kept empty online waits and repeated checks static on the branch screen, and
+  made both owner-only file confirmation actions visible.

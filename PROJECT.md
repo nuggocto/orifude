@@ -274,8 +274,9 @@ moderator tool -- Cloudflare Access --> moderation API
 ### Runtime responsibilities
 
 The TUI owns presentation, keyboard input, the device private key, DPoP proofs,
-in-memory access tokens, request timeouts, retry prompts, and rendering a fold
-from a server-provided seed.
+in-memory access tokens, request timeouts, retry prompts, and previewing the
+stable fold seed derived from its random opaque letter ID. The post office
+derives the same seed, persists it, and returns it for later rendering.
 
 The post office owns device-key authentication, DPoP validation, authorization,
 plaintext validation, envelope encryption, bounded decryption, letter state
@@ -311,7 +312,8 @@ that talks to the post office.
 - `github.com/go-chi/chi/v5` provides routing and narrowly scoped middleware
   while preserving standard `http.Handler` contracts.
 - `crypto/rand` creates P-256 device keys, access and revocation credentials,
-  data nonces, public IDs, and fold seeds.
+  data nonces, and public IDs. A letter's random opaque ID deterministically
+  derives its non-secret fold seed so pre-release and delivered folds agree.
 - `crypto/aes` and `cipher.AEAD` provide AES-256-GCM message encryption.
 - `crypto/sha256` hashes opaque credentials and DPoP access tokens.
 - `github.com/go-jose/go-jose/v4` handles JWK, JWS, JWT, DPoP, and Cloudflare
@@ -1771,6 +1773,10 @@ not match the envelope metadata.
   tries a session challenge with the same key. A successful session proves the
   identity exists; otherwise it retries registration with the same key,
   credential hash, alias, and invite.
+- An exit after an ambiguous registration keeps the pending device key. On
+  restart, the TUI does not enter the branch until a session challenge confirms
+  that identity creation completed. An unavailable post office leaves the TUI
+  on a recovery screen with retry and delete-only credential actions.
 - A release timeout asks the server about the same client-generated letter ID
   before offering another submission.
 - A lost claim response returns the identity's existing active claim on retry.
@@ -2088,37 +2094,39 @@ pass, and logs contain neither test plaintext nor authentication or key material
 
 ### Phase 3: online TUI integration
 
-- [ ] Replace synthetic fixture commands with the bounded API client while
+- [x] Replace synthetic fixture commands with the bounded API client while
   retaining only simple display fixtures for tests and demos.
-- [ ] Reuse one configured `http.Client` and transport for the process lifetime.
-- [ ] Add deadlines, response-size limits, body closure, and typed API errors.
-- [ ] Implement first-run invite exchange and pseudonymous identity creation.
-- [ ] Store the P-256 private key in the OS credential store, with an explicit
+- [x] Reuse one configured `http.Client` and transport for the process lifetime.
+- [x] Add deadlines, response-size limits, body closure, and typed API errors.
+- [x] Implement first-run invite exchange and pseudonymous identity creation.
+- [x] Store the P-256 private key in the OS credential store, with an explicit
   owner-only file fallback, while keeping access tokens in memory.
-- [ ] Show the delete-only revocation credential once without persisting it.
-- [ ] Create sessions with a fresh challenge, renew them on expiry, and create a
+- [x] Show the delete-only revocation credential once without persisting it.
+- [x] Create sessions with a fresh challenge, renew them on expiry, and create a
   fresh DPoP proof for every request, including ambiguous-registration recovery
   with the same key.
-- [ ] Connect authenticated deletion in settings and lost-identity revocation on
+- [x] Connect authenticated deletion in settings and lost-identity revocation on
   the first-launch screen to the shared server deletion behavior.
-- [ ] Never accept private keys or access tokens through a command flag, URL,
+- [x] Never accept private keys or access tokens through a command flag, URL,
   clipboard prompt, or landing-page handoff.
-- [ ] Connect send, claim, open, reply, withdraw, report, block, and keepsake
+- [x] Connect send, claim, open, reply, withdraw, report, block, and keepsake
   screens to their real API operations.
-- [ ] Preserve drafts and current context across recoverable network failures.
-- [ ] Handle offline startup, reconnect, expired claims, invalid identities,
+- [x] Preserve drafts and current context across recoverable network failures.
+- [x] Handle offline startup, reconnect, expired claims, invalid identities,
   conflicts, rate limits, and server failures with actionable messages.
-- [ ] Show passive update notices from the post office without downloading or
+- [x] Show passive update notices from the post office without downloading or
   installing updates.
-- [ ] Prevent duplicate mutation submissions while a request is active.
-- [ ] Ignore stale asynchronous messages after screen or operation changes.
-- [ ] Confirm every online flow remains usable through the keyboard.
-- [ ] Confirm accessible and reduced-motion modes work with real responses.
-- [ ] Add contract tests between shared DTOs, handlers, and client decoding.
-- [ ] Add a controlled pseudo-terminal test for first run, lost-identity
+- [x] Prevent duplicate mutation submissions while a request is active.
+- [x] Ignore stale asynchronous messages after screen or operation changes.
+- [x] Confirm every online flow remains usable through the keyboard.
+- [x] Confirm accessible and reduced-motion modes work with real responses.
+- [x] Add contract tests between shared DTOs, handlers, and client decoding.
+- [x] Add a controlled pseudo-terminal test for first run, lost-identity
   revocation, and letter release.
-- [ ] Regenerate the VHS journey against a local real post office and synthetic
+- [x] Regenerate the VHS journey against a local real post office and synthetic
   test identities.
+- [x] Add an interactive disposable post-office task that isolates local
+  identity material and cleans up its PostgreSQL and synthetic KMS state.
 
 Done when two clean TUI installations with different local identities can use a
 real test server to send, claim, unfold, reply, keep, report, and block without

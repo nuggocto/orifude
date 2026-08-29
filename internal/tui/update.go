@@ -11,6 +11,7 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/nuggocto/orifude/internal/api"
 	"github.com/nuggocto/orifude/internal/textpolicy"
 )
 
@@ -48,6 +49,11 @@ func (command *accessibleFormCommand) SetStderr(io.Writer) {}
 
 // Update applies terminal messages to the root model.
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	if m.runtime != nil {
+		if next, command, handled := m.handleOnlineMessage(message); handled {
+			return next, command
+		}
+	}
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		m.resize(message.Width, message.Height)
@@ -79,7 +85,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.incomingState == fixtureConsumed {
 			m.screen = ScreenBranch
-			m.setStatus(statusInfo, "No letter is waiting right now.")
+			m.setStatus(statusInfo, noLetterStatus)
 			return m, nil
 		}
 		letter := incomingFixture()
@@ -134,6 +140,10 @@ func (m Model) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := message.String()
 	if key != "g" {
 		m.pendingG = false
+	}
+	if m.runtime != nil && m.pending != nil && m.pending.busy && m.pending.mutation && (key == "q" || key == "ctrl+c") {
+		m.setStatus(statusInfo, "Wait for the current operation to finish.")
+		return m, nil
 	}
 	if key == "ctrl+c" {
 		if m.formKind == formQuit {
@@ -328,8 +338,22 @@ func scopeFormCommand(id uint64, command tea.Cmd) tea.Cmd {
 }
 
 func (m Model) activate() (tea.Model, tea.Cmd) {
+	if m.runtime != nil && m.pending != nil && m.pending.busy && m.pending.mutation {
+		if m.pending.kind != operationClaim || m.screen != ScreenBranch || m.cursor != 1 {
+			m.setStatus(statusInfo, "That operation is already in progress.")
+		}
+		return m, nil
+	}
 	switch m.screen {
 	case ScreenSplash:
+		if m.runtime != nil && m.connection == connectionConnecting {
+			m.setStatus(statusInfo, "Checking the local identity...")
+			return m, nil
+		}
+		if m.runtime != nil && m.cursor == 1 {
+			m.screen = ScreenRecovery
+			return m, m.beginForm(formRevokeIdentity)
+		}
 		m.screen = ScreenOnboarding
 		return m, m.beginForm(formOnboarding)
 	case ScreenBranch:
@@ -340,6 +364,12 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.setStatus(statusInfo, "")
 			return m, m.draft.Focus()
 		case 1:
+			if m.runtime != nil {
+				if m.status != noLetterStatus {
+					m.setStatus(statusInfo, "Waiting by the branch...")
+				}
+				return m, m.startClaim()
+			}
 			m.screen = ScreenSearching
 			m.searchID++
 			searchID := m.searchID
@@ -348,6 +378,10 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		case 2:
 			m.screen = ScreenKeepsakes
 			m.cursor = 0
+			if m.runtime != nil {
+				m.setStatus(statusInfo, "Loading keepsakes...")
+				return m, m.startKeepsakes(false)
+			}
 		case 3:
 			m.screen = ScreenSettings
 		}
@@ -356,7 +390,15 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.setStatus(statusError, err.Error())
 			return m, nil
 		}
-		letter := Letter{SenderAlias: m.identity.Alias, Body: m.draft.Value(), Age: "just now", FoldSeed: 0x6f726966756465}
+		if err := m.prepareLetterPreview(); err != nil {
+			m.setStatus(statusError, "A release identifier could not be created.")
+			return m, nil
+		}
+		seed := uint64(0x6f726966756465)
+		if m.runtime != nil {
+			seed = uint64(api.FoldSeedForLetterID(m.draftID))
+		}
+		letter := Letter{ID: m.draftID, SenderAlias: m.identity.Alias, Body: m.draft.Value(), Age: "just now", FoldSeed: seed}
 		m.setCurrent(letter)
 		command := m.startAnimation(ScreenFoldPreview, false)
 		return m, command
@@ -370,18 +412,32 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		m.setStatus(statusInfo, "")
 	case ScreenFoldedDelivery:
+		if m.runtime != nil {
+			m.setStatus(statusInfo, "Opening the folded letter...")
+			return m, m.startOpen()
+		}
 		return m, m.startAnimation(ScreenUnfold, true)
 	case ScreenRead:
 		switch m.cursor {
 		case 0:
+			if m.current != nil {
+				m.bindReplyDraft(m.current.ID)
+			}
 			m.screen = ScreenReply
 			m.mode = ModeText
 			m.setStatus(statusInfo, "")
 			return m, m.replyDraft.Focus()
 		case 1:
+			if m.runtime != nil {
+				m.current = nil
+				m.clearReplyDraft()
+				m.screen = ScreenBranch
+				m.setStatus(statusSuccess, "The opened exchange is in keepsakes.")
+				return m, nil
+			}
 			m.keepCurrent()
 			m.consumeCurrentFixture()
-			m.replyDraft.Reset()
+			m.clearReplyDraft()
 			m.screen = ScreenBranch
 			m.setStatus(statusSuccess, "The exchange is now a keepsake.")
 		case 2:
@@ -391,12 +447,17 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.screen = ScreenReport
 			return m, m.beginForm(formReport)
 		case 3:
+			if m.runtime != nil {
+				return m, m.beginForm(formDeleteKeepsake)
+			}
 			m.consumeCurrentFixture()
 			m.current = nil
-			m.replyDraft.Reset()
+			m.clearReplyDraft()
 			m.screen = ScreenBranch
 			m.cursor = 0
 			m.setStatus(statusInfo, "The exchange was discarded.")
+		case 4:
+			return m, m.beginForm(formBlock)
 		}
 	case ScreenReply:
 		if err := textpolicy.ValidateBody(m.replyDraft.Value()); err != nil {
@@ -411,12 +472,40 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		}
 		return m, m.beginForm(formReplyRelease)
 	case ScreenKeepsakes:
-		if len(m.keepsakes) > 0 {
+		if m.runtime != nil && m.cursor == len(m.keepsakes) && m.nextCursor != "" {
+			m.setStatus(statusInfo, "Loading more keepsakes...")
+			return m, m.startKeepsakes(true)
+		}
+		if len(m.keepsakes) > 0 && m.cursor < len(m.keepsakes) {
+			if m.runtime != nil {
+				m.setStatus(statusInfo, "Loading the exchange...")
+				return m, m.startLetter(m.keepsakes[m.cursor])
+			}
 			m.setKeepsake(m.cursor)
 			m.screen = ScreenKeepsakeDetail
 			m.cursor = 0
 		}
 	case ScreenKeepsakeDetail:
+		if m.runtime != nil {
+			actions := m.detailActions()
+			if m.cursor >= len(actions) {
+				return m, nil
+			}
+			switch actions[m.cursor] {
+			case detailReport:
+				m.reportReturn = ScreenKeepsakeDetail
+				m.reportIndex = m.keepsakeIndex
+				m.reportTarget = m.keepsakeReportTarget()
+				m.screen = ScreenReport
+				return m, m.beginForm(formReport)
+			case detailBlock:
+				return m, m.beginForm(formBlock)
+			case detailWithdraw:
+				return m, m.beginForm(formWithdraw)
+			case detailRemove:
+				return m, m.beginForm(formDeleteKeepsake)
+			}
+		}
 		if m.keepsakeReportable() {
 			m.reportReturn = ScreenKeepsakeDetail
 			m.reportIndex = m.keepsakeIndex
@@ -425,13 +514,48 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			return m, m.beginForm(formReport)
 		}
 	case ScreenSettings:
-		return m, m.beginForm(formSettings)
+		if m.runtime == nil || m.cursor == 0 {
+			return m, m.beginForm(formSettings)
+		}
+		if m.cursor == 1 {
+			previous := m.connection
+			m.connection = connectionConnecting
+			m.setStatus(statusInfo, "Reconnecting to the post office...")
+			pending := m.beginOperation(operationReconnect, false)
+			pending.connection = previous
+			return m, m.reconnectCommand(pending.id)
+		}
+		return m, m.beginForm(formDeleteIdentity)
+	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			m.setStatus(statusInfo, "Retrying registration with the same device key...")
+			pending := m.beginOperation(operationRegister, true)
+			return m, m.registerCommand(pending.id)
+		}
+		return m, m.beginForm(formRevocation)
+	case ScreenRecovery:
+		if m.cursor == 0 && m.device != nil {
+			previous := m.connection
+			m.connection = connectionConnecting
+			m.setStatus(statusInfo, "Retrying authentication...")
+			pending := m.beginOperation(operationReconnect, false)
+			pending.connection = previous
+			return m, m.reconnectCommand(pending.id)
+		}
+		return m, m.beginForm(formRevokeIdentity)
 	}
 	return m, nil
 }
 
 func (m *Model) move(delta int) {
 	if m.screen == ScreenKeepsakeDetail {
+		if m.runtime != nil {
+			limit := m.selectionCount()
+			if limit > 0 {
+				m.cursor = (m.cursor + delta + limit) % limit
+			}
+			return
+		}
 		if delta > 0 {
 			m.viewport.ScrollDown(delta)
 		} else {
@@ -448,6 +572,10 @@ func (m *Model) move(delta int) {
 
 func (m *Model) goTop() {
 	if m.screen == ScreenKeepsakeDetail {
+		if m.runtime != nil {
+			m.cursor = 0
+			return
+		}
 		m.viewport.GotoTop()
 		return
 	}
@@ -456,6 +584,12 @@ func (m *Model) goTop() {
 
 func (m *Model) goBottom() {
 	if m.screen == ScreenKeepsakeDetail {
+		if m.runtime != nil {
+			if count := m.selectionCount(); count > 0 {
+				m.cursor = count - 1
+			}
+			return
+		}
 		m.viewport.GotoBottom()
 		return
 	}
@@ -466,21 +600,70 @@ func (m *Model) goBottom() {
 
 func (m Model) selectionCount() int {
 	switch m.screen {
+	case ScreenSplash:
+		if m.runtime != nil {
+			return 2
+		}
 	case ScreenBranch:
 		return 4
 	case ScreenRead:
+		if m.runtime != nil {
+			return 5
+		}
 		return 4
 	case ScreenKeepsakes:
+		if m.runtime != nil && m.nextCursor != "" {
+			return len(m.keepsakes) + 1
+		}
 		return len(m.keepsakes)
 	case ScreenKeepsakeDetail:
+		if m.runtime != nil {
+			return len(m.detailActions())
+		}
 		if m.keepsakeReportable() {
 			return 1
 		}
+	case ScreenSettings:
+		if m.runtime != nil {
+			return 3
+		}
+	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			return 1
+		}
+	case ScreenRecovery:
+		if m.device != nil {
+			return 2
+		}
+		return 1
 	}
 	return 0
 }
 
 func (m *Model) back() {
+	if m.screen == ScreenRevocation && m.registration != nil && m.registration.uncertain {
+		m.setStatus(statusInfo, "Retry registration with the same device key before leaving this screen.")
+		return
+	}
+	if m.screen == ScreenRecovery && !m.localIdentity.Active && m.device != nil {
+		m.setStatus(statusInfo, "Check identity creation or delete the pending identity before going back.")
+		return
+	}
+	if m.runtime != nil && m.pending != nil && m.pending.busy && m.pending.mutation {
+		m.setStatus(statusInfo, "Wait for the current operation to finish.")
+		return
+	}
+	if m.runtime != nil && m.pending != nil && m.pending.uncertain {
+		m.setStatus(statusInfo, "Retry this operation with its original identifier before leaving.")
+		return
+	}
+	if m.runtime != nil && m.pending != nil {
+		if m.pending.kind == operationReconnect {
+			m.connection = m.pending.connection
+		}
+		m.pending = nil
+		m.requestID++
+	}
 	m.animationID++
 	m.searchID++
 	m.formID++
@@ -494,11 +677,17 @@ func (m *Model) back() {
 	switch m.screen {
 	case ScreenOnboarding:
 		m.screen = ScreenSplash
+	case ScreenRevocation:
+		m.registration = nil
+		m.screen = ScreenSplash
 	case ScreenCompose:
 		m.screen = ScreenBranch
 	case ScreenFoldPreview:
 		m.screen = ScreenCompose
-	case ScreenDelivery, ScreenFoldedDelivery, ScreenRead, ScreenKeepsakes, ScreenSettings:
+	case ScreenDelivery, ScreenFoldedDelivery, ScreenKeepsakes, ScreenSettings:
+		m.screen = ScreenBranch
+	case ScreenRead:
+		m.clearReplyDraft()
 		m.screen = ScreenBranch
 	case ScreenSearching:
 		m.screen = ScreenBranch
@@ -513,10 +702,17 @@ func (m *Model) back() {
 		m.screen = ScreenReply
 	case ScreenKeepsakeDetail:
 		m.screen = ScreenKeepsakes
+	case ScreenRecovery:
+		m.screen = ScreenSplash
 	}
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
+	registrationCanResume := m.screen == ScreenRevocation && m.registration != nil && m.registration.uncertain
+	if m.runtime != nil && m.pending != nil && m.pending.uncertain && !registrationCanResume {
+		m.setStatus(statusInfo, "Retry this operation with its original identifier before quitting.")
+		return m, nil
+	}
 	if m.draft.Value() == "" && m.replyDraft.Value() == "" {
 		return m, tea.Quit
 	}
@@ -551,8 +747,10 @@ func (m *Model) cancelForm() {
 	m.formKind = formNone
 	m.mode = ModeNavigation
 	switch kind {
-	case formOnboarding:
+	case formOnboarding, formFallback, formRevokeIdentity:
 		m.screen = ScreenSplash
+	case formRevocation:
+		m.screen = ScreenRevocation
 	case formRelease:
 		m.screen = ScreenCompose
 	case formReplyRelease:
@@ -561,6 +759,15 @@ func (m *Model) cancelForm() {
 		m.screen = m.reportReturn
 	case formSettings:
 		m.screen = ScreenSettings
+	case formDeleteIdentity:
+		m.screen = ScreenSettings
+	case formBlock, formWithdraw, formDeleteKeepsake:
+		m.screen = m.reportReturn
+		if m.current != nil && m.keepsakeIndex >= 0 {
+			m.screen = ScreenKeepsakeDetail
+		} else if m.current != nil {
+			m.screen = ScreenRead
+		}
 	case formQuit:
 		m.screen = m.quitReturn
 		if m.screen == ScreenFoldPreview {
@@ -603,6 +810,8 @@ func (m Model) initialFormData(kind formKind) *formData {
 	switch kind {
 	case formOnboarding:
 		data.alias = m.identity.Alias
+	case formRevokeIdentity:
+		data.credential = ""
 	case formSettings:
 		data.theme = m.theme
 		data.reduced = m.reducedMotion
@@ -627,31 +836,46 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 				return err
 			})
 		}
+		description := "This offline prototype stores nothing and contacts no service."
+		fields := []huh.Field{aliasInput}
+		if m.runtime != nil {
+			description = "Create one pseudonymous identity. Your alias is visible only to matched strangers."
+			fields = append([]huh.Field{huh.NewInput().Title("Private-alpha invite code").EchoMode(huh.EchoModePassword).CharLimit(64).Value(&data.invite)}, fields...)
+		}
+		fields = append(fields,
+			huh.NewConfirm().
+				Title("Losing the device key means losing access permanently.").
+				Description("There is no password recovery or second device.").
+				Affirmative("I understand").
+				Negative("Go back").
+				Value(&data.confirmed).
+				Validate(func(confirmed bool) error {
+					if !confirmed {
+						return nil
+					}
+					_, _, err := textpolicy.NormalizeAlias(data.alias)
+					return err
+				}))
 		form = huh.NewForm(
-			huh.NewGroup(
-				huh.NewNote().
-					Title("A quiet post office").
-					Description("This offline prototype stores nothing and contacts no service.").
-					Next(true).
-					NextLabel("continue"),
-			),
-			huh.NewGroup(
-				aliasInput,
-				huh.NewConfirm().
-					Title("Losing the device key means losing access permanently.").
-					Description("There is no password recovery or second device.").
-					Affirmative("I understand").
-					Negative("Go back").
-					Value(&data.confirmed).
-					Validate(func(confirmed bool) error {
-						if !confirmed {
-							return nil
-						}
-						_, _, err := textpolicy.NormalizeAlias(data.alias)
-						return err
-					}),
-			),
+			huh.NewGroup(huh.NewNote().Title("A quiet post office").Description(description).Next(true).NextLabel("continue")),
+			huh.NewGroup(fields...),
 		)
+	case formFallback:
+		form = huh.NewForm(huh.NewGroup(
+			huh.NewConfirm().
+				Title("Use an owner-only local file?").
+				Description("The operating-system credential store is unavailable. Orifude will restrict the device-key file to your user account.").
+				Affirmative("Use owner-only file").Negative("Cancel").Value(&data.confirmed),
+		))
+	case formRevocation:
+		credential := ""
+		if m.registration != nil {
+			credential = m.registration.credential
+		}
+		form = huh.NewForm(huh.NewGroup(
+			huh.NewNote().Title("Save this delete-only credential away from this device").Description(credential).Next(true).NextLabel("I saved it"),
+			huh.NewConfirm().Title("This credential will not be shown or stored again.").Affirmative("I stored it safely").Negative("Go back").Value(&data.confirmed),
+		))
 	case formRelease:
 		form = huh.NewForm(huh.NewGroup(
 			huh.NewConfirm().Title("Release this folded letter?").Affirmative("Release").Negative("Keep editing").Value(&data.confirmed),
@@ -666,12 +890,12 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 				Title("Why are you reporting this letter?").
 				Options(
 					huh.NewOption("Harassment", "harassment"),
-					huh.NewOption("Hateful content", "hateful content"),
-					huh.NewOption("Sexual content", "sexual content"),
+					huh.NewOption("Hateful content", string(api.ReportReasonHatefulContent)),
+					huh.NewOption("Sexual content", string(api.ReportReasonSexualContent)),
 					huh.NewOption("Threats", "threats"),
-					huh.NewOption("Spam or scams", "spam or scams"),
-					huh.NewOption("Exposed personal information", "personal information"),
-					huh.NewOption("Other unsafe content", "other unsafe content"),
+					huh.NewOption("Spam or scams", string(api.ReportReasonSpamOrScams)),
+					huh.NewOption("Exposed personal information", string(api.ReportReasonExposedPersonalInformation)),
+					huh.NewOption("Other unsafe content", string(api.ReportReasonOtherUnsafeContent)),
 				).
 				Height(7).
 				Value(&data.reason),
@@ -697,6 +921,19 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 		form = huh.NewForm(huh.NewGroup(
 			huh.NewConfirm().Title("Discard the current draft and quit?").Affirmative("Quit").Negative("Keep writing").Value(&data.confirmed),
 		))
+	case formDeleteIdentity:
+		form = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("Permanently delete this identity?").Description("This cannot be reversed. Your alias and device key remain reserved.").Affirmative("Delete permanently").Negative("Cancel").Value(&data.confirmed)))
+	case formRevokeIdentity:
+		form = huh.NewForm(huh.NewGroup(
+			huh.NewInput().Title("Delete-only revocation credential").EchoMode(huh.EchoModePassword).CharLimit(64).Value(&data.credential),
+			huh.NewConfirm().Title("Submit this permanent deletion request?").Affirmative("Delete identity").Negative("Cancel").Value(&data.confirmed),
+		))
+	case formBlock:
+		form = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("Block future matching permanently?").Affirmative("Block").Negative("Cancel").Value(&data.confirmed)))
+	case formWithdraw:
+		form = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("Withdraw this unclaimed letter?").Affirmative("Withdraw").Negative("Cancel").Value(&data.confirmed)))
+	case formDeleteKeepsake:
+		form = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("Remove this keepsake from your identity?").Description("The other participant keeps their copy until they remove it.").Affirmative("Remove").Negative("Cancel").Value(&data.confirmed)))
 	}
 	form = form.WithTheme(m.huhTheme()).WithShowHelp(false).WithWidth(m.panelContentWidth())
 	if formHeight := formHeight(kind, m.height); formHeight > 0 {
@@ -773,6 +1010,13 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 			m.screen = ScreenSplash
 			return m, nil
 		}
+		if m.runtime != nil {
+			m.registration = nil
+			m.screen = ScreenOnboarding
+			m.setStatus(statusInfo, "Preparing a protected local identity...")
+			pending := m.beginOperation(operationPrepareIdentity, true)
+			return m, m.prepareIdentityCommand(pending.id, alias, data.invite, false)
+		}
 		m.identity.Alias = alias
 		m.screen = ScreenBranch
 		m.cursor = 0
@@ -782,10 +1026,15 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 			m.screen = ScreenCompose
 			return m, nil
 		}
+		if m.runtime != nil {
+			m.setStatus(statusInfo, "Releasing the folded letter...")
+			return m, m.startSend()
+		}
 		if m.current != nil {
 			m.keepsakes = append(m.keepsakes, LetterSummary{Direction: "sent", Alias: "waiting for a stranger", Letter: *m.current})
 		}
 		m.draft.Reset()
+		m.draftID = ""
 		m.deliveryReply = false
 		m.screen = ScreenDelivery
 		m.setStatus(statusSuccess, "The letter was released into the quiet.")
@@ -794,12 +1043,16 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 			m.screen = ScreenReply
 			return m, nil
 		}
+		if m.runtime != nil {
+			m.setStatus(statusInfo, "Releasing the reply...")
+			return m, m.startReply()
+		}
 		if m.current != nil {
 			m.current.Reply = m.replyDraft.Value()
 			m.keepCurrent()
 			m.consumeCurrentFixture()
 		}
-		m.replyDraft.Reset()
+		m.clearReplyDraft()
 		m.deliveryReply = true
 		m.screen = ScreenDelivery
 		m.setStatus(statusSuccess, "Your reply was folded into the keepsake.")
@@ -808,10 +1061,15 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 			m.screen = m.reportReturn
 			return m, nil
 		}
+		if m.runtime != nil {
+			m.screen = m.reportReturn
+			m.setStatus(statusInfo, "Reporting and burning the exchange...")
+			return m, m.startReport(api.ReportReason(data.reason))
+		}
 		if m.reportIndex >= 0 && m.reportIndex < len(m.keepsakes) {
 			m.keepsakes = append(m.keepsakes[:m.reportIndex], m.keepsakes[m.reportIndex+1:]...)
 		} else {
-			m.replyDraft.Reset()
+			m.clearReplyDraft()
 		}
 		m.consumeCurrentFixture()
 		m.current = nil
@@ -827,8 +1085,67 @@ func (m Model) finishForm(kind formKind, data formData) (tea.Model, tea.Cmd) {
 		m.accessible = data.accessible
 		m.ascii = m.asciiFallback || m.theme == "mono" || m.profile == colorprofile.Ascii || m.profile == colorprofile.NoTTY
 		m.refreshPresentation()
+		if m.runtime != nil {
+			m.screen = ScreenSettings
+			pending := m.beginOperation(operationSettings, true)
+			return m, m.saveSettingsCommand(pending.id)
+		}
 		m.screen = ScreenBranch
 		m.setStatus(statusSuccess, "Settings applied for this run.")
+	case formFallback:
+		if !data.confirmed || m.registration == nil {
+			m.registration = nil
+			m.screen = ScreenSplash
+			m.setStatus(statusInfo, "Identity creation was not completed.")
+			return m, nil
+		}
+		m.screen = ScreenOnboarding
+		m.setStatus(statusInfo, "Creating the owner-only local key file...")
+		pending := m.beginOperation(operationPrepareIdentity, true)
+		return m, m.prepareIdentityCommand(pending.id, m.registration.alias, m.registration.invite, true)
+	case formRevocation:
+		if !data.confirmed || m.registration == nil {
+			m.setStatus(statusInfo, "Store the credential before continuing.")
+			m.screen = ScreenRevocation
+			return m, m.beginForm(formRevocation)
+		}
+		m.screen = ScreenRevocation
+		m.setStatus(statusInfo, "Creating the identity...")
+		pending := m.beginOperation(operationRegister, true)
+		return m, m.registerCommand(pending.id)
+	case formDeleteIdentity:
+		if !data.confirmed {
+			m.screen = ScreenSettings
+			return m, nil
+		}
+		m.screen = ScreenSettings
+		m.setStatus(statusInfo, "Deleting the identity...")
+		return m, m.startDeleteIdentity()
+	case formRevokeIdentity:
+		credential := data.credential
+		data.credential = ""
+		if !data.confirmed || credential == "" {
+			m.screen = ScreenSplash
+			return m, nil
+		}
+		m.screen = ScreenRecovery
+		m.setStatus(statusInfo, "Submitting the delete request...")
+		return m, m.startRevokeIdentity(credential)
+	case formBlock:
+		if data.confirmed {
+			m.setStatus(statusInfo, "Blocking future matching...")
+			return m, m.startBlock()
+		}
+	case formWithdraw:
+		if data.confirmed {
+			m.setStatus(statusInfo, "Withdrawing the letter...")
+			return m, m.startWithdraw()
+		}
+	case formDeleteKeepsake:
+		if data.confirmed {
+			m.setStatus(statusInfo, "Removing the keepsake...")
+			return m, m.startDeleteKeepsake()
+		}
 	case formQuit:
 		if data.confirmed {
 			return m, tea.Quit
@@ -869,7 +1186,9 @@ func (m Model) updateFold(message foldTickMsg) (tea.Model, tea.Cmd) {
 		m.animating = false
 		m.screen = ScreenRead
 		m.cursor = 0
-		m.incomingState = fixtureOpened
+		if m.runtime == nil {
+			m.incomingState = fixtureOpened
+		}
 	}
 	return m, nil
 }
@@ -893,6 +1212,12 @@ func (m *Model) consumeCurrentFixture() {
 }
 
 func (m Model) keepsakeReportable() bool {
+	if m.runtime != nil {
+		if m.current == nil {
+			return false
+		}
+		return m.current.Role == api.LetterRoleRecipient && m.current.Body != "" || m.current.Role == api.LetterRoleSender && m.current.Reply != ""
+	}
 	if m.keepsakeIndex < 0 || m.keepsakeIndex >= len(m.keepsakes) {
 		return false
 	}
@@ -901,6 +1226,12 @@ func (m Model) keepsakeReportable() bool {
 }
 
 func (m Model) keepsakeReportTarget() string {
+	if m.runtime != nil && m.current != nil {
+		if m.current.Role == api.LetterRoleSender {
+			return "reply"
+		}
+		return "original letter"
+	}
 	if m.keepsakeIndex >= 0 && m.keepsakeIndex < len(m.keepsakes) && m.keepsakes[m.keepsakeIndex].Direction == "sent" {
 		return "reply"
 	}

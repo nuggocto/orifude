@@ -382,7 +382,7 @@ func TestLetterReportModerationAndDeletionJourney(t *testing.T) {
 	letterID := publicID('L')
 
 	released, err := service.SendLetter(ctx, Principal{IdentityID: sender.ID}, api.CreateLetterRequest{LetterID: letterID, Body: testBody})
-	if err != nil || released.State != api.LetterStateWaiting {
+	if err != nil || released.State != api.LetterStateWaiting || released.FoldSeed != api.FoldSeedForLetterID(letterID) {
 		t.Fatalf("send letter = %+v, %v", released, err)
 	}
 	generateAfterSend := fake.generated()

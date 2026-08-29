@@ -7,7 +7,7 @@ Set FontSize 18
 Set TypingSpeed 20ms
 Set CursorBlink false
 
-Type "orifude"
+Type "ORIFUDE_OFFLINE_DEMO=1 orifude"
 Enter
 Wait+Screen /enter.*begin/
 Enter

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/textarea"
@@ -10,6 +11,9 @@ import (
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/nuggocto/orifude/internal/api"
+	"github.com/nuggocto/orifude/internal/auth"
+	"github.com/nuggocto/orifude/internal/identity"
 	"github.com/nuggocto/orifude/internal/textpolicy"
 )
 
@@ -33,6 +37,8 @@ const (
 	ScreenKeepsakeDetail
 	ScreenReport
 	ScreenSettings
+	ScreenRevocation
+	ScreenRecovery
 )
 
 // InputMode separates application navigation from text entry.
@@ -71,6 +77,13 @@ const (
 	formReport
 	formSettings
 	formQuit
+	formFallback
+	formRevocation
+	formDeleteIdentity
+	formRevokeIdentity
+	formBlock
+	formWithdraw
+	formDeleteKeepsake
 )
 
 type formData struct {
@@ -81,6 +94,8 @@ type formData struct {
 	reduced    bool
 	ascii      bool
 	accessible bool
+	invite     string
+	credential string
 }
 
 type formThemeState struct {
@@ -98,26 +113,111 @@ const (
 	statusError
 )
 
+const noLetterStatus = "No letter is waiting right now."
+
 type Identity struct {
-	Alias string
+	Alias      string
+	Thumbprint string
 }
 
 type Letter struct {
+	ID          string
+	Role        api.LetterRole
+	State       api.LetterState
 	SenderAlias string
 	Body        string
 	Reply       string
 	Age         string
 	FoldSeed    uint64
+	CreatedAt   time.Time
+	ClaimExpiry time.Time
 }
 
 type LetterSummary struct {
+	ID        string
+	Role      api.LetterRole
+	State     api.LetterState
 	Direction string
 	Alias     string
 	Letter    Letter
 }
 
+type connectionState uint8
+
+const (
+	connectionLocal connectionState = iota
+	connectionConnecting
+	connectionOnline
+	connectionOffline
+	connectionInvalidIdentity
+)
+
+type operationKind uint8
+
+const (
+	operationNone operationKind = iota
+	operationBootstrap
+	operationPrepareIdentity
+	operationRegister
+	operationReconnect
+	operationSend
+	operationClaim
+	operationOpen
+	operationReply
+	operationKeepsakes
+	operationLetter
+	operationReport
+	operationBlock
+	operationWithdraw
+	operationDeleteKeepsake
+	operationDeleteIdentity
+	operationRevokeIdentity
+	operationSettings
+)
+
+type pendingOperation struct {
+	id         uint64
+	kind       operationKind
+	screen     Screen
+	busy       bool
+	mutation   bool
+	uncertain  bool
+	clientID   string
+	body       string
+	target     api.ReportTarget
+	reason     api.ReportReason
+	connection connectionState
+}
+
+type pendingRegistration struct {
+	alias      string
+	invite     string
+	credential string
+	key        *auth.DeviceKey
+	device     *api.DeviceClient
+	confirmed  bool
+	uncertain  bool
+}
+
+// Runtime contains process-long online dependencies. Neither dependency stores
+// credentials in the Bubble Tea model itself.
+type Runtime struct {
+	Client  *api.Client
+	Store   *identity.Store
+	Version string
+}
+
 // Model owns all prototype state. It is intentionally process-local.
 type Model struct {
+	runtime       *Runtime
+	device        *api.DeviceClient
+	localIdentity identity.Profile
+	connection    connectionState
+	requestID     uint64
+	pending       *pendingOperation
+	registration  *pendingRegistration
+	nextCursor    string
+	latestVersion string
 	screen        Screen
 	mode          InputMode
 	width         int
@@ -131,7 +231,9 @@ type Model struct {
 	ascii         bool
 	identity      Identity
 	draft         textarea.Model
+	draftID       string
 	replyDraft    textarea.Model
+	replyDraftID  string
 	viewport      viewport.Model
 	help          help.Model
 	form          *huh.Form
@@ -167,6 +269,7 @@ func New() Model {
 	view := viewport.New(viewport.WithWidth(56), viewport.WithHeight(9))
 
 	m := Model{
+		connection:    connectionLocal,
 		screen:        ScreenSplash,
 		mode:          ModeNavigation,
 		width:         80,
@@ -196,6 +299,19 @@ func New() Model {
 	}
 	m.refreshPresentation()
 	m.resize(m.width, m.height)
+	return m
+}
+
+// NewOnline returns the production TUI model with no participant fixtures.
+func NewOnline(runtime *Runtime) Model {
+	m := New()
+	m.runtime = runtime
+	m.connection = connectionConnecting
+	m.identity = Identity{}
+	m.keepsakes = nil
+	m.current = nil
+	m.incomingState = fixtureConsumed
+	m.status = "Connecting to the post office..."
 	return m
 }
 
@@ -284,7 +400,11 @@ func newTextarea(placeholder string) textarea.Model {
 
 // Init requests terminal capabilities without starting background work.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tea.RequestBackgroundColor, tea.RequestWindowSize)
+	commands := []tea.Cmd{tea.RequestBackgroundColor, tea.RequestWindowSize}
+	if m.runtime != nil {
+		commands = append(commands, m.bootstrapCommand())
+	}
+	return tea.Batch(commands...)
 }
 
 func (m *Model) resize(width, height int) {
@@ -312,6 +432,8 @@ func (m *Model) resize(width, height int) {
 func formHeight(kind formKind, terminalHeight int) int {
 	height := max(terminalHeight-8, 4)
 	switch kind {
+	case formFallback:
+		return min(height, 10)
 	case formReport:
 		return min(height, 11)
 	case formSettings:
@@ -322,10 +444,25 @@ func formHeight(kind formKind, terminalHeight int) int {
 }
 
 func (m *Model) setCurrent(letter Letter) {
+	if m.replyDraftID != "" && m.replyDraftID != letter.ID {
+		m.clearReplyDraft()
+	}
 	m.current = &letter
 	m.keepsakeIndex = -1
 	m.refreshLetterViewport()
 	m.viewport.GotoTop()
+}
+
+func (m *Model) bindReplyDraft(letterID string) {
+	if m.replyDraftID != "" && m.replyDraftID != letterID {
+		m.replyDraft.Reset()
+	}
+	m.replyDraftID = letterID
+}
+
+func (m *Model) clearReplyDraft() {
+	m.replyDraft.Reset()
+	m.replyDraftID = ""
 }
 
 func (m *Model) setKeepsake(index int) {
@@ -377,7 +514,9 @@ func (m *Model) startAnimation(screen Screen, reverse bool) tea.Cmd {
 		if screen == ScreenUnfold {
 			m.screen = ScreenRead
 			m.cursor = 0
-			m.incomingState = fixtureOpened
+			if m.runtime == nil {
+				m.incomingState = fixtureOpened
+			}
 		} else {
 			m.foldFrame = len(foldFrames(m.currentSeed(), m.width, m.ascii)) - 1
 		}

@@ -7,16 +7,19 @@ require (
 	charm.land/bubbletea/v2 v2.0.9
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.6
+	github.com/aws/aws-sdk-go-v2 v1.43.8
 	github.com/aws/aws-sdk-go-v2/config v1.32.39
 	github.com/aws/aws-sdk-go-v2/service/kms v1.55.8
-	github.com/aws/aws-sdk-go-v2/service/sts v1.45.8
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/x/ansi v0.11.8
+	github.com/creack/pty v1.1.24
 	github.com/disciplinedware/go-confusables v0.1.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/mod v0.39.0
+	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0
 )
 
@@ -28,7 +31,6 @@ require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.43.8 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.38 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.39 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.39 // indirect
@@ -39,6 +41,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.33.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.45.8 // indirect
 	github.com/aws/smithy-go v1.27.10 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -123,10 +126,8 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
-	golang.org/x/mod v0.39.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/vuln v1.7.0 // indirect

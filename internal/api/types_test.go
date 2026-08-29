@@ -63,3 +63,13 @@ func TestErrorResponseShape(t *testing.T) {
 		t.Fatalf("json = %s, want %s", got, want)
 	}
 }
+
+func TestFoldSeedForLetterIDIsStableAndNonNegative(t *testing.T) {
+	first := FoldSeedForLetterID("AAAAAAAAAAAAAAAAAAAAAA")
+	if first < 0 || first != FoldSeedForLetterID("AAAAAAAAAAAAAAAAAAAAAA") {
+		t.Fatalf("stable fold seed = %d", first)
+	}
+	if first == FoldSeedForLetterID("BBBBBBBBBBBBBBBBBBBBBA") {
+		t.Fatal("different letter identifiers produced the same test seed")
+	}
+}

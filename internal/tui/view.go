@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/nuggocto/orifude/internal/api"
 )
 
 const unicodeMark = `        ╱╲
@@ -99,6 +100,12 @@ func (m Model) renderScreen() string {
 
 	switch m.screen {
 	case ScreenSplash:
+		if m.runtime != nil {
+			return title + "\n\nSend a letter into the quiet.\nLet one stranger find it.\n\n" + m.renderChoices([]string{
+				"Create an identity",
+				"Delete a lost identity",
+			})
+		}
 		separator := "·"
 		if m.ascii {
 			separator = "-"
@@ -109,7 +116,11 @@ func (m Model) renderScreen() string {
 		return title + "\n\nPreparing onboarding..."
 	case ScreenBranch:
 		alias := neutralizeTerminalText(m.identity.Alias)
-		return title + "\n\nWelcome to the branch, " + alias + ".\n\n" + m.renderChoices([]string{
+		connection := ""
+		if m.runtime != nil && m.connection != connectionOnline {
+			connection = "\n" + m.styles.Muted.Render("Post office: "+m.connectionLabel())
+		}
+		return title + "\n\nWelcome to the branch, " + alias + "." + connection + "\n\n" + m.renderChoices([]string{
 			"Fold a letter",
 			"Wait by the branch",
 			"Keepsakes",
@@ -136,22 +147,22 @@ func (m Model) renderScreen() string {
 	case ScreenSearching:
 		return title + "\n\nThe post office is listening beneath the branches..."
 	case ScreenFoldedDelivery:
+		if m.runtime != nil {
+			return title + "\n\n" + m.renderFold() + "\n\nA folded letter arrived " + neutralizeTerminalText(m.current.Age) + ".\n\n[enter] unfold"
+		}
 		return title + "\n\n" + m.renderFold() + "\n\nA letter from " + neutralizeTerminalText(m.current.SenderAlias) + " arrived " + neutralizeTerminalText(m.current.Age) + ".\n\n[enter] unfold"
 	case ScreenUnfold:
 		return title + "\n\n" + m.renderFold() + "\n\n" + m.styles.Muted.Render("opening the creases...")
 	case ScreenRead:
 		from := m.styles.Label.Render("From " + neutralizeTerminalText(m.current.SenderAlias))
-		if m.layout() == layoutText {
-			return title + "\n" + from + "\n" + m.renderLetter() + "\n" + m.renderChoices([]string{
-				"Fold a reply", "Keep without replying", "Report and burn", "Discard",
-			})
+		choices := []string{"Fold a reply", "Keep without replying", "Report and burn", "Discard"}
+		if m.runtime != nil {
+			choices = append(choices, "Block future matching")
 		}
-		return title + "\n\n" + from + "\n\n" + m.renderLetter() + "\n\n" + m.renderChoices([]string{
-			"Fold a reply",
-			"Keep without replying",
-			"Report and burn",
-			"Discard",
-		})
+		if m.layout() == layoutText {
+			return title + "\n" + from + "\n" + m.renderLetter() + "\n" + m.renderChoices(choices)
+		}
+		return title + "\n\n" + from + "\n\n" + m.renderLetter() + "\n\n" + m.renderChoices(choices)
 	case ScreenReply:
 		return title + "\n\n" + m.renderEditor(m.replyDraft.View(), m.replyDraft.Width(), m.replyDraft.Height()) + "\n" + m.styles.Counter.Render(bodyCounter(m.replyDraft.Value())) +
 			"\n\n" + m.editorInstruction()
@@ -159,13 +170,16 @@ func (m Model) renderScreen() string {
 		if len(m.keepsakes) == 0 {
 			return title + "\n\nNo keepsakes yet."
 		}
-		choices := make([]string, 0, len(m.keepsakes))
+		choices := make([]string, 0, len(m.keepsakes)+1)
 		separator := " · "
 		if m.ascii {
 			separator = " - "
 		}
 		for _, summary := range m.keepsakes {
 			choices = append(choices, summary.Direction+separator+neutralizeTerminalText(summary.Alias))
+		}
+		if m.runtime != nil && m.nextCursor != "" {
+			choices = append(choices, "Load more")
 		}
 		return title + "\n\n" + m.renderChoices(choices)
 	case ScreenKeepsakeDetail:
@@ -176,20 +190,60 @@ func (m Model) renderScreen() string {
 		if m.layout() == layoutText {
 			separator = "\n"
 		}
-		content := title + separator + m.styles.Label.Render("From "+neutralizeTerminalText(m.current.SenderAlias)) + separator + m.renderLetter()
-		if m.keepsakeReportable() {
+		heading := "From " + neutralizeTerminalText(m.current.SenderAlias)
+		if m.runtime != nil && m.current.Role == api.LetterRoleSender {
+			heading = "Sent by you"
+			if m.current.SenderAlias != "" {
+				heading += " · exchange with " + neutralizeTerminalText(m.current.SenderAlias)
+			}
+		}
+		content := title + separator + m.styles.Label.Render(heading) + separator + m.renderLetter()
+		if m.runtime != nil {
+			actions := m.detailActions()
+			choices := make([]string, len(actions))
+			for index, action := range actions {
+				choices[index] = detailActionLabel(action)
+			}
+			content += separator + m.renderChoices(choices)
+		} else if m.keepsakeReportable() {
 			content += separator + m.renderChoices([]string{"Report and burn"})
 		}
 		return content
 	case ScreenReport:
 		return title + "\n\nPreparing report reasons..."
 	case ScreenSettings:
+		if m.runtime != nil {
+			return title + "\n\n" + strings.Join([]string{
+				m.styles.Label.Render("Connection") + "  " + m.connectionLabel(),
+				m.styles.Label.Render("Identity") + "    " + neutralizeTerminalText(m.identity.Alias),
+				m.styles.Label.Render("Device") + "      " + shortenedThumbprint(m.identity.Thumbprint),
+			}, "\n") + "\n\n" + m.renderChoices([]string{"Display and accessibility", "Reconnect", "Permanently delete identity"})
+		}
 		return title + "\n\n" + strings.Join([]string{
 			m.styles.Label.Render("Connection") + "  offline prototype",
 			m.styles.Label.Render("Identity") + "    " + neutralizeTerminalText(m.identity.Alias) + " (process-local)",
 			m.styles.Label.Render("Local data") + "  cleared when Orifude exits",
 			m.styles.Label.Render("About") + "       keyboard-only folded letters",
 		}, "\n") + "\n\n[enter] edit display and accessibility"
+	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			if m.pending != nil && m.pending.busy {
+				return title + "\n\nChecking whether identity creation completed..."
+			}
+			return title + "\n\nThe registration result is unknown. Orifude kept the same device key and registration details in memory.\n\n" +
+				m.renderChoices([]string{"Retry registration with the same device key"})
+		}
+		return title + "\n\nPreparing the delete-only credential..."
+	case ScreenRecovery:
+		if !m.localIdentity.Active && m.device != nil {
+			return title + "\n\nIdentity creation could not be confirmed. Orifude kept the original device key. Check again when the post office is available, or delete the pending identity with the credential you saved.\n\n" +
+				m.renderChoices([]string{"Check identity creation", "Delete with revocation credential"})
+		}
+		choices := []string{"Delete with revocation credential"}
+		if m.device != nil {
+			choices = []string{"Retry authentication", "Delete with revocation credential"}
+		}
+		return title + "\n\nThis local identity cannot currently authenticate. Orifude will never replace its key silently.\n\n" + m.renderChoices(choices)
 	default:
 		return title
 	}
@@ -258,7 +312,11 @@ func (m Model) navigationBindings() []key.Binding {
 	}
 	switch m.screen {
 	case ScreenSplash:
-		bindings = append([]key.Binding{binding("enter", "begin"), binding("a", "screen reader")}, bindings...)
+		if m.runtime != nil {
+			bindings = append(append(selection, binding("a", "screen reader")), bindings...)
+		} else {
+			bindings = append([]key.Binding{binding("enter", "begin"), binding("a", "screen reader")}, bindings...)
+		}
 	case ScreenBranch:
 		bindings = append(selection, bindings...)
 	case ScreenRead:
@@ -273,6 +331,10 @@ func (m Model) navigationBindings() []key.Binding {
 	case ScreenFoldedDelivery, ScreenDelivery:
 		bindings = append([]key.Binding{binding("enter", "continue"), binding("b", "back")}, bindings...)
 	case ScreenKeepsakeDetail:
+		if m.runtime != nil {
+			bindings = append(append(selection, binding("b", "back")), bindings...)
+			break
+		}
 		detail := []key.Binding{
 			binding("b", "back"),
 			binding("j/down", "scroll down"),
@@ -286,6 +348,20 @@ func (m Model) navigationBindings() []key.Binding {
 			detail = append(detail, binding("enter", "report"))
 		}
 		bindings = append(detail, bindings...)
+	case ScreenSettings:
+		bindings = append(append(selection, binding("b", "back")), bindings...)
+	case ScreenRecovery:
+		if !m.localIdentity.Active && m.device != nil {
+			bindings = append(selection, bindings...)
+		} else {
+			bindings = append(append(selection, binding("b", "back")), bindings...)
+		}
+	case ScreenRevocation:
+		if m.registration != nil && m.registration.uncertain {
+			bindings = append([]key.Binding{binding("enter", "retry registration")}, bindings...)
+		} else {
+			bindings = append([]key.Binding{binding("b", "back")}, bindings...)
+		}
 	default:
 		bindings = append([]key.Binding{binding("b", "back")}, bindings...)
 	}
@@ -408,6 +484,29 @@ func compactMark(ascii bool) string {
 	return "ORIFUDE  ·  folded beneath the branch"
 }
 
+func (m Model) connectionLabel() string {
+	switch m.connection {
+	case connectionConnecting:
+		return "connecting"
+	case connectionOnline:
+		return "connected"
+	case connectionOffline:
+		return "offline"
+	case connectionInvalidIdentity:
+		return "identity unavailable"
+	default:
+		return "local demo"
+	}
+}
+
+func shortenedThumbprint(value string) string {
+	value = neutralizeTerminalText(value)
+	if len(value) <= 14 {
+		return value
+	}
+	return value[:8] + "..." + value[len(value)-4:]
+}
+
 func (m Model) screenTitle() string {
 	switch m.screen {
 	case ScreenSplash:
@@ -442,6 +541,10 @@ func (m Model) screenTitle() string {
 		return "Report and burn"
 	case ScreenSettings:
 		return "Settings"
+	case ScreenRevocation:
+		return "Delete-only credential"
+	case ScreenRecovery:
+		return "Identity unavailable"
 	default:
 		return "Orifude"
 	}
