@@ -362,11 +362,11 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.setStatus(statusInfo, "")
 			return m, m.draft.Focus()
 		case 1:
-			m.screen = ScreenSearching
 			if m.runtime != nil {
 				m.setStatus(statusInfo, "Waiting by the branch...")
 				return m, m.startClaim()
 			}
+			m.screen = ScreenSearching
 			m.searchID++
 			searchID := m.searchID
 			m.setStatus(statusInfo, "Waiting by the branch...")
@@ -860,7 +860,7 @@ func (m Model) buildForm(kind formKind, data *formData) *huh.Form {
 		form = huh.NewForm(huh.NewGroup(
 			huh.NewConfirm().
 				Title("Store the device key in an owner-only local file?").
-				Description("The operating-system credential store is unavailable. The file will be restricted to your user account.").
+				Description("The operating-system credential store is unavailable. Orifude will restrict this file to your user account.\nPress y to use the file, or n to cancel.").
 				Affirmative("Use owner-only file").Negative("Cancel").Value(&data.confirmed),
 		))
 	case formRevocation:

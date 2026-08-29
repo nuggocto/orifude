@@ -38,6 +38,29 @@ func TestOnlineMutationIgnoresDuplicatesAndStaleResults(t *testing.T) {
 	}
 }
 
+func TestOnlineWaitKeepsBranchStableWhenNoLetterIsAvailable(t *testing.T) {
+	m := NewOnline(&Runtime{})
+	m.connection = connectionOnline
+	m.screen = ScreenBranch
+	m.cursor = 1
+	m.device = new(api.DeviceClient)
+
+	next, command := m.activate()
+	m = next.(Model)
+	if command == nil || m.screen != ScreenBranch || m.pending == nil || m.pending.kind != operationClaim {
+		t.Fatalf("wait started with screen=%v pending=%+v command=%v", m.screen, m.pending, command != nil)
+	}
+	if rendered := m.View().Content; !strings.Contains(rendered, "Waiting by the branch") || strings.Contains(rendered, "post office is listening") {
+		t.Fatalf("waiting branch content = %q", rendered)
+	}
+
+	notFound := &api.HTTPError{Status: 404, API: api.APIError{Code: api.ErrorCodeNotFound}}
+	m, _, _ = m.handleOnlineMessage(claimMsg{id: m.pending.id, err: notFound})
+	if m.screen != ScreenBranch || m.pending != nil || m.status != "No letter is waiting right now." {
+		t.Fatalf("empty wait ended with screen=%v pending=%+v status=%q", m.screen, m.pending, m.status)
+	}
+}
+
 func TestOnlineFailuresPreserveDraftAndRetryIdentifier(t *testing.T) {
 	m := NewOnline(&Runtime{})
 	m.screen = ScreenFoldPreview
