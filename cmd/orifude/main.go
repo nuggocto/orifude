@@ -17,6 +17,11 @@ const defaultAPIOrigin = "https://api.orifude.com"
 var version = "dev"
 
 func main() {
+	appVersion := resolvedVersion(version)
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Printf("orifude %s\n", appVersion)
+		return
+	}
 	if os.Getenv("ORIFUDE_OFFLINE_DEMO") == "1" {
 		run(tui.New())
 		return
@@ -33,13 +38,18 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	if version == "dev" {
-		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-			version = info.Main.Version
-		}
-	}
-	runtime := &tui.Runtime{Client: client, Store: store, Version: version}
+	runtime := &tui.Runtime{Client: client, Store: store, Version: appVersion}
 	run(tui.NewOnline(runtime))
+}
+
+func resolvedVersion(linked string) string {
+	if linked != "dev" {
+		return linked
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return linked
 }
 
 func run(model tui.Model) {

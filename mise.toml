@@ -50,6 +50,14 @@ run = [
 description = "Record and verify the online TUI journey with Docker"
 run = "./testdata/vhs/check.sh"
 
+[tasks.landing-demo]
+description = "Record the deterministic terminal journey for the landing page"
+run = "./testdata/vhs/record-landing.sh"
+
+[tasks.release-check]
+description = "Build and verify a local snapshot of every release artifact"
+run = "docker run --rm -v \"$PWD:/work\" -w /work goreleaser/goreleaser@sha256:a7609141326e383370858ab3ca2572e96e00fb212fe3fd5610cd4de434652faa release --snapshot --clean && ./scripts/check-release.sh dist"
+
 [tasks.db-generate]
 description = "Generate typed PostgreSQL queries"
 run = "go tool sqlc generate"

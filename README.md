@@ -42,6 +42,10 @@ identity, and temporary files. Docker is required.
 `mise run vhs` drives the same kind of disposable online journey automatically.
 Fixture invites work only while their test post office is running.
 
+`mise run landing-demo` records the deterministic, network-isolated terminal
+journey used by the public landing page. The generated media stays out of this
+repository and is copied into the separate frontend repository after review.
+
 Orifude keeps access sessions in memory. It stores the device key in the
 operating-system credential store and offers an explicitly confirmed,
 owner-only file fallback if that store is unavailable. The delete-only
@@ -66,3 +70,16 @@ Available tasks:
 | `mise run vuln` | Scan Go dependencies for known vulnerabilities. |
 | `mise run check` | Run tests, race detection, vet, and vulnerability scanning. |
 | `mise run vhs` | Record the online TUI journey against a disposable local post office. |
+| `mise run landing-demo` | Record the network-isolated landing-page terminal journey. |
+| `mise run release-check` | Build and verify all release archives and checksums locally. |
+
+## Releases
+
+Release tags use complete semantic versions such as `v0.2.0` and must point to
+the current `shrek` commit. The tag workflow runs the Go tests, builds Linux,
+macOS, and Windows archives for amd64 and arm64, publishes one SHA-256 checksum
+file, and updates Homebrew, Scoop, and AUR package metadata.
+
+The public POSIX and PowerShell installers are pinned to one release, download
+from immutable GitHub tag URLs, and verify the selected archive before
+extracting or installing it. Run `mise run release-check` before creating a tag.

@@ -28,6 +28,12 @@ All notable changes to Orifude will be recorded here.
   unfold, reply, keepsakes, report, block, restart, and lost-identity deletion.
 - Interactive online development with a disposable PostgreSQL database,
   synthetic KMS, test post office, and isolated local identity.
+- Deterministic landing-page terminal media covering onboarding, release,
+  claim, unfold, reply, and keepsake behavior without network access.
+- Cross-platform release automation for archives, SHA-256 checksums, Homebrew,
+  Scoop, and AUR, plus checksum-verifying POSIX and PowerShell installers.
+- Noninteractive version output for release, installer, and package-manager
+  smoke checks.
 
 ### Changed
 
@@ -68,3 +74,6 @@ All notable changes to Orifude will be recorded here.
   restart.
 - Kept empty online waits and repeated checks static on the branch screen, and
   made both owner-only file confirmation actions visible.
+- Pinned third-party release and CI actions to reviewed commits, restricted tag
+  publication to the current main-branch commit, and rejected incomplete or
+  checksum-mismatched release matrices.
