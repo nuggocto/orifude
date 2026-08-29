@@ -26,6 +26,8 @@ All notable changes to Orifude will be recorded here.
 - Strict, bounded participant API client coverage and a real post-office terminal
   journey for two isolated identities through onboarding, release, claim,
   unfold, reply, keepsakes, report, block, restart, and lost-identity deletion.
+- Interactive online development with a disposable PostgreSQL database,
+  synthetic KMS, test post office, and isolated local identity.
 
 ### Changed
 

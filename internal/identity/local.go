@@ -80,7 +80,7 @@ func NewStore() (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find user configuration directory: %w", err)
 	}
-	return newStore(filepath.Join(directory, "orifude"), systemKeyring{}), nil
+	return newStore(filepath.Join(directory, "orifude"), defaultKeyring()), nil
 }
 
 func newStore(directory string, backend keyringBackend) *Store {

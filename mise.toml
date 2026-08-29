@@ -5,6 +5,10 @@ go = "1.27.0"
 description = "Run the TUI"
 run = "go run ./cmd/orifude"
 
+[tasks.dev-online]
+description = "Run an interactive TUI against a disposable local post office"
+run = "./testdata/dev-online/run.sh"
+
 [tasks.postoffice]
 description = "Run the post office with server environment variables"
 run = "go run ./cmd/postoffice"

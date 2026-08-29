@@ -2125,6 +2125,8 @@ pass, and logs contain neither test plaintext nor authentication or key material
   revocation, and letter release.
 - [x] Regenerate the VHS journey against a local real post office and synthetic
   test identities.
+- [x] Add an interactive disposable post-office task that isolates local
+  identity material and cleans up its PostgreSQL and synthetic KMS state.
 
 Done when two clean TUI installations with different local identities can use a
 real test server to send, claim, unfold, reply, keep, report, and block without

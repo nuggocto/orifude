@@ -27,10 +27,20 @@ development, set `ORIFUDE_API_URL` to an HTTPS origin or a loopback HTTP origin:
 ORIFUDE_API_URL=http://127.0.0.1:8080 mise run dev
 ```
 
-`mise run vhs` owns a disposable test post office and drives the terminal
-journey automatically. Its fixture invite works only during that run, and the
-test post office stops when the recording finishes. It is not an interactive
-backend for a later `mise run dev` session.
+Run the online TUI interactively against a disposable PostgreSQL database,
+synthetic KMS, and local test post office:
+
+```sh
+mise run dev-online
+```
+
+The task prints its private-alpha test invite before launching the TUI. It uses
+an isolated owner-only file for the device key instead of the operating-system
+credential store. Quitting the TUI removes the database container, server,
+identity, and temporary files. Docker is required.
+
+`mise run vhs` drives the same kind of disposable online journey automatically.
+Fixture invites work only while their test post office is running.
 
 Orifude keeps access sessions in memory. It stores the device key in the
 operating-system credential store and offers an explicitly confirmed,
@@ -46,6 +56,7 @@ Available tasks:
 | Command | Purpose |
 | --- | --- |
 | `mise run dev` | Run the TUI. |
+| `mise run dev-online` | Run the online TUI with a disposable local post office. |
 | `mise run postoffice` | Run the post office using the server variables in `PROJECT.md`. |
 | `mise run build` | Build all Go packages. |
 | `mise run fmt` | Format all Go packages. |
