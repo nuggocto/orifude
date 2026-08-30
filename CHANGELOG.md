@@ -4,6 +4,8 @@ All notable changes to Orifude will be recorded here.
 
 ## Unreleased
 
+## 0.2.0 - 2026-08-30
+
 ### Added
 
 - Initial product and technical specification.
