@@ -1636,13 +1636,15 @@ Expected package scripts:
 {
   "scripts": {
     "dev": "astro dev",
-    "build": "astro check && astro build",
+    "build": "pnpm validate:releases && pnpm validate:redirect && astro check && astro build",
     "preview": "astro preview",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check",
-    "check": "pnpm fmt:check && pnpm lint && astro check && astro build"
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "validate:releases": "node --experimental-strip-types src/data/releases.test.ts",
+    "validate:redirect": "node --experimental-strip-types src/redirect.test.ts",
+    "check": "pnpm fmt:check && pnpm lint && pnpm build"
   }
 }
 ```
@@ -1651,12 +1653,14 @@ Expected package scripts:
 
 Cloudflare Pages hosts the generated `dist` directory. The Pages project connects
 to the `orifude-front` GitHub repository, runs `pnpm build`, publishes `dist`, and
-creates preview deployments for pull requests. No Worker script or Wrangler
-configuration is needed for the static site.
+creates preview deployments for pull requests. The site remains static. A small
+Pages Function handles only canonical-host redirection, and Wrangler records the
+build directory and supports local testing of that middleware.
 
 The Pages project attaches `orifude.com` as its custom domain and redirects
-`www.orifude.com` to the apex. Static `_headers` and `_redirects` files keep the
-security policy and redirect behavior in version control.
+`www.orifude.com` to the same path and query on the apex with a permanent
+redirect. A static `_headers` file and the host middleware keep the security
+policy and redirect behavior in version control.
 
 The landing deployment has no post-office secret, database binding, or API
 token. Browser security headers should include a restrictive content security
@@ -1664,9 +1668,10 @@ policy, `X-Content-Type-Options: nosniff`, a strict referrer policy, and framing
 protection. External scripts and analytics remain absent by default.
 
 The page uses the actual supplied logo, icon, watermark, and monochrome assets.
-Its visual language is warm washi, muted moss and clay, broad negative space,
-and one ink branch that guides the page vertically. It should not look like a
-SaaS dashboard or contain fake application panels.
+Its visual language is warm paper, muted moss and clay, broad negative space,
+and two restrained folded sheets with the supplied courier between them. The
+courier never crosses text or controls. The site should not look like a SaaS
+dashboard or contain fake application panels.
 
 Download links point to immutable release artifacts and checksums. Installation
 instructions may describe launching the binary, but the product does not grow
@@ -1674,10 +1679,10 @@ CLI subcommands for setup or use.
 
 ## Release distribution
 
-The 1.0 release matrix is Linux, macOS, and Windows on amd64 and arm64.
-GoReleaser builds archives, a Windows zip, and one checksum file from tags after
-`cmd/orifude` exists. Until that entrypoint builds, the repository does not carry
-a speculative GoReleaser configuration.
+The release matrix, beginning with 0.2.0 and retained for 1.0, is Linux, macOS,
+and Windows on amd64 and arm64.
+GoReleaser builds archives, a Windows zip, and one checksum file from tags. Its
+configuration was added only after `cmd/orifude` built as the release entrypoint.
 
 GitHub Releases is the source of immutable binaries and checksums. GoReleaser
 publishes package metadata to `nuggocto/homebrew-tap` and
@@ -2163,18 +2168,18 @@ restart authentication succeeds from each stored device key.
 - [x] Connect the `orifude-front` repository to Cloudflare Pages with
   `pnpm build` and `dist` as its build settings.
 - [x] Confirm Cloudflare Pages creates preview deployments for pull requests.
-- [ ] Attach `orifude.com` as the canonical custom domain.
-- [ ] Redirect `www.orifude.com` to `https://orifude.com`.
+- [x] Attach `orifude.com` as the canonical custom domain.
+- [x] Redirect `www.orifude.com` to `https://orifude.com`.
 - [x] Confirm the landing deployment has no post-office or database secret.
 - [x] Build Linux, macOS, and Windows artifacts for the approved architecture
   matrix.
-- [ ] Add GoReleaser after `cmd/orifude` exists and publish archives and
+- [x] Add GoReleaser after `cmd/orifude` exists and publish archives and
   checksums through GitHub Releases.
-- [ ] Publish Homebrew and Scoop metadata to their `shrek` branches.
-- [ ] Publish an AUR package through its separate SSH-backed repository.
-- [ ] Publish checksum-verifying POSIX shell and PowerShell installers.
-- [ ] Publish immutable release checksums and connect download links.
-- [ ] Run Oxc, Astro, build, responsive, accessibility, SEO, link, header, and
+- [x] Publish Homebrew and Scoop metadata to their `shrek` branches.
+- [x] Publish an AUR package through its separate SSH-backed repository.
+- [x] Publish checksum-verifying POSIX shell and PowerShell installers.
+- [x] Publish immutable release checksums and connect download links.
+- [x] Run Oxc, Astro, build, responsive, accessibility, SEO, link, header, and
   download smoke checks.
 
 Done when `orifude-front` installs from a clean checkout,

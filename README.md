@@ -75,10 +75,14 @@ Available tasks:
 
 ## Releases
 
-Release tags use complete semantic versions such as `v0.2.0` and must point to
-the current `shrek` commit. The tag workflow runs the Go tests, builds Linux,
-macOS, and Windows archives for amd64 and arm64, publishes one SHA-256 checksum
-file, and updates Homebrew, Scoop, and AUR package metadata.
+The current release is [v0.2.0](https://github.com/nuggocto/orifude/releases/tag/v0.2.0).
+Installation commands, archives, and their complete checksums are published at
+[orifude.com](https://orifude.com/#download).
+
+Release tags use complete semantic versions such as `v0.2.0`. At publication,
+the tag must point to the current `shrek` commit. The tag workflow runs the Go
+tests, builds Linux, macOS, and Windows archives for amd64 and arm64, publishes
+one SHA-256 checksum file, and updates Homebrew, Scoop, and AUR package metadata.
 
 The public POSIX and PowerShell installers are pinned to one release, download
 from immutable GitHub tag URLs, and verify the selected archive before
