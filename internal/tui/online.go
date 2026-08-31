@@ -57,6 +57,12 @@ type registerMsg struct {
 	err       error
 }
 
+type abandonRegistrationMsg struct {
+	id   uint64
+	quit bool
+	err  error
+}
+
 type reconnectMsg struct {
 	id      uint64
 	profile identity.Profile
@@ -289,6 +295,16 @@ func (m Model) registerCommand(id uint64) tea.Cmd {
 	}
 }
 
+func (m Model) abandonRegistrationCommand(id uint64, quit bool) tea.Cmd {
+	runtime := m.runtime
+	return func() tea.Msg {
+		if runtime == nil || runtime.Store == nil {
+			return abandonRegistrationMsg{id: id, quit: quit, err: errors.New("online runtime is incomplete")}
+		}
+		return abandonRegistrationMsg{id: id, quit: quit, err: runtime.Store.Delete()}
+	}
+}
+
 func registrationMissing(err error) bool {
 	var httpError *api.HTTPError
 	return errors.As(err, &httpError) && httpError.API.Code == api.ErrorCodeAuthenticationFailed
@@ -501,6 +517,21 @@ func (m Model) handleOnlineMessage(message tea.Msg) (Model, tea.Cmd, bool) {
 		if !m.connected(message.me) {
 			m.setStatus(statusSuccess, "Welcome, "+message.me.Alias+".")
 		}
+		return m, nil, true
+	case abandonRegistrationMsg:
+		if !m.operationCurrent(message.id, operationAbandonRegistration) {
+			return m, nil, true
+		}
+		if message.err != nil {
+			m.pending = nil
+			m.setStatus(statusError, "The pending local identity could not be removed. Try again before leaving.")
+			return m, nil, true
+		}
+		m.resetIdentity()
+		if message.quit {
+			return m, tea.Quit, true
+		}
+		m.setStatus(statusInfo, "Identity creation was cancelled.")
 		return m, nil, true
 	case reconnectMsg:
 		if !m.operationCurrent(message.id, operationReconnect) {
@@ -1149,6 +1180,10 @@ func (m *Model) removeCurrentSummary() {
 func (m *Model) resetIdentity() {
 	if m.device != nil {
 		m.device.ClearSession()
+	}
+	if m.registration != nil {
+		m.registration.credential = ""
+		m.registration.invite = ""
 	}
 	m.device = nil
 	m.localIdentity = identity.Profile{}

@@ -159,6 +159,7 @@ const (
 	operationBootstrap
 	operationPrepareIdentity
 	operationRegister
+	operationAbandonRegistration
 	operationReconnect
 	operationSend
 	operationClaim
