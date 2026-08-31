@@ -175,6 +175,90 @@ func TestAmbiguousRegistrationOffersRetryAndCanQuit(t *testing.T) {
 	}
 }
 
+func TestDefiniteRegistrationAbandonmentWaitsForLocalCleanup(t *testing.T) {
+	t.Run("back before registration", func(t *testing.T) {
+		m := NewOnline(&Runtime{Store: new(identity.Store)})
+		m.screen = ScreenRevocation
+		m.registration = &pendingRegistration{alias: "willow", invite: "invite", credential: "credential"}
+
+		next, command := m.Update(textKey("b"))
+		m = next.(Model)
+		if command == nil || m.screen != ScreenRevocation || m.registration == nil || m.pending == nil || m.pending.kind != operationAbandonRegistration || !m.pending.busy {
+			t.Fatalf("back did not wait for local cleanup: screen=%v registration=%v pending=%+v command=%v", m.screen, m.registration != nil, m.pending, command != nil)
+		}
+	})
+
+	t.Run("quit after invalid invite", func(t *testing.T) {
+		m := NewOnline(&Runtime{Store: new(identity.Store)})
+		m.screen = ScreenRevocation
+		m.registration = &pendingRegistration{alias: "willow", invite: "invalid", credential: "credential"}
+		pending := m.beginOperation(operationRegister, true)
+		inviteInvalid := &api.HTTPError{Status: 400, API: api.APIError{Code: api.ErrorCodeInviteInvalid}}
+		m, _, _ = m.handleOnlineMessage(registerMsg{id: pending.id, err: inviteInvalid})
+
+		next, command := m.Update(textKey("q"))
+		m = next.(Model)
+		if command == nil || m.screen != ScreenRevocation || m.registration == nil || m.pending == nil || m.pending.kind != operationAbandonRegistration || !m.pending.busy {
+			t.Fatalf("quit did not wait for local cleanup: screen=%v registration=%v pending=%+v command=%v", m.screen, m.registration != nil, m.pending, command != nil)
+		}
+	})
+}
+
+func TestRegistrationAbandonmentCompletesOnlyAfterLocalCleanup(t *testing.T) {
+	t.Run("cleanup failure remains retryable", func(t *testing.T) {
+		m := NewOnline(&Runtime{Store: new(identity.Store)})
+		m.screen = ScreenRevocation
+		registration := &pendingRegistration{alias: "willow", invite: "invite", credential: "credential"}
+		m.registration = registration
+		pending := m.beginOperation(operationAbandonRegistration, true)
+
+		m, command, handled := m.handleOnlineMessage(abandonRegistrationMsg{id: pending.id, err: errors.New("disk full")})
+		if !handled || command != nil || m.screen != ScreenRevocation || m.registration != registration || m.pending != nil {
+			t.Fatalf("cleanup failure abandoned registration: handled=%v screen=%v registration=%v pending=%+v", handled, m.screen, m.registration != nil, m.pending)
+		}
+		if !strings.Contains(m.status, "Try again before leaving") {
+			t.Fatalf("cleanup failure status = %q", m.status)
+		}
+
+		next, retry := m.Update(textKey("b"))
+		m = next.(Model)
+		if retry == nil || m.pending == nil || m.pending.kind != operationAbandonRegistration || !m.pending.busy {
+			t.Fatalf("cleanup retry = command %v pending %+v", retry != nil, m.pending)
+		}
+	})
+
+	t.Run("successful back clears registration", func(t *testing.T) {
+		m := NewOnline(&Runtime{})
+		m.screen = ScreenRevocation
+		registration := &pendingRegistration{alias: "willow", invite: "invite", credential: "credential"}
+		m.registration = registration
+		pending := m.beginOperation(operationAbandonRegistration, true)
+
+		m, command, handled := m.handleOnlineMessage(abandonRegistrationMsg{id: pending.id})
+		if !handled || command != nil || m.screen != ScreenSplash || m.registration != nil || m.pending != nil {
+			t.Fatalf("successful cleanup = handled %v screen %v registration %v pending %+v", handled, m.screen, m.registration != nil, m.pending)
+		}
+		if registration.invite != "" || registration.credential != "" {
+			t.Fatal("successful cleanup retained registration secrets in the detached state")
+		}
+	})
+
+	t.Run("successful quit exits", func(t *testing.T) {
+		m := NewOnline(&Runtime{})
+		m.screen = ScreenRevocation
+		m.registration = &pendingRegistration{alias: "willow", invite: "invite", credential: "credential"}
+		pending := m.beginOperation(operationAbandonRegistration, true)
+
+		m, command, handled := m.handleOnlineMessage(abandonRegistrationMsg{id: pending.id, quit: true})
+		if !handled || command == nil || m.screen != ScreenSplash || m.registration != nil {
+			t.Fatalf("successful quit cleanup = handled %v command %v screen %v registration %v", handled, command != nil, m.screen, m.registration != nil)
+		}
+		if _, ok := command().(tea.QuitMsg); !ok {
+			t.Fatal("successful quit cleanup did not emit quit")
+		}
+	})
+}
+
 func TestConfirmedRegistrationPersistenceFailureCannotBeAbandoned(t *testing.T) {
 	m := NewOnline(&Runtime{})
 	m.screen = ScreenRevocation

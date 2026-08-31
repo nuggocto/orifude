@@ -111,8 +111,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if !errors.Is(message.err, huh.ErrUserAborted) {
 				m.setStatus(statusError, "The form could not be completed.")
 			}
-			m.back()
-			return m, nil
+			return m, m.back()
 		}
 		return m.finishForm(message.kind, message.data)
 	case embeddedFormMsg:
@@ -255,7 +254,7 @@ func (m Model) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.replyDraft.Focus()
 		}
 	case "b":
-		m.back()
+		return m, m.back()
 	case "j", "down", "tab":
 		m.move(1)
 	case "k", "up", "shift+tab":
@@ -640,22 +639,22 @@ func (m Model) selectionCount() int {
 	return 0
 }
 
-func (m *Model) back() {
-	if m.screen == ScreenRevocation && m.registration != nil && m.registration.uncertain {
+func (m *Model) back() tea.Cmd {
+	if m.screen == ScreenRevocation && m.registration != nil && (m.registration.confirmed || m.registration.uncertain) {
 		m.setStatus(statusInfo, "Retry registration with the same device key before leaving this screen.")
-		return
+		return nil
 	}
 	if m.screen == ScreenRecovery && !m.localIdentity.Active && m.device != nil {
 		m.setStatus(statusInfo, "Check identity creation or delete the pending identity before going back.")
-		return
+		return nil
 	}
 	if m.runtime != nil && m.pending != nil && m.pending.busy && m.pending.mutation {
 		m.setStatus(statusInfo, "Wait for the current operation to finish.")
-		return
+		return nil
 	}
 	if m.runtime != nil && m.pending != nil && m.pending.uncertain {
 		m.setStatus(statusInfo, "Retry this operation with its original identifier before leaving.")
-		return
+		return nil
 	}
 	if m.runtime != nil && m.pending != nil {
 		if m.pending.kind == operationReconnect {
@@ -678,7 +677,11 @@ func (m *Model) back() {
 	case ScreenOnboarding:
 		m.screen = ScreenSplash
 	case ScreenRevocation:
-		m.registration = nil
+		if m.registration != nil {
+			m.setStatus(statusInfo, "Removing the pending local identity...")
+			pending := m.beginOperation(operationAbandonRegistration, true)
+			return m.abandonRegistrationCommand(pending.id, false)
+		}
 		m.screen = ScreenSplash
 	case ScreenCompose:
 		m.screen = ScreenBranch
@@ -705,13 +708,25 @@ func (m *Model) back() {
 	case ScreenRecovery:
 		m.screen = ScreenSplash
 	}
+	return nil
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
-	registrationCanResume := m.screen == ScreenRevocation && m.registration != nil && m.registration.uncertain
+	registrationCanResume := m.screen == ScreenRevocation && m.registration != nil && (m.registration.confirmed || m.registration.uncertain)
 	if m.runtime != nil && m.pending != nil && m.pending.uncertain && !registrationCanResume {
 		m.setStatus(statusInfo, "Retry this operation with its original identifier before quitting.")
 		return m, nil
+	}
+	if m.runtime != nil && m.screen == ScreenRevocation && m.registration != nil && !registrationCanResume {
+		m.formID++
+		m.form = nil
+		m.formData = nil
+		m.formTheme = nil
+		m.formKind = formNone
+		m.mode = ModeNavigation
+		m.setStatus(statusInfo, "Removing the pending local identity...")
+		pending := m.beginOperation(operationAbandonRegistration, true)
+		return m, m.abandonRegistrationCommand(pending.id, true)
 	}
 	if m.draft.Value() == "" && m.replyDraft.Value() == "" {
 		return m, tea.Quit
