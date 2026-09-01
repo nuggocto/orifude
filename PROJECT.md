@@ -189,14 +189,17 @@ records the solution and adds the result to the branch.
 - Built-in boards use sizes between 4 by 4 and 12 by 12 cells.
 
 The v1 working area is the paper's original width-by-height coordinate
-rectangle. A fold may leave some positions empty, but no physical cell may move
-outside that rectangle. The puzzle format has no separate overhang field.
+rectangle. A fold may leave some positions empty, and a moved stack may land at
+an empty position inside the rectangle. No physical cell may move outside that
+rectangle. The puzzle format has no separate overhang field.
 
 ### Fold
 
 A fold selects a vertical or horizontal crease and one side to move. The engine
-reflects every cell on that side across the crease, reverses the moving layer
-order as required, and places the moved cells on the stationary material.
+reflects every cell on that side across the crease and reverses the moving layer
+order as required. At each destination, the moved stack is placed above any
+stationary stack. If the destination is empty, the moved stack becomes the only
+stack at that position.
 
 A fold is legal only when:
 
@@ -1196,9 +1199,12 @@ Verification record (2026-09-01): signed commit `cdc2b22` passed task
 validation and `mise run check` locally and from a fresh clone with isolated
 Rust, Cargo, mise, and cache directories. The first cache-free GitHub Actions
 run completed its `ubuntu-24.04` `check` job in 15 seconds; tool installation
-took about 10 seconds and the repository check took about 1.5 seconds. `shrek`
-remains the default branch, requires the strict GitHub Actions `check`, and
-disallows force-pushes and deletion.
+took about 10 seconds and the repository check took about 1.5 seconds. At that
+verification point, `shrek` was the default branch, required the strict GitHub
+Actions `check`, and disallowed force-pushes and deletion. The owner later
+removed branch protection. A live GitHub API check on 2026-09-01 confirmed that
+`shrek` remains the default branch, GitHub reports it as unprotected, and no
+branch rules apply. Ordinary CI still runs after each push.
 
 Exit gate:
 
