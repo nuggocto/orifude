@@ -22,6 +22,10 @@ lives.
 - Keep `PROJECT.md` as the only phase tracker. The notebook may link to its
   build-plan sections, but it must not copy phase names, phase numbers,
   checkboxes, or progress claims.
+- For each implemented area that benefits from a visual, place the smallest
+  useful Mermaid graph or text diagram beside its notebook explanation. Use
+  real module and state names, and show important limits when they affect the
+  flow. Skip diagrams for simple facts or one-step changes.
 
 ## Skills
 
@@ -34,6 +38,8 @@ lives.
   the frontend deployment.
 - Use the `qa` skill when verifying user-visible behavior, packaged artifacts,
   supported platforms, the frontend, or a release candidate.
+- Use the `show-me` skill when ownership, data flow, control flow, state
+  transitions, or dependencies are easier to understand as a graph.
 - YOU MUST always use the `unslop` skill on every prompt.
 
 ## Project rules

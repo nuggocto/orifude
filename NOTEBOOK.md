@@ -15,6 +15,8 @@ into another checklist.
   of the code.
 - Add a note when work changes behavior, a boundary, a decision, a measurement,
   or the way we verify something.
+- Add the smallest useful graph when it makes ownership, flow, state changes,
+  or dependencies easier to understand. A simple fact does not need one.
 - Keep it honest. Record untested platforms and rejected ideas too.
 - Keep it easy to read. A notebook should help, not ask for its own manual.
 
@@ -43,6 +45,18 @@ Build-plan source: [product contract](PROJECT.md#phase-0-product-contract).
 The project settled the rules before growing the application. That was the
 right order. A late change to fold meaning would ripple through puzzles,
 replays, the solver, saved progress, and the TUI.
+
+```mermaid
+flowchart LR
+    Orifude["Orifude"] --> Game["Native Rust game<br/>keyboard-driven and offline"]
+    Game --> Rules["Paper and ink rules"]
+    Game --> Storage["Local SQLite progress"]
+    Orifude --> Site["Separate static website"]
+    Site --> Pages["Game explanation and releases"]
+```
+
+The split is deliberate. Playing never depends on the website or a network
+service.
 
 What was decided:
 
@@ -85,6 +99,19 @@ Build-plan source: [repository foundation](PROJECT.md#phase-1-repository-foundat
 The repository has one small, reproducible Rust application base. It is meant
 to fail clearly before domain code, storage, and terminal work make failures
 more expensive.
+
+```mermaid
+flowchart LR
+    Local["Local development"] --> Check["mise run check"]
+    CI["Read-only CI"] --> Check
+    Pins["Pinned Rust, tools, and lockfile"] --> Check
+    Check --> Source["Format, lint, tests, and docs"]
+    Check --> Supply["Sources, licenses, and advisories"]
+    Check --> Build["Locked release build"]
+```
+
+Local work and CI enter through the same bounded check. The pinned inputs keep
+that check reproducible.
 
 What was built:
 
@@ -146,6 +173,21 @@ Build-plan source:
 The paper model proves the fold algebra before a TUI tries to make it pretty.
 The core idea is simple: every physical cell keeps one stable identity even
 when its position, layer, face, and orientation change.
+
+```mermaid
+flowchart TD
+    Action["Fold or brush action"] --> Paper["Paper"]
+    Paper --> Cells["Dense cells by stable CellId<br/>at most 144"]
+    Paper --> Ink["Fixed ink bit set"]
+    Paper --> History["Complete snapshots<br/>at most 64"]
+    Cells --> Stack["Derived StackView"]
+    Cells --> Key["Canonical state key"]
+    Ink --> Key
+    History -->|undo| Paper
+```
+
+`Paper` is the only mutable source of truth. Stack views and state keys are
+derived, while undo restores an earlier complete state.
 
 What was built in [`src/domain/paper.rs`](src/domain/paper.rs):
 
@@ -212,6 +254,21 @@ Build-plan source:
 The prototype became the production domain API. The TUI, solver, generator,
 authoring tools, and replay loader are expected to call this API instead of
 reimplementing paper rules.
+
+```mermaid
+flowchart LR
+    Spec["Puzzle specification"] -->|validate once| Puzzle["Puzzle"]
+    Puzzle --> Attempt["Owned playable Attempt"]
+    Action["Fold or brush"] --> Attempt
+    Attempt --> Paper["Canonical Paper rules"]
+    Attempt --> Result["Exact result and score"]
+    Attempt --> Replay["Bounded replay"]
+    Replay -->|exact puzzle revision| Fresh["Fresh isolated Attempt"]
+    Fresh --> Result
+```
+
+The validated puzzle stays with its attempt. Replays start from fresh paper and
+must match the complete gameplay revision before any action runs.
 
 The domain is split by behavior:
 
@@ -289,7 +346,7 @@ The complete engine landed in
 Its [GitHub CI run](https://github.com/nuggocto/orifude/actions/runs/33527703571)
 passed after the direct push to `shrek`.
 
-## How this first notebook pass was checked
+## How the notebook was checked
 
 On 2026-09-01, this notebook was checked against `PROJECT.md`, the current
 source and tests, and the puzzle-game Git history beginning at `0e3f08c`.
@@ -298,6 +355,11 @@ in local history, and every linked `PROJECT.md` heading exists.
 `git diff --check` and `mise run check` also passed. This was a
 documentation-only change, so it did not create a new player or platform
 behavior claim.
+
+A follow-up added four small Mermaid graphs for the product boundary, shared
+check path, paper ownership, and engine flow. Their nodes and limits were
+checked against the same linked contracts and source. The graphs explain
+existing behavior; they do not add a new rule.
 
 ## What comes next
 
