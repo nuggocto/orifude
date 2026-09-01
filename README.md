@@ -63,9 +63,11 @@ mise run paper
 mise run paper-measure
 ```
 
-`mise run paper` opens a bounded plain-text exercise for predicting one-fold
-and two-fold layer order. `mise run paper-measure` compares the dense paper
-state with the rejected coordinate-to-stack map in a release build.
+`mise run paper` opens a model-driven ASCII walkthrough followed by a bounded
+exercise for predicting one-fold and two-fold layer order. When it asks for the
+top cell ID, enter only that number and press Enter.
+`mise run paper-measure` compares the dense paper state with the rejected
+coordinate-to-stack map in a release build.
 
 The planned native targets and minimum operating-system versions are recorded
 as package metadata in `Cargo.toml`. The complete product contract and work

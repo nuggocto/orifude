@@ -10,6 +10,7 @@ use orifude::domain::paper::{
 const MAX_MENU_ATTEMPTS_PER_RUN: usize = 12;
 const MAX_INPUT_BYTES: usize = 16;
 const MAX_STACK_TEXT_BYTES: usize = MAX_PHYSICAL_CELLS * 4 + 1;
+const WALKTHROUGH_ROW_COUNT: u8 = 2;
 const PAPER_SPEC: PaperSpec = PaperSpec::new(4, 4, 4, 2, 6);
 
 const LEFT: Fold = Fold::new(FoldDirection::Left, 2);
@@ -110,10 +111,8 @@ fn main() -> ExitCode {
 }
 
 fn run(input: &mut impl Read, output: &mut impl Write) -> io::Result<()> {
-    writeln!(
-        output,
-        "Orifude paper exercise\n\nEach bracket lists physical cell IDs from bottom to top."
-    )?;
+    writeln!(output, "Orifude paper exercise")?;
+    render_walkthrough(output)?;
 
     for _ in 0..MAX_MENU_ATTEMPTS_PER_RUN {
         render_menu(output)?;
@@ -142,6 +141,93 @@ fn run(input: &mut impl Read, output: &mut impl Write) -> io::Result<()> {
         output,
         "This run reached its limit of {MAX_MENU_ATTEMPTS_PER_RUN} menu attempts."
     )
+}
+
+fn render_walkthrough(output: &mut impl Write) -> io::Result<()> {
+    let mut paper = Paper::new(PAPER_SPEC).map_err(domain_error)?;
+
+    writeln!(
+        output,
+        "\nHow one fold works, shown with two rows.\n\nBefore:"
+    )?;
+    render_walkthrough_rows(&paper, Some(LEFT.crease()), output)?;
+    writeln!(
+        output,
+        "\nThe | is the crease. Fold the right half to the left."
+    )?;
+
+    paper.fold(LEFT).map_err(domain_error)?;
+    writeln!(output, "\nAfter:")?;
+    render_walkthrough_rows(&paper, None, output)?;
+
+    let focus = paper.dimensions().coordinate(1, 1).map_err(domain_error)?;
+    let mut stack = StackView::new();
+    paper.stack_at(focus, &mut stack).map_err(domain_error)?;
+    if stack.len() != 2 {
+        return Err(io::Error::other(
+            "the walkthrough fold no longer produces its two-layer stack",
+        ));
+    }
+    let bottom = stack.cell_ids()[0];
+    let top = stack.cell_ids()[1];
+
+    paper.stamp_dot(focus).map_err(domain_error)?;
+    let ink = paper.ink();
+    if ink.len() != 2 || !ink.contains(bottom) || !ink.contains(top) {
+        return Err(io::Error::other(
+            "the walkthrough dot no longer inks its complete stack",
+        ));
+    }
+
+    writeln!(
+        output,
+        "\nRead {} from bottom to top: {:02}, then {:02}.",
+        stack_text(&stack),
+        bottom.get(),
+        top.get()
+    )?;
+    writeln!(output, "\nA dot passes through every layer in the stack:")?;
+    writeln!(output, "          dot\n           v")?;
+    writeln!(output, "    [{:02}] top layer, inked", top.get())?;
+    writeln!(output, "    [{:02}] bottom layer, inked", bottom.get())?;
+    writeln!(
+        output,
+        "\nWhen asked for the top cell ID, type only that number and press Enter."
+    )?;
+    writeln!(
+        output,
+        "For {}, the top cell is {:02}, so type:",
+        stack_text(&stack),
+        top.get()
+    )?;
+    writeln!(output, "> {}", top.get())
+}
+
+fn render_walkthrough_rows(
+    paper: &Paper,
+    crease: Option<u8>,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    let dimensions = paper.dimensions();
+    let mut stack = StackView::new();
+
+    for row in 0..WALKTHROUGH_ROW_COUNT {
+        for column in 0..dimensions.width().get() {
+            if column > 0 {
+                write!(output, " ")?;
+            }
+            if crease == Some(column) {
+                write!(output, "| ")?;
+            }
+            let coordinate = dimensions.coordinate(row, column).map_err(domain_error)?;
+            paper
+                .stack_at(coordinate, &mut stack)
+                .map_err(domain_error)?;
+            write!(output, "{}", stack_text(&stack))?;
+        }
+        writeln!(output)?;
+    }
+    Ok(())
 }
 
 fn render_menu(output: &mut impl Write) -> io::Result<()> {
@@ -262,25 +348,29 @@ fn render_paper(paper: &Paper, output: &mut impl Write) -> io::Result<()> {
             paper
                 .stack_at(coordinate, &mut stack)
                 .map_err(domain_error)?;
-            let mut cell = String::with_capacity(MAX_STACK_TEXT_BYTES);
-            cell.push('[');
-            if stack.is_empty() {
-                cell.push_str("..");
-            } else {
-                for (index, cell_id) in stack.cell_ids().iter().enumerate() {
-                    if index > 0 {
-                        cell.push('<');
-                    }
-                    write!(cell, "{:02}", cell_id.get())
-                        .expect("writing to a bounded String must succeed");
-                }
-            }
-            cell.push(']');
+            let cell = stack_text(&stack);
             write!(output, "{cell:<16}")?;
         }
         writeln!(output)?;
     }
     Ok(())
+}
+
+fn stack_text(stack: &StackView) -> String {
+    let mut text = String::with_capacity(MAX_STACK_TEXT_BYTES);
+    text.push('[');
+    if stack.is_empty() {
+        text.push_str("..");
+    } else {
+        for (index, cell_id) in stack.cell_ids().iter().enumerate() {
+            if index > 0 {
+                text.push('<');
+            }
+            write!(text, "{:02}", cell_id.get()).expect("writing to a bounded String must succeed");
+        }
+    }
+    text.push(']');
+    text
 }
 
 fn stack_at(paper: &Paper, coordinate: Coordinate) -> io::Result<Vec<CellId>> {
@@ -393,6 +483,49 @@ mod tests {
         assert!(output.contains("A dot at the focus inks 4 layer(s)."));
         assert!(output.contains("Target comparison: exact."));
         assert!(output.contains("Undo restored the complete uninked folded state."));
+    }
+
+    #[test]
+    fn walkthrough_shows_fold_stack_order_and_ink_path_before_the_menu() {
+        let mut input = &b"q\n"[..];
+        let mut output = Vec::new();
+
+        run(&mut input, &mut output).expect("the walkthrough should render");
+
+        let output = String::from_utf8(output).expect("the exercise output should be UTF-8");
+        let before_row = output
+            .lines()
+            .find(|line| line.starts_with("[00]"))
+            .expect("the unfolded row should be present");
+        assert_eq!(
+            before_row.split_ascii_whitespace().collect::<Vec<_>>(),
+            ["[00]", "[01]", "|", "[02]", "[03]"]
+        );
+        let after_row = output
+            .lines()
+            .find(|line| line.starts_with("[00<03]"))
+            .expect("the folded row should be present");
+        assert_eq!(
+            after_row.split_ascii_whitespace().collect::<Vec<_>>(),
+            ["[00<03]", "[01<02]", "[..]", "[..]"]
+        );
+        assert!(output.contains("Read [05<06] from bottom to top: 05, then 06."));
+        assert!(output.contains("[06] top layer, inked"));
+        assert!(output.contains("[05] bottom layer, inked"));
+        assert!(
+            output
+                .contains("When asked for the top cell ID, type only that number and press Enter.")
+        );
+        assert!(output.contains("For [05<06], the top cell is 06, so type:"));
+        assert!(output.lines().any(|line| line.trim() == "> 6"));
+
+        let walkthrough = output
+            .find("How one fold works")
+            .expect("the walkthrough heading should be present");
+        let menu = output
+            .find("Choose a paper:")
+            .expect("the menu should be present");
+        assert!(walkthrough < menu);
     }
 
     #[test]

@@ -31,6 +31,9 @@ intentionally not included.
   and exact undo restoration.
 - Added six plain-text folding exercises and a release-mode measurement that
   compares the dense paper model with a coordinate-to-stack map.
+- Added a model-driven walkthrough that shows a crease, the folded stack order,
+  ink passing through both layers, and how to enter the predicted top cell
+  before the player makes a prediction.
 - Added concise play instructions to the README.
 
 ### Changed

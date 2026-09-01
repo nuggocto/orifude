@@ -153,6 +153,26 @@ available ways to play:
 The first launch gives a short interactive lesson instead of a wall of text.
 The player can replay the lesson later.
 
+### How to play
+
+The home branch and contextual help open a replayable `How to play` view. It
+teaches the rules with one small paper instead of a page of instructions. The
+player can step forward and backward through these views:
+
+- The target beside a fresh unfolded paper.
+- The chosen crease, moving side, and folded result.
+- A side view that labels the top and bottom of the resulting stack.
+- Ink passing through every layer under the brush.
+- The unfolded result compared with the target, including extra and missing
+  ink.
+
+The TUI derives every teaching frame from production domain state. It does not
+maintain a second hand-written version of fold behavior. Captions explain every
+symbol, and the sequence remains clear in ASCII, monochrome, and reduced-motion
+modes. Reduced motion replaces transitions with player-controlled steps rather
+than removing information. The first-launch lesson reuses the same components
+and example.
+
 ### Puzzle screen
 
 The puzzle screen shows:
@@ -1077,7 +1097,7 @@ The landing page contains:
 - The real Orifude wordmark and squirrel-courier artwork
 - A short introduction written in the same quiet voice as the game
 - A direct description of the terminal puzzle
-- A short fold, ink, and unfold explanation
+- A short visual fold, ink, and unfold explanation
 - One reviewed terminal recording or still image
 - A visible project status
 - A link to `https://github.com/nuggocto/orifude`
@@ -1088,6 +1108,13 @@ The landing page contains:
 It must not contain a browser game, account form, newsletter form, analytics,
 tracking pixel, cookie banner, fake terminal interaction, or unavailable
 download button.
+
+The mechanic explanation uses one reviewed static sequence: fresh paper and
+target, the chosen fold, ink passing through the resulting stack, and the final
+unfolded comparison. Short captions explain the crease, moving side, stack
+order, and exact-match rule. The sequence must remain understandable without
+animation, JavaScript, color, or physical-cell IDs. It explains the native game
+but does not imitate an interactive terminal.
 
 ### Changelog page
 
@@ -1314,6 +1341,8 @@ contract; arbitrary puzzle-allowed cell boundaries remain engine work.
   order.
 - [x] Add validation errors for malformed dimensions, creases, and budgets.
 - [x] Render the prototype as plain text without committing to the final TUI.
+- [x] Add a model-driven visual walkthrough that explains the crease, layer
+  order, ink path, and answer format before asking for a prediction.
 - [x] Create at least six small example puzzles that expose different layer
   orders and fold directions.
 - [ ] Run a paper prototype with real keyboard input and observe whether players
@@ -1335,7 +1364,19 @@ input-limit, menu-limit, and measurement-accounting defects before the final
 run. A follow-up review reproduced unread oversized-input tails at both keyboard
 prompts. Regression tests now prove that oversized input ends the exercise
 without changing paper state or interpreting trailing bytes as later commands.
-Native macOS and Windows behavior was not exercised because this prototype does
+The owner review found that raw cell-ID stacks were understandable after an
+explanation but too mathematical on their own. The exercise now begins with a
+two-row fold, top-and-bottom stack labels, and a dot passing through both layers.
+It then says to enter only the predicted top cell ID and shows `> 6` as the
+answer for `[05<06]`.
+Follow-up verification on the uncommitted working tree based on `9419443`
+passed `mise run check`, release-mode example tests, and piped release-mode
+sessions on x86_64 Arch Linux with Rust 1.98.0. The sessions covered the visual
+walkthrough and numeric answer example, a correct two-fold prediction, immediate
+quit, and oversized input. The walkthrough used ASCII only, stayed within 80
+columns, and wrote no saved state or other files. A PTY run through
+`mise run paper` confirmed the same walkthrough and a clean exit.
+Native macOS and Windows behavior remains untested because this prototype does
 not use platform terminal APIs. Observation with external players remains open.
 
 Exit gate:
@@ -1481,8 +1522,8 @@ with game screens.
 - [ ] Implement true-color, ANSI 256, ANSI 16, monochrome, and ASCII choices.
 - [ ] Implement preferred, narrow, and resize-message layouts.
 - [ ] Keep resize handling valid during every transient state.
-- [ ] Define reusable focus, dialog, help, error, paper, branch, and status
-  components.
+- [ ] Define reusable focus, dialog, help, rules-step, error, paper, branch, and
+  status components.
 - [ ] Convert the monochrome Orifude mark into reviewed terminal-safe artwork.
 - [ ] Add reduced-motion and instant-reveal settings.
 - [ ] Sanitize external display strings before they reach rendering.
@@ -1504,7 +1545,8 @@ Exit gate:
 Goal: connect the domain engine, persistence, and TUI into the complete player
 journey.
 
-- [ ] Implement first-launch capability checks and the interactive lesson.
+- [ ] Implement first-launch capability checks and the interactive lesson using
+  the shared visual teaching components.
 - [ ] Implement the home branch and progress summary.
 - [ ] Implement journey selection and locked or completed states.
 - [ ] Implement the puzzle target view.
@@ -1520,6 +1562,8 @@ journey.
 - [ ] Implement daily mode with an injected local date.
 - [ ] Implement endless mode with visible solver or generator exhaustion errors.
 - [ ] Implement installed pack selection and missing-pack history behavior.
+- [ ] Implement the replayable `How to play` view with a bounded, engine-derived
+  fold, stack, ink, unfold, and comparison sequence.
 - [ ] Implement settings, contextual help, and key-conflict validation.
 - [ ] Implement spoiler-free text result export.
 - [ ] Preserve drafts and attempt state across unrelated dialogs and resizes.
@@ -1670,7 +1714,8 @@ release-driven changelog without creating a second application.
 - [ ] Generate responsive optimized assets without changing the identity.
 - [ ] Build the landing hero with a short introduction, TUI description, status,
   and direct GitHub repository link.
-- [ ] Explain the fold, ink, and unfold mechanic in a short section.
+- [ ] Explain the fold, ink, and unfold mechanic with the reviewed static visual
+  sequence and plain captions.
 - [ ] Add the reviewed terminal recording or still from the native application.
 - [ ] Add release links only after the corresponding artifacts verify.
 - [ ] Present POSIX, PowerShell, Homebrew, Scoop, and AUR instructions without
