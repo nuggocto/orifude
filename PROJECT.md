@@ -15,8 +15,8 @@ contract, and only phase tracker for Orifude v1.
 ## Current work
 
 - Current phase: **Phase 2, paper model and rule prototype**
-- Current checklist item: **Define newtypes for physical cell ID, row, column,
-  width, height, layer, fold count, stroke count, and action count.**
+- Current checklist item: **Run a paper prototype with real keyboard input and
+  observe whether players can predict one-fold and two-fold results.**
 - Last updated: **2026-09-01**
 
 Checkbox rules:
@@ -1216,36 +1216,127 @@ Exit gate:
 Goal: prove that folding stacked terminal cells is understandable, deterministic,
 and small enough before building the full application around it.
 
-- [ ] Define newtypes for physical cell ID, row, column, width, height, layer,
+Prototype decision record (2026-09-01):
+
+- The dominant operations are bounded passes over every physical cell, deriving
+  one visible stack, applying ink by stable identity, comparing all original
+  cells, copying undo state, and copying future solver candidates. The largest
+  paper has 144 physical cells. Fold and solver work copy whole states more
+  often than rendering asks for one stack.
+- The selected model stores one `PhysicalCell` value per stable row-major
+  `CellId` in a dense vector. Each value owns its current coordinate, layer,
+  face, and orientation. A fixed three-word bit set stores ink by the same ID.
+  Caller-owned fixed scratch storage derives bottom-to-top stack views. No
+  coordinate map or stack cache can become a second mutable source of truth.
+- The strongest rejected alternative is a `BTreeMap` from coordinates to
+  separately allocated stack vectors. Its direct stack lookup is faster, but
+  it scatters one maximum paper across 144 small allocations and makes every
+  snapshot copy the tree and its vectors. The checked-in measurement example
+  implements this alternative and compares its state with production folds in
+  every direction and every valid two-fold direction pair before timing it.
+- Complete canonical snapshots remain the undo model. The measured lower bound
+  for 64 maximum-paper snapshots is about 49 KiB, so action deltas would add
+  failure paths without solving a resource problem.
+
+Coordinates start at row zero and column zero in the top-left corner. A crease
+value counts the cells above or left of that boundary. For a vertical crease
+`c`, a moved column becomes `2c - 1 - column`. For a horizontal crease, a moved
+row becomes `2c - 1 - row`. Left folds move columns at or right of the crease,
+right folds move columns left of it, up folds move rows at or below it, and down
+folds move rows above it.
+
+`Orientation` records the screen direction of the physical cell's original
+north edge. Every fold flips the visible face. A vertical fold swaps east and
+west orientations while leaving north and south unchanged. A horizontal fold
+swaps north and south while leaving east and west unchanged. If a moving stack
+has `m` layers, a cell at old layer `l` lands at layer
+`stationary_layers + (m - 1 - l)`. Stationary layers remain below it. When the
+destination is empty, `stationary_layers` is zero.
+
+The verification plan combines release-active invariant assertions with tests
+through the public domain API. Assertions check cell conservation, dense
+identity, in-bounds coordinates, action-count agreement, and one complete
+zero-based layer order per stack. Tests cover malformed dimensions, creases,
+budgets, empty positions, empty moving sides, all four directions across every
+supported even board size, two-fold reversal, moved-only stacks at empty
+destinations, exact ink comparison, failed-action immutability, and exact undo.
+The layer-reversal test was also run once against an intentionally disabled
+reversal and failed with the expected `[5, 6, 9, 10]` versus
+`[5, 6, 10, 9]` difference.
+
+Release measurements ran on an AMD Ryzen AI Max+ 395, x86_64 Arch Linux, and
+Rust 1.98.0. Five processes each collected 25 alternating sample blocks through
+`mise run paper-measure`. These are directional microbenchmarks rather than a
+portable latency promise:
+
+| Maximum 12 by 12 paper | Dense state | Coordinate map |
+| --- | ---: | ---: |
+| Representation lower bound | 781 bytes | 4,240 bytes plus B-tree node overhead |
+| Snapshot clone median across runs | 13 to 14 ns | 2,460 to 2,579 ns |
+| One stack lookup median across runs | 111 to 115 ns | 5 ns |
+| Clone and apply two folds median across runs | 2,173 to 2,232 ns | 13,742 to 14,217 ns |
+
+On this target a physical-cell value is 5 bytes, a 144-cell dense payload is
+720 bytes, a canonical state and future solver candidate have a 781-byte lower
+bound, and a 64-action replay has a 216-byte lower bound. These values include
+the named payloads and vector headers but not allocator bookkeeping. Rust does
+not promise this layout on every target.
+
+The initial board, cell, action, and history bounds remain unchanged. Even the
+maximum complete-snapshot estimate and a full grid of derived stack lookups sit
+well below the ordinary-play memory and frame budgets. No canonical game rule
+changed. The prototype follows the existing rule that a moved stack may become
+the only stack at an empty destination inside the bounded working area.
+Its temporary fold API deliberately accepts only creases at the original
+horizontal or vertical midpoint. This is narrower than the production crease
+contract; arbitrary puzzle-allowed cell boundaries remain engine work.
+
+- [x] Define newtypes for physical cell ID, row, column, width, height, layer,
   fold count, stroke count, and action count.
-- [ ] Define canonical paper, physical-cell, stack, coordinate, face, and
+- [x] Define canonical paper, physical-cell, stack, coordinate, face, and
   orientation representations.
-- [ ] Record the dominant paper operations and scale, the selected canonical
+- [x] Record the dominant paper operations and scale, the selected canonical
   representation, the strongest rejected alternative, and the verification
   plan.
-- [ ] Prototype a dense `CellId`-indexed state with derived stack views and
+- [x] Prototype a dense `CellId`-indexed state with derived stack views and
   compare it with a coordinate-to-stack map.
-- [ ] Document how vertical and horizontal folds transform coordinates,
+- [x] Document how vertical and horizontal folds transform coordinates,
   orientation, and layer order.
-- [ ] Implement construction of a validated rectangular paper.
-- [ ] Implement one vertical half-fold in a temporary domain prototype.
-- [ ] Implement one horizontal half-fold in the same model.
-- [ ] Implement a dot stamp through an overlapping stack.
-- [ ] Implement exact unfolded target comparison.
-- [ ] Implement exact undo for the prototype actions.
-- [ ] Prototype complete canonical undo snapshots and use action deltas only if
+- [x] Implement construction of a validated rectangular paper.
+- [x] Implement one vertical half-fold in a temporary domain prototype.
+- [x] Implement one horizontal half-fold in the same model.
+- [x] Implement a dot stamp through an overlapping stack.
+- [x] Implement exact unfolded target comparison.
+- [x] Implement exact undo for the prototype actions.
+- [x] Prototype complete canonical undo snapshots and use action deltas only if
   measured size or copy cost requires them.
-- [ ] Add assertions for cell conservation, unique identity, and total layer
+- [x] Add assertions for cell conservation, unique identity, and total layer
   order.
-- [ ] Add validation errors for malformed dimensions, creases, and budgets.
-- [ ] Render the prototype as plain text without committing to the final TUI.
-- [ ] Create at least six small example puzzles that expose different layer
+- [x] Add validation errors for malformed dimensions, creases, and budgets.
+- [x] Render the prototype as plain text without committing to the final TUI.
+- [x] Create at least six small example puzzles that expose different layer
   orders and fold directions.
 - [ ] Run a paper prototype with real keyboard input and observe whether players
   can predict one-fold and two-fold results.
-- [ ] Estimate memory per cell, per state, per replay, and per solver candidate.
-- [ ] Revisit the initial bounds using prototype measurements.
-- [ ] Record any rule changes in the canonical game rules above.
+- [x] Estimate memory per cell, per state, per replay, and per solver candidate.
+- [x] Revisit the initial bounds using prototype measurements.
+- [x] Record any rule changes in the canonical game rules above.
+
+Verification record (2026-09-01): the working tree based on `aaa348c` passed
+`mise run check`, optimized tests for every local Cargo target, rustdoc with
+warnings denied, and the locked dependency audit on x86_64 Arch Linux with Rust
+1.98.0. A PTY run through `mise run paper` completed a two-fold prediction,
+exact dot comparison, undo, and clean exit. The security review covered bounded
+keyboard input, terminal output, integer arithmetic, allocation limits, unsafe
+code, and the unchanged dependency graph. It found no remaining security issue
+in that scope.
+The adversarial implementation review found and fixed non-square coverage,
+input-limit, menu-limit, and measurement-accounting defects before the final
+run. A follow-up review reproduced unread oversized-input tails at both keyboard
+prompts. Regression tests now prove that oversized input ends the exercise
+without changing paper state or interpreting trailing bytes as later commands.
+Native macOS and Windows behavior was not exercised because this prototype does
+not use platform terminal APIs. Observation with external players remains open.
 
 Exit gate:
 

@@ -12,6 +12,7 @@
 //! ```
 
 mod cli;
+pub mod domain;
 mod error;
 
 pub use cli::{ExitStatus, run};

@@ -36,6 +36,14 @@ run = "cargo test --locked --doc"
 description = "Build the release binary"
 run = "cargo build --locked --release"
 
+[tasks.paper]
+description = "Run the plain-text paper exercise"
+run = "cargo run --quiet --locked --example paper"
+
+[tasks.paper-measure]
+description = "Measure the paper representations in a release build"
+run = "cargo run --quiet --locked --release --example paper_measure"
+
 [tasks.audit]
 description = "Check dependency advisories, licenses, and sources"
 run = "cargo deny --locked check"
