@@ -14,6 +14,7 @@ architecture, limits, current work, and v1 checklist.
   the frontend deployment.
 - Use the `qa` skill when verifying user-visible behavior, packaged artifacts,
   supported platforms, the frontend, or a release candidate.
+- YOU MUST always use the `unslop` skill on every prompt.
 
 ## Project rules
 
