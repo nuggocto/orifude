@@ -3,6 +3,26 @@
 Read `PROJECT.md` before planning or changing Orifude. It defines the product,
 architecture, limits, current work, and v1 checklist.
 
+Then read `NOTEBOOK.md`. It explains what the repository already contains, why
+important choices were made, how the work was checked, and where the evidence
+lives.
+
+## Working notebook
+
+- Keep `NOTEBOOK.md` at the repository root.
+- Update it during every project task. Record each completed implementation,
+  material decision, correction, measurement, verification result, and known
+  limitation from that work. No material project knowledge should live only in
+  chat.
+- Link each note to the most useful source, test, document, or immutable commit.
+- Write for a person joining the project. Keep the explanation plain, relaxed,
+  and short enough to scan.
+- Record outcomes and reasons, not private reasoning, raw command transcripts,
+  temporary files, credentials, or secrets.
+- Keep `PROJECT.md` as the only phase tracker. The notebook may link to its
+  build-plan sections, but it must not copy phase names, phase numbers,
+  checkboxes, or progress claims.
+
 ## Skills
 
 - Use the `rust` skill and then the `tiger-style` skill for project work.
