@@ -37,4 +37,6 @@ jobs:
           cache: "false"
 
       - name: Check the repository
+        env:
+          MISE_GITHUB_TOKEN: ""
         run: mise run check

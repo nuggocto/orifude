@@ -38,15 +38,15 @@ run = "cargo build --locked --release"
 
 [tasks.audit]
 description = "Check dependency advisories, licenses, and sources"
-run = "cargo deny check"
+run = "cargo deny --locked check"
 
 [tasks.check]
 description = "Run every ordinary repository check in a safe order"
 run = [
     { task = "fmt-check" },
+    { task = "audit" },
     { task = "lint" },
     { task = "test" },
     { task = "doctest" },
     { task = "build" },
-    { task = "audit" },
 ]
