@@ -1,0 +1,52 @@
+min_version = "2026.8.14"
+
+[settings]
+idiomatic_version_file_enable_tools = ["rust"]
+
+[tools]
+"github:EmbarkStudios/cargo-deny" = "0.20.2"
+
+[tasks.run]
+description = "Run Orifude"
+raw_args = true
+quiet = true
+run = "cargo run --quiet --locked --"
+
+[tasks.fmt]
+description = "Format Rust sources"
+run = "cargo fmt --all"
+
+[tasks.fmt-check]
+description = "Check Rust formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks.lint]
+description = "Lint every Rust target"
+run = "cargo clippy --locked --all-targets -- -D warnings"
+
+[tasks.test]
+description = "Test every Rust target"
+run = "cargo test --locked --all-targets"
+
+[tasks.doctest]
+description = "Test Rust documentation examples"
+run = "cargo test --locked --doc"
+
+[tasks.build]
+description = "Build the release binary"
+run = "cargo build --locked --release"
+
+[tasks.audit]
+description = "Check dependency advisories, licenses, and sources"
+run = "cargo deny check"
+
+[tasks.check]
+description = "Run every ordinary repository check in a safe order"
+run = [
+    { task = "fmt-check" },
+    { task = "lint" },
+    { task = "test" },
+    { task = "doctest" },
+    { task = "build" },
+    { task = "audit" },
+]

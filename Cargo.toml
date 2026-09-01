@@ -2,5 +2,53 @@
 name = "orifude"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.98"
+description = "A quiet, offline folding and ink puzzle game for the terminal"
+license = "Apache-2.0"
+repository = "https://github.com/nuggocto/orifude"
+homepage = "https://orifude.com"
+readme = "README.md"
+publish = false
+
+resolver = "3"
+
+[[bin]]
+name = "orifude"
+path = "src/main.rs"
+
+[package.metadata.orifude.platforms.linux]
+minimum-kernel = "5.10"
+targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]
+qa-distributions = [
+    "Ubuntu 24.04",
+    "Debian 12",
+    "Fedora (current at release-candidate QA)",
+    "Arch Linux (current at release-candidate QA)",
+]
+
+[package.metadata.orifude.platforms.macos]
+minimum-version = "13"
+targets = ["x86_64-apple-darwin", "aarch64-apple-darwin"]
+
+[package.metadata.orifude.platforms.windows]
+minimum-version = "10 22H2"
+targets = ["x86_64-pc-windows-msvc"]
 
 [dependencies]
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+
+[profile.dev]
+overflow-checks = true
+
+[profile.test]
+overflow-checks = true
+
+[profile.release]
+overflow-checks = true
+panic = "unwind"
