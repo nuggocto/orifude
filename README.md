@@ -16,8 +16,9 @@ the playable game yet.
 Install [rustup](https://rustup.rs/) and
 [mise](https://mise.jdx.dev/getting-started.html) 2026.8.14 or newer. The exact
 Rust toolchain is declared in `rust-toolchain.toml`; mise reads that declaration
-instead of keeping another Rust version. Downloaded development tools are
-verified against the checksums in `mise.lock`.
+instead of keeping another Rust version. `mise.lock` records the reviewed URL
+and checksum for the cargo-deny download. Rustup installs the exact declared
+Rust toolchain and components.
 
 `Cargo.lock` is committed for reproducible application builds. Tasks that
 resolve or compile Rust dependencies use it in locked mode.

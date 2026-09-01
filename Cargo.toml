@@ -50,5 +50,6 @@ overflow-checks = true
 overflow-checks = true
 
 [profile.release]
+# Preserve checked arithmetic in shipped puzzle-state transitions.
 overflow-checks = true
 panic = "unwind"

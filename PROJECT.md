@@ -53,6 +53,11 @@ modify, or delete data from the retired application. Its changelog begins with
 the puzzle-game reboot, and no installer or package channel offers an automatic
 upgrade or rollback between the two products.
 
+Running a puzzle-game installer is an explicit fresh installation. It may
+replace the executable at the chosen destination after verification, but it
+does not detect, migrate, or remove retired-product data. Package metadata must
+not declare the retired release as an upgrade source or rollback target.
+
 The artwork in `/home/nuggocto/Pictures/Orifude` is the identity source:
 
 - `Orifude-logo.png` contains the squirrel courier, folded paper, branch,
@@ -183,6 +188,10 @@ records the solution and adds the result to the branch.
 - The v1 board uses axis-aligned creases on cell boundaries.
 - Built-in boards use sizes between 4 by 4 and 12 by 12 cells.
 
+The v1 working area is the paper's original width-by-height coordinate
+rectangle. A fold may leave some positions empty, but no physical cell may move
+outside that rectangle. The puzzle format has no separate overhang field.
+
 ### Fold
 
 A fold selects a vertical or horizontal crease and one side to move. The engine
@@ -206,7 +215,8 @@ count or duplicate physical cell is a programmer-error invariant.
 - A brush action targets one visible position on the folded paper.
 - Ink passes through every physical cell in the selected stack.
 - Ink records against physical cells, not screen positions.
-- Ink cannot be removed during a puzzle attempt.
+- There is no direct erase action. Undo and reset may restore an earlier state
+  and thereby remove ink added by the reversed actions.
 - The v1 brush set contains a dot and bounded horizontal or vertical strokes.
 - Every allowed brush and stroke length is declared by the puzzle.
 - A brush action must stay within the puzzle's stroke budget.
@@ -426,6 +436,10 @@ Property testing, fuzzing, archive support, and release tooling may add
 development dependencies after their value and bounds are documented. Do not
 add an async runtime or network client for v1.
 
+`deny.toml` starts with only the license used by this dependency-free package.
+Each new dependency license requires review and an explicit allowlist entry.
+Do not add a skip or exception merely to make the audit pass.
+
 ### State ownership
 
 - `App` owns the current screen, loaded puzzle, attempt, dialogs, and terminal
@@ -623,12 +637,30 @@ resource estimate, tests, and a documented decision here.
 | Animation refresh rate | 30 frames per second |
 | One reveal animation | 1,200 milliseconds |
 | Recent replays per puzzle | 20 |
-| Local database target ceiling | 128 MiB |
+| SQLite main database file | 128 MiB |
 
 The solver must stop before breaching its visited-state or memory budget. The
-database ceiling triggers bounded pruning of superseded non-best replays and a
-clear warning before writes would fail. Best solutions and completion state are
-never the first pruning targets.
+SQLite limit applies to the main database file. Persistence fixes the page size
+before schema creation and enforces the corresponding `max_page_count` on every
+writable connection. A transaction that would grow the main file past 128 MiB
+fails without exposing partial progress.
+
+SQLite capacity is the configured maximum page count minus allocated non-free
+pages, using `page_count` and `freelist_count`. A nonessential transaction must
+leave at least 16 MiB of that capacity available. Before committing a replay or
+history write that would cross the reserve, one bounded pruning batch removes
+superseded non-best replays and other nonessential history in the same
+transaction. If pruning cannot restore the reserve, Orifude rolls the
+transaction back and reports the storage limit. Settings, completion state,
+best solutions, and migrations may use the reserve, but a protected write that
+would exceed the hard maximum also leaves the prior state unchanged and
+reports the limit. Protected data is not a promise of unbounded growth.
+
+Physical storage accounting records the main file and any journal, WAL,
+shared-memory, or temporary sidecar by actual file length. The 128 MiB limit is
+for the main file, not a claim about transient SQLite space. Before persistence
+work closes, the project chooses a journal mode, checkpoint policy, retained
+journal limit, and a separate hard budget for worst-case transaction sidecars.
 
 The installed-pack content ceiling includes final and staging content.
 Installation checks the candidate's validated extracted size before committing
@@ -697,6 +729,11 @@ toolchain selection. It uses the minimal rustup profile and includes `rustfmt`
 and `clippy`. `Cargo.toml` declares `rust-version = "1.98"` as the package's
 minimum compiler version. Updating either value is a reviewed compatibility
 change, not an automatic moving-stable update.
+
+While the two versions match, ordinary CI is also the minimum-version build. If
+the exact toolchain advances beyond `rust-version`, that same change adds a
+separate CI build with the declared minimum. A newer compiler build is not MSRV
+evidence.
 
 `mise.toml` is the command interface for development, CI, QA, and release work.
 It does not declare a second Rust version. Rustup reads `rust-toolchain.toml`,
@@ -933,11 +970,10 @@ the installer attached to an exact immutable GitHub release. The release
 attestation gives users with GitHub CLI a separate way to verify the release and
 downloaded asset.
 
-The website presents downloading and reading the installer before running it as
-the normal path. A `curl` pipe may be shown as a convenience, tied to an exact
-release version rather than a moving `latest` URL. The installer defines its
-functions and checksum table before its final call into `main`, so a truncated
-piped download cannot begin installation.
+The website presents separate commands to download the installer to a named
+file, inspect it, and run it only after the transfer succeeds. It must not
+publish pipe-to-shell or pipe-to-`Invoke-Expression` commands. A failed transfer
+never invokes an interpreter or changes the installation destination.
 
 ### Classic POSIX installer
 
@@ -969,6 +1005,8 @@ The PowerShell installer must:
 
 - Enable terminating error behavior for every required operation.
 - Download only immutable GitHub release URLs over HTTPS.
+- Finish downloading the installer before execution in the documented default
+  command, and never pipe network output into `Invoke-Expression`.
 - Embed the expected checksum for each supported Windows archive.
 - Verify the selected archive against its embedded checksum before extraction.
 - Optionally compare the complete checksum file for consistency, but never use
@@ -1288,6 +1326,8 @@ the player's filesystem or terminal.
 - [ ] Implement single-process database ownership or an explicit lock.
 - [ ] Persist one completed attempt and its progress in one transaction.
 - [ ] Persist settings without coupling them to terminal rendering types.
+- [ ] Fix the SQLite page size and main-file `max_page_count`, then choose and
+  test the journal mode, checkpoint policy, and hard transient-sidecar budget.
 - [ ] Enforce recent-replay and database growth policy.
 - [ ] Preserve best solutions during pruning.
 - [ ] Report full disk, read-only path, lock conflict, corrupt database, and
@@ -1487,8 +1527,10 @@ installers, and the three approved package channels.
 - [ ] Test clean install, upgrade, tampered archive, tampered checksum file,
   embedded-hash mismatch, unsupported platform, destination conflict, and
   cleanup behavior.
-- [ ] Test that a truncated piped POSIX installer makes no filesystem change.
-- [ ] Document the inspect-then-run curl command before the pipe-to-shell form.
+- [ ] Test that failed and truncated installer downloads are never executed and
+  make no filesystem change.
+- [ ] Document separate download, inspection, and execution commands. Do not
+  publish pipe-to-shell or pipe-to-`Invoke-Expression` forms.
 - [ ] Render the macOS-only Homebrew formula for `nuggocto/homebrew-tap`.
 - [ ] Test the formula on Intel and Apple Silicon macOS.
 - [ ] Render the Scoop manifest for `nuggocto/scoop-bucket`.

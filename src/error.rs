@@ -32,11 +32,6 @@ impl OutputError {
     pub const fn stream(&self) -> OutputStream {
         self.stream
     }
-
-    #[must_use]
-    pub const fn source_error(&self) -> &io::Error {
-        &self.source
-    }
 }
 
 impl fmt::Display for OutputError {

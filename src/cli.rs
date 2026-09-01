@@ -7,6 +7,7 @@ use crate::{OutputError, OutputStream};
 const ABOUT: &str = concat!(
     "Orifude is a quiet, offline puzzle game for the terminal.\n",
     "The playable game is not available in this build yet.\n",
+    "Run 'orifude --help' to see the available options.\n",
 );
 const HELP: &str = concat!(
     "Orifude is a quiet, offline puzzle game for the terminal.\n\n",
@@ -114,6 +115,7 @@ fn flush(stream: &mut impl Write, output_stream: OutputStream) -> Result<(), Out
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
     use std::io::{self, Write};
 
     use super::*;
@@ -148,7 +150,11 @@ mod tests {
             .expect_err("a broken output stream should fail");
 
         assert_eq!(error.stream(), OutputStream::Stdout);
-        assert_eq!(error.source_error().kind(), io::ErrorKind::BrokenPipe);
+        let source = error
+            .source()
+            .and_then(|cause| cause.downcast_ref::<io::Error>())
+            .expect("the source should be an I/O error");
+        assert_eq!(source.kind(), io::ErrorKind::BrokenPipe);
     }
 
     #[test]
@@ -157,6 +163,10 @@ mod tests {
             .expect_err("a failed flush should fail");
 
         assert_eq!(error.stream(), OutputStream::Stdout);
-        assert_eq!(error.source_error().kind(), io::ErrorKind::BrokenPipe);
+        let source = error
+            .source()
+            .and_then(|cause| cause.downcast_ref::<io::Error>())
+            .expect("the source should be an I/O error");
+        assert_eq!(source.kind(), io::ErrorKind::BrokenPipe);
     }
 }
