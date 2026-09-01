@@ -767,6 +767,9 @@ CI grows with the behavior it can verify:
 
 - The repository foundation creates ordinary CI. Every pull request and push
   to `shrek` runs `mise run check` once on Linux x86_64.
+- The `shrek` branch has no branch-protection rule and accepts direct pushes.
+  Ordinary CI reports the result after a push; it does not block the update.
+  Pull requests remain available but are optional.
 - The terminal foundation adds a small native smoke matrix on Linux x86_64,
   macOS Apple Silicon, and Windows x86_64. It exercises terminal startup and
   restoration on pull requests without duplicating the complete test suite.
@@ -1181,8 +1184,8 @@ checks before domain code arrives.
 - [x] Pin third-party CI actions to reviewed immutable revisions.
 - [x] Pin the mise release installed by CI and document the supported local
   mise version.
-- [x] Confirm `shrek` remains the GitHub default branch and require ordinary CI
-  before merge.
+- [x] Confirm `shrek` remains the GitHub default branch, accepts direct pushes
+  without branch protection, and runs ordinary CI after each push.
 - [x] Measure ordinary CI before adding any cross-run build cache.
 - [x] Document rustup, mise, supported local tools, and the mise commands.
 - [x] Replace the placeholder README with the current product description and
