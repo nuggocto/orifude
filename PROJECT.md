@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 2, paper model and rule prototype**
-- Current checklist item: **Run a paper prototype with real keyboard input and
-  observe whether players can predict one-fold and two-fold results.**
+- Current phase: **Phase 4, solver and deterministic generator**
+- Current checklist item: **Define the solver input, result, cancellation,
+  limit, and exhaustion contracts.**
 - Last updated: **2026-09-01**
 
 Checkbox rules:
@@ -235,7 +235,10 @@ count or duplicate physical cell is a programmer-error invariant.
 
 ### Ink
 
-- A brush action targets one visible position on the folded paper.
+- A dot targets one occupied position on the folded paper.
+- A line is an inclusive horizontal or vertical segment between two endpoints.
+  Endpoint order does not matter, and every position in the segment must
+  contain paper.
 - Ink passes through every physical cell in the selected stack.
 - Ink records against physical cells, not screen positions.
 - There is no direct erase action. Undo and reset may restore an earlier state
@@ -260,8 +263,13 @@ understands stack behavior.
 
 - Undo restores the complete state before the last action.
 - Reset restores the initial puzzle without changing stored progress.
-- A replay contains a puzzle identity, format version, engine compatibility
-  version, and bounded action list.
+- A replay contains a puzzle identity, exact validated gameplay revision,
+  format version, engine compatibility version, and bounded action list. The
+  gameplay revision covers dimensions, target, allowed folds and brushes,
+  budgets, and par. Display text does not invalidate a replay.
+- A solution replay contains the current successful fold and brush sequence.
+  Undo removes the reversed action, and reset clears the sequence. Personal
+  undo and hint history remain result metadata rather than replay actions.
 - Replaying the same valid actions must produce identical state on every
   supported platform.
 - Invalid, incompatible, or oversized replays fail without partially mutating
@@ -277,8 +285,10 @@ Completing a puzzle matters more than optimization. The result records:
 - Whether hints were used
 - Whether the solution meets the declared par
 
-Best-solution comparison uses folds first, then strokes. Time is never part of
-the score. Daily results contain no hidden timing or streak pressure.
+Best-solution comparison uses folds first, then strokes. Meeting par requires
+both the fold and stroke counts to stay at or below their declared values. Time
+is never part of the score. Daily results contain no hidden timing or streak
+pressure.
 
 ## Play modes
 
@@ -478,7 +488,7 @@ Do not add a skip or exception merely to make the audit pass.
 
 ### Core data representation
 
-The paper prototype starts from the operations the engine performs most often:
+The paper model follows the operations the engine performs most often:
 fold every physical cell, inspect one visible stack, apply ink by physical cell
 ID, compare every original cell, copy bounded undo state, and produce a stable
 solver key. A board contains at most 144 physical cells, so predictable dense
@@ -507,8 +517,8 @@ representation, the strongest rejected alternative, and the invariants and
 measurements that justify the choice. The likely rejected baseline is a map from
 coordinates to separately allocated stacks: it makes lookup direct but makes
 folds, snapshots, hashing, and solver copies more expensive and easier to
-desynchronize. Production representation remains contingent on prototype
-measurements and invariant tests.
+desynchronize. The production engine keeps this representation after the
+prototype measurements and invariant tests accepted it.
 
 ## Local storage
 
@@ -632,6 +642,9 @@ resource estimate, tests, and a documented decision here.
 | Physical cells | 144 |
 | Fold actions in one attempt | 12 |
 | Brush actions in one attempt | 8 |
+| Line brush length | 2 to 12 cells |
+| Allowed fold rules in one puzzle | 44 |
+| Allowed brush rules in one puzzle | 23 |
 | Total replay actions | 64 |
 | Undo history states | 64 |
 | Puzzle file size | 64 KiB |
@@ -1303,11 +1316,13 @@ portable latency promise:
 | One stack lookup median across runs | 111 to 115 ns | 5 ns |
 | Clone and apply two folds median across runs | 2,173 to 2,232 ns | 13,742 to 14,217 ns |
 
-On this target a physical-cell value is 5 bytes, a 144-cell dense payload is
-720 bytes, a canonical state and future solver candidate have a 781-byte lower
-bound, and a 64-action replay has a 216-byte lower bound. These values include
-the named payloads and vector headers but not allocator bookkeeping. Rust does
-not promise this layout on every target.
+On this target a physical-cell value is 5 bytes and a 144-cell dense payload is
+720 bytes. A complete snapshot's named payloads total 779 bytes. The solver
+state has a 776-byte lower bound. A 64-action replay with maximum-length IDs and
+the maximum rule collections has a 710-byte lower bound. Sixty-four
+snapshot-and-action history entries have a 50,176-byte named-payload lower
+bound. These values include the named payloads and collection headers but not
+allocator bookkeeping. Rust does not promise this layout on every target.
 
 The initial board, cell, action, and history bounds remain unchanged. Even the
 maximum complete-snapshot estimate and a full grid of derived stack lookups sit
@@ -1345,7 +1360,7 @@ contract; arbitrary puzzle-allowed cell boundaries remain engine work.
   order, ink path, and answer format before asking for a prediction.
 - [x] Create at least six small example puzzles that expose different layer
   orders and fold directions.
-- [ ] Run a paper prototype with real keyboard input and observe whether players
+- [x] Run a paper prototype with real keyboard input and observe whether players
   can predict one-fold and two-fold results.
 - [x] Estimate memory per cell, per state, per replay, and per solver candidate.
 - [x] Revisit the initial bounds using prototype measurements.
@@ -1377,11 +1392,14 @@ quit, and oversized input. The walkthrough used ASCII only, stayed within 80
 columns, and wrote no saved state or other files. A PTY run through
 `mise run paper` confirmed the same walkthrough and a clean exit.
 Native macOS and Windows behavior remains untested because this prototype does
-not use platform terminal APIs. Observation with external players remains open.
+not use platform terminal APIs. On 2026-09-01, the owner accepted the revised
+visual explanation and dense paper model as sufficient for this prototype gate.
+No separate external-player session was claimed; broader player observation
+remains part of content and playable-loop review.
 
 Exit gate:
 
-- [ ] The production model is chosen only after the prototype preserves every
+- [x] The production model is chosen only after the prototype preserves every
   invariant and the fold result can be explained without reading code.
 
 ### Phase 3, deterministic game engine
@@ -1389,33 +1407,65 @@ Exit gate:
 Goal: turn the accepted model into the complete bounded rules engine used by
 play, authoring tools, tests, and the solver.
 
-- [ ] Implement validated puzzle construction.
-- [ ] Implement every allowed horizontal and vertical crease and direction.
-- [ ] Reject empty, overlapping-invalid, out-of-area, over-budget, and
+- [x] Implement validated puzzle construction.
+- [x] Implement every allowed horizontal and vertical crease and direction.
+- [x] Reject empty, overlapping-invalid, out-of-area, over-budget, and
   disallowed folds without mutating state.
-- [ ] Implement dot brush behavior.
-- [ ] Implement bounded horizontal and vertical line brushes.
-- [ ] Implement missing-ink and extra-ink result sets.
-- [ ] Implement success and par evaluation.
-- [ ] Implement bounded action history, undo, and reset.
-- [ ] Define canonical state equality and hashing.
-- [ ] Define stable replay actions and compatibility metadata.
-- [ ] Implement replay validation and deterministic execution.
-- [ ] Define typed operational errors and programmer-error invariants.
-- [ ] Add focused unit tests for every public domain transition.
-- [ ] Add boundary tests at zero, one, maximum, and maximum plus one.
-- [ ] Add property tests for conservation, undo, replay, and failed-action
+- [x] Implement dot brush behavior.
+- [x] Implement bounded horizontal and vertical line brushes.
+- [x] Implement missing-ink and extra-ink result sets.
+- [x] Implement success and par evaluation.
+- [x] Implement bounded action history, undo, and reset.
+- [x] Define canonical state equality and hashing.
+- [x] Define stable replay actions and compatibility metadata.
+- [x] Implement replay validation and deterministic execution.
+- [x] Define typed operational errors and programmer-error invariants.
+- [x] Add focused unit tests for every public domain transition.
+- [x] Add boundary tests at zero, one, maximum, and maximum plus one.
+- [x] Add property tests for conservation, undo, replay, and failed-action
   immutability.
-- [ ] Make each new regression test fail for the expected reason before the fix
+- [x] Make each new regression test fail for the expected reason before the fix
   is accepted.
-- [ ] Add a bounded domain-action fuzz target.
-- [ ] Review the engine for integer conversion, overflow, allocation, recursion,
+- [x] Add a bounded domain-action fuzz target.
+- [x] Review the engine for integer conversion, overflow, allocation, recursion,
   and panic paths.
-- [ ] Verify identical replay results in debug and release builds.
+- [x] Verify identical replay results in debug and release builds.
+
+Verification record (2026-09-01): `mise run check`, release tests for every
+target, and warning-denied Rust documentation passed on Rust 1.98.0 for Linux
+x86_64. The 26 engine integration tests cover validated construction, every
+fold direction, nested folds to eight layers, dot and line brushes, result
+comparison, scoring, history, keys, replay compatibility, and atomic failures.
+The exhaustive fold property covered all 2,268 board, direction, and crease
+cases from 4 by 4 through 12 by 12; it needs no shrink step because it visits
+the complete bounded range. Eight recorded seeds covered 256 direct actions and
+fresh replay execution. Both property runs completed inside a separate
+30-second review budget. Stable state hashes and replay outcomes matched in
+debug and release profiles.
+
+The fixed fuzz corpus and a 256-byte, 64-operation release run preserved cell,
+layer, atomicity, and replay invariants. A 257-byte input stopped with status 2
+before domain work. The keyboard exercise ran through folds, prediction, exact
+ink comparison, undo, and clean exit using the production puzzle API. It used a
+piped non-TTY with `TERM=xterm-ghostty`, true color available, and `NO_COLOR=1`;
+it wrote no saved state or user files.
+
+The adversarial review covered integer conversions, checked arithmetic,
+allocation retention, recursion, panic paths, error reflection, and replay
+isolation. It changed attempts to own their bounded validated puzzle, normalized
+retained rule, replay, and solver collections to exact-length boxed slices,
+canonicalized order-independent line endpoints, and corrected the memory
+measurement for action-bearing history. A follow-up review bound every replay
+to the exact validated gameplay revision and corrected the snapshot and replay
+size accounting. Dependency policy checks passed and no
+unsafe code, network access, parsing, paths, archives, SQLite, or terminal
+control handling entered this engine surface. Puzzle and replay parsing and
+native macOS and Windows runtime behavior remain later-phase verification
+surfaces.
 
 Exit gate:
 
-- [ ] A validated puzzle can be played entirely through the public domain API,
+- [x] A validated puzzle can be played entirely through the public domain API,
   and every required invariant has focused or property coverage.
 
 ### Phase 4, solver and deterministic generator

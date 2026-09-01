@@ -258,7 +258,7 @@ impl ActionCount {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Coordinate {
     row: Row,
     column: Column,
@@ -471,13 +471,13 @@ impl PhysicalCell {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FoldAxis {
     Vertical,
     Horizontal,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FoldDirection {
     Left,
     Right,
@@ -495,7 +495,7 @@ impl FoldDirection {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Fold {
     direction: FoldDirection,
     crease: u8,
@@ -518,10 +518,104 @@ impl Fold {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum StrokeAxis {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum BrushRule {
+    Dot,
+    Line { axis: StrokeAxis, length: u8 },
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct LineStroke {
+    start: Coordinate,
+    end: Coordinate,
+}
+
+impl LineStroke {
+    /// Creates a line with endpoints in canonical row-major order.
+    #[must_use]
+    pub fn new(start: Coordinate, end: Coordinate) -> Self {
+        if start <= end {
+            Self { start, end }
+        } else {
+            Self {
+                start: end,
+                end: start,
+            }
+        }
+    }
+
+    #[must_use]
+    pub const fn start(self) -> Coordinate {
+        self.start
+    }
+
+    #[must_use]
+    pub const fn end(self) -> Coordinate {
+        self.end
+    }
+
+    /// Returns the canonical axis and inclusive length of this line.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PaperError::LineIsNotAxisAligned`] for a diagonal line and
+    /// [`PaperError::LineIsTooShort`] when both endpoints are the same cell.
+    pub fn axis_and_length(self) -> Result<(StrokeAxis, u8), PaperError> {
+        if self.start.row == self.end.row && self.start.column == self.end.column {
+            return Err(PaperError::LineIsTooShort);
+        }
+        if self.start.row == self.end.row {
+            let length = self.start.column.get().abs_diff(self.end.column.get()) + 1;
+            return Ok((StrokeAxis::Horizontal, length));
+        }
+        if self.start.column == self.end.column {
+            let length = self.start.row.get().abs_diff(self.end.row.get()) + 1;
+            return Ok((StrokeAxis::Vertical, length));
+        }
+        Err(PaperError::LineIsNotAxisAligned {
+            start: self.start,
+            end: self.end,
+        })
+    }
+
+    fn coordinate_at(self, offset: u8) -> Coordinate {
+        let row_start = self.start.row.get().min(self.end.row.get());
+        let column_start = self.start.column.get().min(self.end.column.get());
+        if self.start.row == self.end.row {
+            Coordinate::new(
+                self.start.row,
+                Column::new(
+                    column_start
+                        .checked_add(offset)
+                        .expect("a validated horizontal line must stay in range"),
+                )
+                .expect("a validated horizontal line column must be globally valid"),
+            )
+        } else {
+            Coordinate::new(
+                Row::new(
+                    row_start
+                        .checked_add(offset)
+                        .expect("a validated vertical line must stay in range"),
+                )
+                .expect("a validated vertical line row must be globally valid"),
+                self.start.column,
+            )
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PaperAction {
     Fold(Fold),
     Dot(Coordinate),
+    Line(LineStroke),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -581,7 +675,7 @@ impl PaperBudget {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct InkPattern {
     dimensions: Dimensions,
     words: [u64; INK_WORDS],
@@ -755,6 +849,49 @@ struct Snapshot {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct HistoryEntry {
+    before: Snapshot,
+    action: PaperAction,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct PaperStateKey {
+    dimensions: Dimensions,
+    cells: Box<[PhysicalCell]>,
+    ink: InkPattern,
+    fold_count: FoldCount,
+    stroke_count: StrokeCount,
+}
+
+impl PaperStateKey {
+    /// Returns a stable non-cryptographic hash of the canonical state.
+    ///
+    /// The value is suitable for deterministic solver bookkeeping. Equality
+    /// must still resolve hash collisions.
+    #[must_use]
+    pub fn stable_hash(&self) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        hash_byte(&mut hash, self.dimensions.width.get());
+        hash_byte(&mut hash, self.dimensions.height.get());
+        for cell in &self.cells {
+            hash_byte(&mut hash, cell.coordinate.row.get());
+            hash_byte(&mut hash, cell.coordinate.column.get());
+            hash_byte(&mut hash, cell.layer.get());
+            hash_byte(&mut hash, face_code(cell.face));
+            hash_byte(&mut hash, orientation_code(cell.orientation));
+        }
+        for word in self.ink.words {
+            for byte in word.to_le_bytes() {
+                hash_byte(&mut hash, byte);
+            }
+        }
+        hash_byte(&mut hash, self.fold_count.get());
+        hash_byte(&mut hash, self.stroke_count.get());
+        hash
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Paper {
     dimensions: Dimensions,
     budget: PaperBudget,
@@ -763,7 +900,7 @@ pub struct Paper {
     fold_count: FoldCount,
     stroke_count: StrokeCount,
     action_count: ActionCount,
-    history: Vec<Snapshot>,
+    history: Vec<HistoryEntry>,
 }
 
 impl Paper {
@@ -840,6 +977,21 @@ impl Paper {
         self.ink
     }
 
+    #[must_use]
+    pub fn state_key(&self) -> PaperStateKey {
+        PaperStateKey {
+            dimensions: self.dimensions,
+            cells: self.cells.clone().into_boxed_slice(),
+            ink: self.ink,
+            fold_count: self.fold_count,
+            stroke_count: self.stroke_count,
+        }
+    }
+
+    pub fn actions(&self) -> impl Iterator<Item = PaperAction> + '_ {
+        self.history.iter().map(|entry| entry.action)
+    }
+
     pub fn cell_ids(&self) -> impl Iterator<Item = CellId> + '_ {
         (0..self.cells.len()).map(CellId::from_index)
     }
@@ -908,10 +1060,11 @@ impl Paper {
         match action {
             PaperAction::Fold(fold) => self.fold(fold),
             PaperAction::Dot(coordinate) => self.stamp_dot(coordinate),
+            PaperAction::Line(line) => self.stamp_line(line),
         }
     }
 
-    /// Applies one centered vertical or horizontal half-fold.
+    /// Applies one vertical or horizontal fold on a cell boundary.
     ///
     /// # Errors
     ///
@@ -929,7 +1082,7 @@ impl Paper {
             FoldAxis::Vertical => self.dimensions.width.get(),
             FoldAxis::Horizontal => self.dimensions.height.get(),
         };
-        validate_half_crease(axis, fold.crease, extent)?;
+        validate_crease(axis, fold.crease, extent)?;
         self.validate_fold_budget()?;
 
         let mut stationary_counts = [0_u8; MAX_PHYSICAL_CELLS];
@@ -942,7 +1095,7 @@ impl Paper {
                 moving_cell_count = moving_cell_count
                     .checked_add(1)
                     .expect("the bounded cell count must not overflow");
-                reflected_coordinate(cell.coordinate, fold, self.dimensions)
+                reflected_coordinate(cell.coordinate, fold, self.dimensions)?
             } else {
                 cell.coordinate
             };
@@ -964,13 +1117,14 @@ impl Paper {
             });
         }
 
-        self.remember();
+        self.remember(PaperAction::Fold(fold));
         for cell in &mut self.cells {
             if !is_on_moving_side(cell.coordinate, fold) {
                 continue;
             }
 
-            let destination = reflected_coordinate(cell.coordinate, fold, self.dimensions);
+            let destination = reflected_coordinate(cell.coordinate, fold, self.dimensions)
+                .expect("a fold validated before mutation must stay inside the paper");
             let destination_index = self.dimensions.coordinate_index(destination);
             let reversed_layer = moving_counts[destination_index]
                 .checked_sub(1)
@@ -1013,10 +1167,45 @@ impl Paper {
             return Err(PaperError::EmptyBrushPosition { coordinate });
         }
 
-        self.remember();
+        self.remember(PaperAction::Dot(coordinate));
         for &cell_id in stack.cell_ids() {
             self.ink.insert(cell_id);
         }
+        self.stroke_count = self.stroke_count.increment();
+        self.action_count = self.action_count.increment();
+        self.assert_invariants();
+        Ok(())
+    }
+
+    /// Applies one inclusive horizontal or vertical line through occupied stacks.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed operational error without mutation when the line is
+    /// diagonal, shorter than two cells, outside the paper, crosses an empty
+    /// position, or exceeds a budget.
+    pub fn stamp_line(&mut self, line: LineStroke) -> Result<(), PaperError> {
+        self.assert_invariants();
+        self.dimensions.validate_coordinate(line.start)?;
+        self.dimensions.validate_coordinate(line.end)?;
+        self.validate_stroke_budget()?;
+        let (_, length) = line.axis_and_length()?;
+
+        let mut ink = self.ink;
+        let mut stack = StackView::new();
+        for offset in 0..length {
+            let coordinate = line.coordinate_at(offset);
+            self.stack_at(coordinate, &mut stack)?;
+            if stack.is_empty() {
+                return Err(PaperError::EmptyBrushPosition { coordinate });
+            }
+            for &cell_id in stack.cell_ids() {
+                ink.insert(cell_id);
+            }
+        }
+
+        self.remember(PaperAction::Line(line));
+        self.ink = ink;
         self.stroke_count = self.stroke_count.increment();
         self.action_count = self.action_count.increment();
         self.assert_invariants();
@@ -1056,16 +1245,33 @@ impl Paper {
     /// conservation, identity, or total layer order.
     pub fn undo(&mut self) -> Result<(), PaperError> {
         self.assert_invariants();
-        let Some(snapshot) = self.history.pop() else {
+        let Some(entry) = self.history.pop() else {
             return Err(PaperError::NothingToUndo);
         };
-        self.cells = snapshot.cells;
-        self.ink = snapshot.ink;
-        self.fold_count = snapshot.fold_count;
-        self.stroke_count = snapshot.stroke_count;
-        self.action_count = snapshot.action_count;
+        self.cells = entry.before.cells;
+        self.ink = entry.before.ink;
+        self.fold_count = entry.before.fold_count;
+        self.stroke_count = entry.before.stroke_count;
+        self.action_count = entry.before.action_count;
         self.assert_invariants();
         Ok(())
+    }
+
+    /// Restores the fresh uninked paper and clears successful action history.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the paper's already validated dimensions or budgets have
+    /// become invalid, which is a programmer-error invariant.
+    pub fn reset(&mut self) {
+        let spec = PaperSpec::new(
+            self.dimensions.width.get(),
+            self.dimensions.height.get(),
+            self.budget.folds.get(),
+            self.budget.strokes.get(),
+            self.budget.actions.get(),
+        );
+        *self = Self::new(spec).expect("canonical paper settings must remain valid");
     }
 
     fn validate_fold_budget(&self) -> Result<(), PaperError> {
@@ -1095,14 +1301,17 @@ impl Paper {
         Ok(())
     }
 
-    fn remember(&mut self) {
+    fn remember(&mut self, action: PaperAction) {
         assert!(self.history.len() < usize::from(self.budget.actions.get()));
-        self.history.push(Snapshot {
-            cells: self.cells.clone(),
-            ink: self.ink,
-            fold_count: self.fold_count,
-            stroke_count: self.stroke_count,
-            action_count: self.action_count,
+        self.history.push(HistoryEntry {
+            before: Snapshot {
+                cells: self.cells.clone(),
+                ink: self.ink,
+                fold_count: self.fold_count,
+                stroke_count: self.stroke_count,
+                action_count: self.action_count,
+            },
+            action,
         });
     }
 
@@ -1157,16 +1366,9 @@ fn bit_location(cell_id: CellId) -> (usize, u64) {
     (word, 1_u64 << bit)
 }
 
-fn validate_half_crease(axis: FoldAxis, crease: u8, extent: u8) -> Result<(), PaperError> {
+fn validate_crease(axis: FoldAxis, crease: u8, extent: u8) -> Result<(), PaperError> {
     if crease == 0 || crease >= extent {
         return Err(PaperError::CreaseOutsidePaper {
-            axis,
-            crease,
-            extent,
-        });
-    }
-    if !extent.is_multiple_of(2) || crease != extent / 2 {
-        return Err(PaperError::CreaseIsNotHalfFold {
             axis,
             crease,
             extent,
@@ -1184,29 +1386,75 @@ fn is_on_moving_side(coordinate: Coordinate, fold: Fold) -> bool {
     }
 }
 
-fn reflected_coordinate(coordinate: Coordinate, fold: Fold, dimensions: Dimensions) -> Coordinate {
+fn reflected_coordinate(
+    coordinate: Coordinate,
+    fold: Fold,
+    dimensions: Dimensions,
+) -> Result<Coordinate, PaperError> {
     match fold.direction.axis() {
         FoldAxis::Vertical => {
-            let column = reflect_index(coordinate.column.get(), fold.crease);
-            dimensions
-                .coordinate(coordinate.row.get(), column)
-                .expect("a validated vertical half-fold must stay inside the paper")
+            let column = reflect_index(
+                coordinate.column.get(),
+                fold.crease,
+                dimensions.width.get(),
+                fold.direction,
+            )?;
+            dimensions.coordinate(coordinate.row.get(), column)
         }
         FoldAxis::Horizontal => {
-            let row = reflect_index(coordinate.row.get(), fold.crease);
-            dimensions
-                .coordinate(row, coordinate.column.get())
-                .expect("a validated horizontal half-fold must stay inside the paper")
+            let row = reflect_index(
+                coordinate.row.get(),
+                fold.crease,
+                dimensions.height.get(),
+                fold.direction,
+            )?;
+            dimensions.coordinate(row, coordinate.column.get())
         }
     }
 }
 
-fn reflect_index(index: u8, crease: u8) -> u8 {
-    let doubled_crease = usize::from(crease) * 2;
-    let reflected = doubled_crease
-        .checked_sub(1 + usize::from(index))
-        .expect("a half-fold reflection must not cross the working-area origin");
-    u8::try_from(reflected).expect("a reflected coordinate must fit in u8")
+fn reflect_index(
+    index: u8,
+    crease: u8,
+    extent: u8,
+    direction: FoldDirection,
+) -> Result<u8, PaperError> {
+    let reflected = i16::from(crease) * 2 - 1 - i16::from(index);
+    if reflected < 0 || reflected >= i16::from(extent) {
+        return Err(PaperError::FoldLeavesPaper {
+            direction,
+            crease,
+            index,
+            extent,
+        });
+    }
+    u8::try_from(reflected).map_err(|_| PaperError::FoldLeavesPaper {
+        direction,
+        crease,
+        index,
+        extent,
+    })
+}
+
+fn hash_byte(hash: &mut u64, byte: u8) {
+    *hash ^= u64::from(byte);
+    *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+}
+
+const fn face_code(face: Face) -> u8 {
+    match face {
+        Face::Front => 0,
+        Face::Back => 1,
+    }
+}
+
+const fn orientation_code(orientation: Orientation) -> u8 {
+    match orientation {
+        Orientation::North => 0,
+        Orientation::East => 1,
+        Orientation::South => 2,
+        Orientation::West => 3,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1253,9 +1501,10 @@ pub enum PaperError {
         crease: u8,
         extent: u8,
     },
-    CreaseIsNotHalfFold {
-        axis: FoldAxis,
+    FoldLeavesPaper {
+        direction: FoldDirection,
         crease: u8,
+        index: u8,
         extent: u8,
     },
     EmptyMovingSide {
@@ -1273,6 +1522,11 @@ pub enum PaperError {
     EmptyBrushPosition {
         coordinate: Coordinate,
     },
+    LineIsTooShort,
+    LineIsNotAxisAligned {
+        start: Coordinate,
+        end: Coordinate,
+    },
     TargetDimensionsDiffer {
         paper: Dimensions,
         target: Dimensions,
@@ -1281,6 +1535,7 @@ pub enum PaperError {
 }
 
 impl fmt::Display for PaperError {
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CellIdOutOfRange { value } => {
@@ -1337,13 +1592,14 @@ impl fmt::Display for PaperError {
                 formatter,
                 "{axis} crease {crease} is outside the paper extent {extent}"
             ),
-            Self::CreaseIsNotHalfFold {
-                axis,
+            Self::FoldLeavesPaper {
+                direction,
                 crease,
+                index,
                 extent,
             } => write!(
                 formatter,
-                "{axis} crease {crease} does not divide extent {extent} in half"
+                "the {direction} fold at crease {crease} reflects index {index} outside extent {extent}"
             ),
             Self::EmptyMovingSide { direction } => {
                 write!(
@@ -1371,6 +1627,17 @@ impl fmt::Display for PaperError {
                 "cannot stamp empty position ({}, {})",
                 coordinate.row.get(),
                 coordinate.column.get()
+            ),
+            Self::LineIsTooShort => {
+                formatter.write_str("a line brush must cover at least two positions")
+            }
+            Self::LineIsNotAxisAligned { start, end } => write!(
+                formatter,
+                "line endpoints ({}, {}) and ({}, {}) are not horizontally or vertically aligned",
+                start.row.get(),
+                start.column.get(),
+                end.row.get(),
+                end.column.get()
             ),
             Self::TargetDimensionsDiffer { paper, target } => write!(
                 formatter,
@@ -1403,6 +1670,24 @@ impl fmt::Display for FoldDirection {
             Self::Right => formatter.write_str("right"),
             Self::Up => formatter.write_str("up"),
             Self::Down => formatter.write_str("down"),
+        }
+    }
+}
+
+impl fmt::Display for StrokeAxis {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Horizontal => formatter.write_str("horizontal"),
+            Self::Vertical => formatter.write_str("vertical"),
+        }
+    }
+}
+
+impl fmt::Display for BrushRule {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Dot => formatter.write_str("dot"),
+            Self::Line { axis, length } => write!(formatter, "{length}-cell {axis} line"),
         }
     }
 }

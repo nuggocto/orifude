@@ -2,16 +2,16 @@ use std::fmt::Write as FmtWrite;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 
+use orifude::domain::attempt::Attempt;
 use orifude::domain::paper::{
-    CellId, Coordinate, Fold, FoldDirection, InkPattern, MAX_PHYSICAL_CELLS, Paper, PaperError,
-    PaperSpec, StackView,
+    BrushRule, CellId, Coordinate, Fold, FoldDirection, MAX_PHYSICAL_CELLS, StackView,
 };
+use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 
 const MAX_MENU_ATTEMPTS_PER_RUN: usize = 12;
 const MAX_INPUT_BYTES: usize = 16;
 const MAX_STACK_TEXT_BYTES: usize = MAX_PHYSICAL_CELLS * 4 + 1;
 const WALKTHROUGH_ROW_COUNT: u8 = 2;
-const PAPER_SPEC: PaperSpec = PaperSpec::new(4, 4, 4, 2, 6);
 
 const LEFT: Fold = Fold::new(FoldDirection::Left, 2);
 const RIGHT: Fold = Fold::new(FoldDirection::Right, 2);
@@ -144,7 +144,15 @@ fn run(input: &mut impl Read, output: &mut impl Write) -> io::Result<()> {
 }
 
 fn render_walkthrough(output: &mut impl Write) -> io::Result<()> {
-    let mut paper = Paper::new(PAPER_SPEC).map_err(domain_error)?;
+    let puzzle = Puzzle::new(
+        PuzzleSpec::new(puzzle_identity("walkthrough")?, 4, 4)
+            .with_target_cells(expected_cell_ids(&[5, 6])?)
+            .with_allowed_folds(vec![LEFT])
+            .with_allowed_brushes(vec![BrushRule::Dot])
+            .with_budgets(1, 1),
+    )
+    .map_err(domain_error)?;
+    let mut paper = puzzle.start();
 
     writeln!(
         output,
@@ -204,7 +212,7 @@ fn render_walkthrough(output: &mut impl Write) -> io::Result<()> {
 }
 
 fn render_walkthrough_rows(
-    paper: &Paper,
+    paper: &Attempt,
     crease: Option<u8>,
     output: &mut impl Write,
 ) -> io::Result<()> {
@@ -244,14 +252,13 @@ fn run_exercise(
     input: &mut impl Read,
     output: &mut impl Write,
 ) -> io::Result<bool> {
-    let mut paper = Paper::new(PAPER_SPEC).map_err(domain_error)?;
+    let puzzle = exercise_puzzle(exercise)?;
+    let mut paper = puzzle.start();
     let focus = paper
         .dimensions()
         .coordinate(exercise.focus_row, exercise.focus_column)
         .map_err(domain_error)?;
     let expected_ids = expected_cell_ids(exercise.expected_stack)?;
-    let target =
-        InkPattern::from_cell_ids(paper.dimensions(), &expected_ids).map_err(domain_error)?;
 
     writeln!(output, "\n{}", exercise.name)?;
     render_paper(&paper, output)?;
@@ -319,8 +326,7 @@ fn run_exercise(
     }
 
     paper.stamp_dot(focus).map_err(domain_error)?;
-    let comparison = paper.compare_ink(target).map_err(domain_error)?;
-    if !comparison.is_exact() {
+    if !paper.result().is_success() {
         return Err(io::Error::other(
             "the exercise dot did not produce its reviewed target",
         ));
@@ -339,7 +345,7 @@ fn run_exercise(
     Ok(true)
 }
 
-fn render_paper(paper: &Paper, output: &mut impl Write) -> io::Result<()> {
+fn render_paper(paper: &Attempt, output: &mut impl Write) -> io::Result<()> {
     let dimensions = paper.dimensions();
     let mut stack = StackView::new();
     for row in 0..dimensions.height().get() {
@@ -373,7 +379,7 @@ fn stack_text(stack: &StackView) -> String {
     text
 }
 
-fn stack_at(paper: &Paper, coordinate: Coordinate) -> io::Result<Vec<CellId>> {
+fn stack_at(paper: &Attempt, coordinate: Coordinate) -> io::Result<Vec<CellId>> {
     let mut stack = StackView::new();
     paper
         .stack_at(coordinate, &mut stack)
@@ -389,6 +395,23 @@ fn expected_cell_ids(values: &[u8]) -> io::Result<Vec<CellId>> {
         .iter()
         .map(|&value| CellId::new(value).map_err(domain_error))
         .collect()
+}
+
+fn exercise_puzzle(exercise: Exercise) -> io::Result<Puzzle> {
+    let fold_budget =
+        u8::try_from(exercise.folds.len()).expect("the fixed exercise fold count must fit in u8");
+    Puzzle::new(
+        PuzzleSpec::new(puzzle_identity("paper-exercise")?, 4, 4)
+            .with_target_cells(expected_cell_ids(exercise.expected_stack)?)
+            .with_allowed_folds(exercise.folds.to_vec())
+            .with_allowed_brushes(vec![BrushRule::Dot])
+            .with_budgets(fold_budget, 1),
+    )
+    .map_err(domain_error)
+}
+
+fn puzzle_identity(puzzle_id: &str) -> io::Result<PuzzleIdentity> {
+    PuzzleIdentity::new("internal", puzzle_id).map_err(domain_error)
 }
 
 fn parse_cell_id(input: &BoundedInput) -> Option<CellId> {
@@ -443,7 +466,7 @@ fn write_input_too_long(output: &mut impl Write) -> io::Result<()> {
     )
 }
 
-fn domain_error(error: PaperError) -> io::Error {
+fn domain_error(error: impl std::error::Error + Send + Sync + 'static) -> io::Error {
     io::Error::other(error)
 }
 
@@ -456,7 +479,8 @@ mod tests {
         assert_eq!(EXERCISES.len(), 6);
 
         for exercise in EXERCISES {
-            let mut paper = Paper::new(PAPER_SPEC).expect("the paper should be valid");
+            let puzzle = exercise_puzzle(exercise).expect("the exercise puzzle should be valid");
+            let mut paper = puzzle.start();
             for &fold in exercise.folds {
                 paper.fold(fold).expect("the exercise fold should be valid");
             }

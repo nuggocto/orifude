@@ -34,6 +34,15 @@ intentionally not included.
 - Added a model-driven walkthrough that shows a crease, the folded stack order,
   ink passing through both layers, and how to enter the predicted top cell
   before the player makes a prediction.
+- Added validated puzzle identities, targets, allowed actions, budgets, and par
+  as the construction boundary for playable paper.
+- Added every bounded horizontal and vertical fold, dot and line brushes,
+  atomic action rejection, reset, result scoring, and exact state keys.
+- Added versioned bounded replays that bind to the exact validated gameplay
+  revision, execute on fresh paper, and report failures without exposing
+  partial state.
+- Added exhaustive crease properties, fixed-seed action properties, and a
+  dependency-free bounded domain-action fuzz harness.
 - Added concise play instructions to the README.
 
 ### Changed
@@ -44,6 +53,7 @@ intentionally not included.
   earlier protected-branch verification as dated history.
 - Chose dense physical-cell storage and complete snapshots after measuring the
   rejected map-based representation and the maximum paper bounds.
+- Moved the plain-text paper exercise onto the validated production domain API.
 
 ### Fixed
 

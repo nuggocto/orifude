@@ -5,10 +5,12 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use orifude::domain::paper::{
-    ActionCount, CellId, Dimensions, Face, Fold, FoldAxis, FoldCount, FoldDirection, InkPattern,
-    MAX_ACTIONS, MAX_FOLD_ACTIONS, MAX_PHYSICAL_CELLS, MAX_STROKE_ACTIONS, Orientation, Paper,
-    PaperAction, PaperSpec, PhysicalCell, StackView, StrokeCount,
+    ActionCount, BrushRule, CellId, Dimensions, Face, Fold, FoldAxis, FoldCount, FoldDirection,
+    InkPattern, MAX_ACTIONS, MAX_FOLD_ACTIONS, MAX_PHYSICAL_CELLS, MAX_STROKE_ACTIONS, Orientation,
+    Paper, PaperAction, PaperSpec, PaperStateKey, PhysicalCell, StackView, StrokeCount,
 };
+use orifude::domain::puzzle::{MAX_ALLOWED_FOLDS, MAX_BRUSH_RULES, MAX_ID_BYTES};
+use orifude::domain::replay::Replay;
 
 const SAMPLE_COUNT: usize = 25;
 const CLONE_ITERATIONS: usize = 2_000;
@@ -274,16 +276,20 @@ fn main() -> ExitCode {
 fn print_size_estimates(dense: &Paper, mapped: &CoordinateMapPaper) {
     let cell_count = dense.dimensions().cell_count();
     let dense_cell_payload = cell_count * size_of::<PhysicalCell>();
-    let canonical_state_lower_bound = size_of::<Vec<PhysicalCell>>()
+    let snapshot_lower_bound = size_of::<Vec<PhysicalCell>>()
         + dense_cell_payload
         + size_of::<InkPattern>()
-        + size_of::<Dimensions>()
         + size_of::<FoldCount>()
         + size_of::<StrokeCount>()
         + size_of::<ActionCount>();
-    let replay_lower_bound =
-        size_of::<Vec<PaperAction>>() + MAX_ACTIONS as usize * size_of::<PaperAction>();
-    let history_lower_bound = MAX_ACTIONS as usize * canonical_state_lower_bound;
+    let solver_key_lower_bound = size_of::<PaperStateKey>() + dense_cell_payload;
+    let action_size = size_of::<PaperAction>();
+    let replay_lower_bound = size_of::<Replay>()
+        + MAX_ACTIONS as usize * action_size
+        + MAX_ID_BYTES * 2
+        + MAX_ALLOWED_FOLDS * size_of::<Fold>()
+        + MAX_BRUSH_RULES * size_of::<BrushRule>();
+    let history_lower_bound = MAX_ACTIONS as usize * (snapshot_lower_bound + action_size);
 
     println!("Paper representation sizes on this target:");
     println!(
@@ -291,10 +297,11 @@ fn print_size_estimates(dense: &Paper, mapped: &CoordinateMapPaper) {
         size_of::<PhysicalCell>()
     );
     println!("  dense 144-cell payload:        {dense_cell_payload:>8} bytes");
-    println!("  canonical state lower bound:   {canonical_state_lower_bound:>8} bytes");
-    println!("  solver candidate lower bound:  {canonical_state_lower_bound:>8} bytes");
-    println!("  64-action replay lower bound:  {replay_lower_bound:>8} bytes");
-    println!("  64 complete snapshots:         {history_lower_bound:>8} bytes");
+    println!("  snapshot named payloads:       {snapshot_lower_bound:>8} bytes");
+    println!("  solver state key lower bound:  {solver_key_lower_bound:>8} bytes");
+    println!("  replay action value:           {action_size:>8} bytes");
+    println!("  maximum 64-action replay:      {replay_lower_bound:>8} bytes");
+    println!("  64 history entries:            {history_lower_bound:>8} bytes");
     println!(
         "  coordinate-map lower bound:    {:>8} bytes",
         mapped.heap_payload_lower_bound()

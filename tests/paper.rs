@@ -381,9 +381,10 @@ fn invalid_folds_and_exhausted_budgets_leave_state_unchanged() {
         ),
         (
             Fold::new(FoldDirection::Left, 1),
-            PaperError::CreaseIsNotHalfFold {
-                axis: FoldAxis::Vertical,
+            PaperError::FoldLeavesPaper {
+                direction: FoldDirection::Left,
                 crease: 1,
+                index: 2,
                 extent: 4,
             },
         ),
@@ -446,9 +447,10 @@ fn invalid_folds_and_exhausted_budgets_leave_state_unchanged() {
     let before_odd_fold = odd_width.clone();
     assert_eq!(
         odd_width.fold(Fold::new(FoldDirection::Left, 2)),
-        Err(PaperError::CreaseIsNotHalfFold {
-            axis: FoldAxis::Vertical,
+        Err(PaperError::FoldLeavesPaper {
+            direction: FoldDirection::Left,
             crease: 2,
+            index: 4,
             extent: 5,
         })
     );
