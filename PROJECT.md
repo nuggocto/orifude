@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 1, repository foundation**
-- Current checklist item: **Add `rust-toolchain.toml` pinning Rust `1.98.0`
-  with the minimal profile, `rustfmt`, and `clippy`.**
+- Current phase: **Phase 2, paper model and rule prototype**
+- Current checklist item: **Define newtypes for physical cell ID, row, column,
+  width, height, layer, fold count, stroke count, and action count.**
 - Last updated: **2026-09-01**
 
 Checkbox rules:
@@ -1111,49 +1111,57 @@ Exit gate:
 Goal: create a reproducible Rust application base with strict local and CI
 checks before domain code arrives.
 
-- [ ] Add `rust-toolchain.toml` pinning Rust `1.98.0` with the minimal profile,
+- [x] Add `rust-toolchain.toml` pinning Rust `1.98.0` with the minimal profile,
   `rustfmt`, and `clippy`.
-- [ ] Declare `rust-version = "1.98"` in `Cargo.toml` and verify it remains the
+- [x] Declare `rust-version = "1.98"` in `Cargo.toml` and verify it remains the
   intended minimum compiler version.
-- [ ] Confirm Rust edition 2024 and the matching Cargo resolver behavior.
-- [ ] Encode the approved operating-system, architecture, minimum-version, and
+- [x] Confirm Rust edition 2024 and the matching Cargo resolver behavior.
+- [x] Encode the approved operating-system, architecture, minimum-version, and
   Rust target matrix in build and test configuration.
-- [ ] Add `.gitattributes` with explicit text, binary, and cross-platform
+- [x] Add `.gitattributes` with explicit text, binary, and cross-platform
   line-ending rules.
-- [ ] Commit `Cargo.lock` and document the lockfile policy.
-- [ ] Add project metadata, license metadata, repository URL, and binary target
+- [x] Commit `Cargo.lock` and document the lockfile policy.
+- [x] Add project metadata, license metadata, repository URL, and binary target
   to `Cargo.toml`.
-- [ ] Add strict but practical Rust and Clippy lint policy.
-- [ ] Deny unsafe code at the crate boundary.
-- [ ] Define debug, test, and release profile choices, including overflow and
+- [x] Add strict but practical Rust and Clippy lint policy.
+- [x] Deny unsafe code at the crate boundary.
+- [x] Define debug, test, and release profile choices, including overflow and
   panic behavior.
-- [ ] Establish the single-package module layout without empty abstraction
+- [x] Establish the single-package module layout without empty abstraction
   layers.
-- [ ] Add typed top-level error handling and stable exit statuses.
-- [ ] Add `--help` and `--version` behavior.
-- [ ] Add formatter, Clippy, test, doctest, and locked build commands.
-- [ ] Add `mise.toml` as the command interface and compose the full local check
+- [x] Add typed top-level error handling and stable exit statuses.
+- [x] Add `--help` and `--version` behavior.
+- [x] Add formatter, Clippy, test, doctest, and locked build commands.
+- [x] Add `mise.toml` as the command interface and compose the full local check
   from small reusable tasks.
-- [ ] Add bounded dependency license and advisory checks through
+- [x] Add bounded dependency license and advisory checks through
   `mise run audit`.
-- [ ] Add ordinary CI that runs `mise run check` on Linux x86_64 for every pull
+- [x] Add ordinary CI that runs `mise run check` on Linux x86_64 for every pull
   request and push to `shrek`.
-- [ ] Give ordinary CI read-only permissions, no publication secrets, bounded
+- [x] Give ordinary CI read-only permissions, no publication secrets, bounded
   job timeouts, and concurrency cancellation for superseded runs.
-- [ ] Pin third-party CI actions to reviewed immutable revisions.
-- [ ] Pin the mise release installed by CI and document the supported local
+- [x] Pin third-party CI actions to reviewed immutable revisions.
+- [x] Pin the mise release installed by CI and document the supported local
   mise version.
-- [ ] Confirm `shrek` remains the GitHub default branch and require ordinary CI
+- [x] Confirm `shrek` remains the GitHub default branch and require ordinary CI
   before merge.
-- [ ] Measure ordinary CI before adding any cross-run build cache.
-- [ ] Document rustup, mise, supported local tools, and the mise commands.
-- [ ] Replace the placeholder README with the current product description and
+- [x] Measure ordinary CI before adding any cross-run build cache.
+- [x] Document rustup, mise, supported local tools, and the mise commands.
+- [x] Replace the placeholder README with the current product description and
   development commands.
-- [ ] Verify a clean checkout without relying on undeclared global state.
+- [x] Verify a clean checkout without relying on undeclared global state.
+
+Verification record (2026-09-01): signed commit `cdc2b22` passed task
+validation and `mise run check` locally and from a fresh clone with isolated
+Rust, Cargo, mise, and cache directories. The first cache-free GitHub Actions
+run completed its `ubuntu-24.04` `check` job in 15 seconds; tool installation
+took about 10 seconds and the repository check took about 1.5 seconds. `shrek`
+remains the default branch, requires the strict GitHub Actions `check`, and
+disallows force-pushes and deletion.
 
 Exit gate:
 
-- [ ] A clean checkout formats, lints, tests, and builds with the declared
+- [x] A clean checkout formats, lints, tests, and builds with the declared
   toolchain and locked dependencies.
 
 ### Phase 2, paper model and rule prototype
