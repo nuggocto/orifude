@@ -14,6 +14,8 @@
 mod cli;
 pub mod domain;
 mod error;
+pub mod generator;
+pub mod solver;
 
 pub use cli::{ExitStatus, run};
 pub use error::{OutputError, OutputStream};

@@ -44,6 +44,10 @@ run = "cargo run --quiet --locked --example paper"
 description = "Measure the paper representations in a release build"
 run = "cargo run --quiet --locked --release --example paper_measure"
 
+[tasks.solver-measure]
+description = "Measure bounded solver search in a release build"
+run = "cargo run --quiet --locked --release --example solver_measure"
+
 [tasks.domain-fuzz]
 description = "Run the bounded domain-action fuzz harness"
 run = "cargo run --quiet --locked --release --example domain_actions_fuzz"

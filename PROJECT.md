@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 4, solver and deterministic generator**
-- Current checklist item: **Define the solver input, result, cancellation,
-  limit, and exhaustion contracts.**
+- Current phase: **Phase 5, persistence and local packs**
+- Current checklist item: **Choose and document platform-specific data,
+  config, and cache paths.**
 - Last updated: **2026-09-01**
 
 Checkbox rules:
@@ -1473,35 +1473,128 @@ Exit gate:
 Goal: validate authored puzzles, find bounded solutions, and generate daily and
 endless puzzles without unbounded search.
 
-- [ ] Define the solver input, result, cancellation, limit, and exhaustion
+Implementation record (2026-09-01):
+
+- The solver uses deterministic uniform-cost search. Its priority queue compares
+  the same typed `Score` as the game, so folds come first and strokes break ties
+  inside one fold count. A serial insertion number resolves equal scores. This
+  is Dijkstra search without a heuristic, chosen because the action depth is at
+  most 20 and measurements did not justify a puzzle-specific heuristic.
+- Each visited entry owns the exact `PaperStateKey`, including dimensions,
+  physical-cell placement, layer, face, orientation, ink, fold count, and stroke
+  count. A separate compact node stores only its parent, action, depth, and
+  score cost. Search restores one reusable attempt by replaying that parent path
+  through production actions. It never stores a complete `Attempt` in every
+  frontier entry.
+- A `HashSet` answers membership but is never traversed. Queue insertion order,
+  the canonical puzzle rules, and row-major action enumeration therefore
+  determine output even though the standard hash table chooses a private hash
+  seed. Cancellation is checked before setup, at every frontier pop, and before
+  every candidate transition. One restore between checks contains at most 20
+  bounded production actions.
+- Visited states stop at 250,000, retained solver work stops at 128 MiB, and
+  depth stops at the smaller of the caller limit and puzzle budgets. The memory
+  check includes fixed setup, canonical key payloads, parent nodes, frontier
+  entries, collection overhead, and a 512-byte per-state safety margin. On the
+  measured 64-bit target, a maximum-paper state is charged 1,312 bytes, so the
+  memory limit normally arrives before the numerical visited-state limit.
+- Version 1 generation uses SplitMix64 wrapping arithmetic and multiply-high
+  bounded index mapping. Daily seed text is exactly
+  `orifude:1:YYYY-MM-DD`, hashed with FNV-1a into the versioned seed. The caller
+  supplies a validated Gregorian date; generation never reads a clock.
+- Candidate construction starts with a legal fold, uses a bounded configured
+  action count, and finishes with ink. Successful production actions guarantee
+  that built candidates are non-empty, initially unsolved, and within budget;
+  those conditions are programmer-error assertions rather than retryable
+  rejection states. Duplicate and trivial targets are rejected normally. The
+  source action sequence is a solution witness, so a solver `Unsolved` result is
+  also an invariant failure.
+- Solver exhaustion rejects only the current candidate. Generation records the
+  reason and tries the next candidate until the generation attempt limit is
+  reached. Every accepted target passes `Puzzle::new`, receives the solver score
+  as par, and replays the returned solution against that final exact puzzle
+  revision.
+- Generation performs at most 512 candidate attempts. Exhausted and cancelled
+  results retain the exact versioned seed and counters needed to reproduce the
+  run. Compatibility dispatch keeps the version 1 date and random path intact
+  when a later generator is introduced. A fixed daily golden covers the seed,
+  target cell IDs, selected actions, puzzle ID, and candidate number.
+
+Release measurements ran on an AMD Ryzen AI Max+ 395, x86_64 Arch Linux, and
+Rust 1.98.0. Five release processes each collected 25 sample blocks through
+`mise run solver-measure`. These are directional measurements, not portable
+latency promises:
+
+| Representative solver work | Visited states | Checked actions | Median range |
+| --- | ---: | ---: | ---: |
+| One dot | 2 | 16 | 4.61 to 4.90 microseconds |
+| One fold and one dot | 7 | 68 | 14.25 to 14.65 microseconds |
+| Small unsolved target | 3 | 16 | 5.01 to 5.19 microseconds |
+| Two-axis four-layer target | 35 | 798 | 180.87 to 184.30 microseconds |
+
+The maximum-paper canonical key has a 776-byte named-payload lower bound. A
+256-key `HashSet` lookup took 1.495 to 1.502 microseconds per membership across
+the five process medians; a linear vector lookup took 11.682 to 11.809
+microseconds. Hash storage used 209,408 named bytes versus 198,656 for the
+vector, excluding hash control bytes and allocator bookkeeping. The selected
+1,312-byte conservative state charge is about one thirteenth of the 16,750-byte
+named-payload lower bound for cloning a maximum-rule `Attempt` with 20 history
+entries. Replaying a 20-action parent path took 18.726 to 18.989 microseconds
+versus 0.339 to 0.347 microseconds for cloning that complete attempt. The
+selected representation spends bounded CPU to avoid multiplying full puzzle,
+paper, and history ownership across the frontier.
+
+Generation remains unsuitable for fold-free teaching puzzles, authored visual
+compositions, story pacing, puzzles that require a unique solution, and broad
+or deep rule sets that exhaust the solver. Line-heavy folded layouts can also
+reject many candidates because a valid line may not cross an empty position.
+Those classes remain handcrafted or require a later measured generator policy;
+the bounded generator does not keep trying until a pleasing result appears.
+
+- [x] Define the solver input, result, cancellation, limit, and exhaustion
   contracts.
-- [ ] Choose breadth-first, A-star, or another iterative search using measured
+- [x] Choose breadth-first, A-star, or another iterative search using measured
   state behavior rather than fashion.
-- [ ] Define a canonical search key that does not merge distinct meaningful
+- [x] Define a canonical search key that does not merge distinct meaningful
   states.
-- [ ] Compare visited-set and frontier representations using total bytes per
+- [x] Compare visited-set and frontier representations using total bytes per
   entry, lookup cost, deterministic traversal, and cancellation behavior.
-- [ ] Enforce visited-state, memory, depth, and cancellation bounds.
-- [ ] Return solved, unsolved, exhausted, cancelled, and invalid distinctly.
-- [ ] Verify solver results by replaying them through the production engine.
-- [ ] Build a tiny brute-force reference for differential tests on small boards.
-- [ ] Add deterministic solver tests for shortest known solutions.
-- [ ] Add tests for bound exhaustion and cancellation.
-- [ ] Define a versioned stable seed and random generator policy.
-- [ ] Generate candidates from bounded valid action sequences.
-- [ ] Reject empty, already-solved, trivial, duplicate, and over-budget targets.
-- [ ] Run every candidate through the production validator and solver.
-- [ ] Enforce the generator attempt limit and report reproducible failure seeds.
-- [ ] Implement date injection for daily generation without reading time inside
+- [x] Enforce visited-state, memory, depth, and cancellation bounds.
+- [x] Return solved, unsolved, exhausted, cancelled, and invalid distinctly.
+- [x] Verify solver results by replaying them through the production engine.
+- [x] Build a tiny brute-force reference for differential tests on small boards.
+- [x] Add deterministic solver tests for shortest known solutions.
+- [x] Add tests for bound exhaustion and cancellation.
+- [x] Define a versioned stable seed and random generator policy.
+- [x] Generate candidates from bounded valid action sequences.
+- [x] Reject empty, already-solved, trivial, duplicate, and over-budget targets.
+- [x] Run every candidate through the production validator and solver.
+- [x] Enforce the generator attempt limit and report reproducible failure seeds.
+- [x] Implement date injection for daily generation without reading time inside
   the generator.
-- [ ] Preserve daily results across generator compatibility changes.
-- [ ] Measure solver latency and memory on representative puzzle classes.
-- [ ] Tune search order and representation only from measurements.
-- [ ] Document puzzle classes that remain unsuitable for generation.
+- [x] Preserve daily results across generator compatibility changes.
+- [x] Measure solver latency and memory on representative puzzle classes.
+- [x] Tune search order and representation only from measurements.
+- [x] Document puzzle classes that remain unsuitable for generation.
+
+Verification record (2026-09-01): `mise run check`, release tests for every
+Cargo target, warning-denied Rust documentation, the locked dependency audit,
+and five release measurement processes passed on x86_64 Arch Linux with Rust
+1.98.0. Six solver integration tests cover deterministic score order, exact
+replay, horizontal and vertical line catalogs, independent brute-force
+agreement, all result classes, every limit, and cancellation during expansion.
+Seven generator integration tests cover Gregorian dates, fixed seed text,
+reproducible acceptance, trivial and duplicate rejection, solver-exhaustion
+recovery, production validation, exact final replay, attempt exhaustion with
+its seed, cancellation, invalid configuration, and a complete version 1 daily
+golden. The implementation uses fixed-width integer random operations,
+canonical action order, and no platform or clock input.
+Native terminal execution on macOS and Windows remains part of the later smoke
+matrix because this work adds no terminal surface.
 
 Exit gate:
 
-- [ ] The solver never reports an invalid solution, generator work always ends
+- [x] The solver never reports an invalid solution, generator work always ends
   within its bounds, and daily output repeats across supported platforms.
 
 ### Phase 5, persistence and local packs

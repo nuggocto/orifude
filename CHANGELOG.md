@@ -43,6 +43,15 @@ intentionally not included.
   partial state.
 - Added exhaustive crease properties, fixed-seed action properties, and a
   dependency-free bounded domain-action fuzz harness.
+- Added a deterministic solver with exact state keys, fold-first score order,
+  independent visited-state, memory, depth, and cancellation limits, and
+  production replay verification for every reported solution.
+- Added versioned deterministic puzzle generation with injected calendar dates,
+  bounded candidate attempts, validator and solver checks, reproducible failure
+  seeds, and a preserved daily-output golden.
+- Added solver and generator integration tests plus a release measurement for
+  frontier memory, visited lookup cost, path restoration, and representative
+  solved and unsolved puzzles.
 - Added concise play instructions to the README.
 
 ### Changed
@@ -54,11 +63,17 @@ intentionally not included.
 - Chose dense physical-cell storage and complete snapshots after measuring the
   rejected map-based representation and the maximum paper bounds.
 - Moved the plain-text paper exercise onto the validated production domain API.
+- Reused paper allocations during reset so bounded search can restore parent
+  paths without rebuilding the canonical cell vector each time.
 
 ### Fixed
 
 - Made oversized paper-exercise input stop the session instead of allowing the
   unread tail to be interpreted as later commands.
+- Kept deterministic generation trying its remaining bounded candidates after
+  one candidate exhausts the solver.
+- Removed a redundant invariant scan before in-place paper reset while keeping
+  the rebuilt state checked before reset returns.
 
 ### Security
 

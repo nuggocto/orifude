@@ -1261,17 +1261,25 @@ impl Paper {
     ///
     /// # Panics
     ///
-    /// Panics only if the paper's already validated dimensions or budgets have
-    /// become invalid, which is a programmer-error invariant.
+    /// Panics if the retained dimensions, budgets, or physical-cell collection
+    /// violate the paper's validated settings.
     pub fn reset(&mut self) {
-        let spec = PaperSpec::new(
-            self.dimensions.width.get(),
-            self.dimensions.height.get(),
-            self.budget.folds.get(),
-            self.budget.strokes.get(),
-            self.budget.actions.get(),
-        );
-        *self = Self::new(spec).expect("canonical paper settings must remain valid");
+        for (index, cell) in self.cells.iter_mut().enumerate() {
+            let cell_id = CellId::from_index(index);
+            cell.coordinate = self
+                .dimensions
+                .original_coordinate(cell_id)
+                .expect("a retained cell identity must belong to the paper");
+            cell.layer = Layer::bottom();
+            cell.face = Face::Front;
+            cell.orientation = Orientation::North;
+        }
+        self.ink = InkPattern::empty(self.dimensions);
+        self.fold_count = FoldCount(0);
+        self.stroke_count = StrokeCount(0);
+        self.action_count = ActionCount(0);
+        self.history.clear();
+        self.assert_invariants();
     }
 
     fn validate_fold_budget(&self) -> Result<(), PaperError> {

@@ -34,9 +34,10 @@ into another checklist.
 | Process and command line | [entry](src/main.rs), [CLI](src/cli.rs), [errors](src/error.rs) |
 | Paper and game rules | [`src/domain`](src/domain) |
 | Plain-text exercise | [`examples/paper.rs`](examples/paper.rs) |
-| Representation measurement | [`examples/paper_measure.rs`](examples/paper_measure.rs) |
+| Representation measurements | [paper](examples/paper_measure.rs), [solver](examples/solver_measure.rs) |
 | Bounded action fuzzing | [`examples/domain_actions_fuzz.rs`](examples/domain_actions_fuzz.rs) |
-| Behavior tests | [CLI](tests/cli.rs), [paper](tests/paper.rs), [engine](tests/engine.rs) |
+| Search and generation | [solver](src/solver), [generator](src/generator) |
+| Behavior tests | [CLI](tests/cli.rs), [paper](tests/paper.rs), [engine](tests/engine.rs), [solver](tests/solver.rs), [generator](tests/generator.rs) |
 
 ## Product contract
 
@@ -346,6 +347,83 @@ The complete engine landed in
 Its [GitHub CI run](https://github.com/nuggocto/orifude/actions/runs/33527703571)
 passed after the direct push to `shrek`.
 
+## Bounded search and generation
+
+Build-plan source: [solver and generator work](PROJECT.md#phase-4-solver-and-deterministic-generator).
+
+The engine can now prove a small puzzle, explain why search stopped, and build a
+repeatable puzzle from a seed. The important bit is that neither side gets to
+invent paper rules. Both return to the production engine before Orifude trusts
+their answer.
+
+```mermaid
+flowchart LR
+    Puzzle[Validated Puzzle] --> Solver[Bounded Solver]
+    Solver --> Frontier[Key and parent frontier]
+    Frontier --> Replay[Solution Replay]
+    Replay --> Verify[Production verification]
+    Seed[Versioned Seed] --> Builder[Bounded candidate builder]
+    Builder --> Validate[Puzzle validation]
+    Validate --> Solver
+```
+
+What was built:
+
+- [`src/solver/mod.rs`](src/solver/mod.rs) has one deterministic priority
+  search. It compares folds first and strokes second, just like the game score.
+  It returns solved, unsolved, exhausted, cancelled, and invalid as different
+  outcomes.
+- Search keeps exact [`PaperStateKey`](src/domain/paper.rs) values in a hash
+  set, plus small parent records in its frontier. It never iterates the hash
+  set, so private hash-table order cannot change the chosen replay.
+- A state is restored by resetting one reusable attempt and replaying at most
+  20 parent actions through the real engine. Every reported solution is then
+  replayed once more against the exact puzzle revision.
+- The solver checks its fixed setup before allocating search collections. It
+  stops independently for 250,000 visited states, 128 MiB of conservatively
+  charged memory, configured depth, or cancellation.
+- [`src/generator/mod.rs`](src/generator/mod.rs) owns an explicit versioned seed
+  and a maximum of 512 candidate attempts. It receives a calendar date from its
+  caller and never opens a clock.
+- The generator builds legal bounded action sequences. Construction guarantees
+  a non-empty target and enforces the action budgets through the production
+  engine. It rejects repeated and trivial targets, and one solver-exhausted
+  target does not prevent it from trying the remaining bounded candidates.
+- The generated action sequence is already a solution witness. If the complete
+  solver called that target unsolved, or if the internal puzzle validator
+  rejected data built from the validated template, that would be a code defect
+  rather than ordinary bad luck. Those cases are assertions instead of public
+  rejection reasons.
+- The first random compatibility path uses fixed-width SplitMix64 arithmetic.
+  A daily seed comes from `orifude:1:YYYY-MM-DD`. The golden in
+  [`tests/generator.rs`](tests/generator.rs) fixes the date, seed, target,
+  actions, puzzle ID, and accepted candidate so a future algorithm change does
+  not quietly rewrite old daily papers.
+
+Why the frontier looks a little unusual:
+
+- Cloning a complete maximum-depth attempt is quick here, around 0.34
+  microseconds in the recorded release runs. It also has a 16,750-byte
+  named-payload lower bound for every retained state because the puzzle, paper,
+  and 20 snapshots come along for the ride.
+- The selected key and parent representation is conservatively charged at
+  1,312 bytes per maximum-paper state. Rebuilding a 20-action path is slower,
+  around 18.73 to 18.99 microseconds, but it keeps the hard memory story simple
+  and leaves one production rules engine.
+- On 256 maximum-paper keys, hashed membership took about 1.50 microseconds per
+  lookup. A linear vector took about 11.7 microseconds. The small extra table
+  storage earns its keep once the search grows.
+- The representative solver fixtures visited 2 to 35 states and took roughly
+  4.6 to 184.3 microseconds at the median on the recorded AMD Linux machine. Run
+  [`mise run solver-measure`](mise.toml) for the full local table. These numbers
+  guide the structure; they are not promises for another computer.
+
+The generator is deliberately not an artist or a lesson designer. Fold-free
+introductions, carefully shaped pictures, story pacing, unique-solution
+puzzles, line-heavy folded layouts, and rule sets that exhaust bounded search
+still belong in handcrafted content. A failed seed is reported and ends. It
+does not keep shaking the branch until a convenient puzzle falls out.
+
 ## How the notebook was checked
 
 On 2026-09-01, this notebook was checked against `PROJECT.md`, the current
@@ -353,18 +431,28 @@ source and tests, and the puzzle-game Git history beginning at `0e3f08c`.
 Every relative link resolves inside the repository, every linked commit exists
 in local history, and every linked `PROJECT.md` heading exists.
 `git diff --check` and `mise run check` also passed. This was a
-documentation-only change, so it did not create a new player or platform
-behavior claim.
+documentation-only check at that point. Search and generation later added their
+own linked tests, measurement harness, and verification record.
 
 A follow-up added four small Mermaid graphs for the product boundary, shared
 check path, paper ownership, and engine flow. Their nodes and limits were
 checked against the same linked contracts and source. The graphs explain
 existing behavior; they do not add a new rule.
 
+The search-and-generation review then checked every reported candidate
+rejection against the actual builder. It fixed one real control-flow bug: a
+solver-exhausted candidate used to stop the whole generation run. A regression
+test now proves that all 32 configured attempts are considered and that repeated
+targets skip duplicate solver work. Impossible rejection labels were removed
+instead of manufacturing tests for states that validated construction cannot
+produce. The same review removed a redundant full-state scan at the start of
+in-place paper reset; the release median for resetting and replaying the fixed
+20-action path was 18.73 to 18.99 microseconds across five processes. Reset
+still checks the rebuilt state before returning.
+
 ## What comes next
 
 The current work and its acceptance gate stay in
-[`PROJECT.md`](PROJECT.md#current-work). The next implementation will build on
-the exact state keys and replay verification already in the engine. That is the
-important handoff: search may explore its own bounded data, but any claimed
-solution must come home through the production rules before Orifude trusts it.
+[`PROJECT.md`](PROJECT.md#current-work). The next implementation adds local
+progress and pack storage. It can keep generated seeds and exact solution
+replays without asking search or storage to reinterpret paper rules.
