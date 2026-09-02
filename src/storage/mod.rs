@@ -27,7 +27,7 @@ use crate::packs::{
 pub use paths::{AppPaths, PathError};
 pub use replay::{CURRENT_REPLAY_FORMAT_VERSION, DecodedReplay, MAX_REPLAY_BYTES};
 
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 const PAGE_SIZE: u64 = 4 * 1024;
 const PAGE_SIZE_DB: i64 = 4 * 1024;
 const MAIN_FILE_LIMIT: u64 = 128 * 1024 * 1024;
@@ -41,6 +41,8 @@ const PRUNE_BATCH_DB: i64 = 256;
 const MAX_MANAGED_ENTRIES: usize = MAX_INSTALLED_PACKS + 2;
 const MAX_INSTALLED_PACKS_DB: u64 = 32;
 const MAX_DATABASE_VALUE_BYTES: i32 = 1024 * 1024;
+pub const PROGRESS_PAGE_SIZE: usize = 128;
+const PROGRESS_PAGE_QUERY_DB: i64 = 129;
 
 /// Parses a bounded replay document and validates it through the domain engine.
 ///
@@ -102,11 +104,95 @@ impl ColorMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KeyBindings {
+    pub fold: char,
+    pub brush: char,
+    pub undo: char,
+    pub reset: char,
+    pub preview: char,
+    pub help: char,
+    pub quit: char,
+}
+
+impl KeyBindings {
+    #[must_use]
+    pub fn is_conflict_free(self) -> bool {
+        let keys = [
+            self.fold,
+            self.brush,
+            self.undo,
+            self.reset,
+            self.preview,
+            self.help,
+            self.quit,
+        ];
+        keys.iter().enumerate().all(|(index, key)| {
+            (key.is_ascii_graphic() || (index == 4 && *key == ' '))
+                && !matches!(key, 'h' | 'j' | 'k' | 'l' | 't' | 'v' | 'x')
+                && keys.iter().filter(|candidate| *candidate == key).count() == 1
+        })
+    }
+
+    fn database_values(self) -> [String; 7] {
+        [
+            self.fold,
+            self.brush,
+            self.undo,
+            self.reset,
+            self.preview,
+            self.help,
+            self.quit,
+        ]
+        .map(|key| key.to_string())
+    }
+
+    fn from_database(values: [&str; 7]) -> Result<Self, StorageError> {
+        let mut keys = ['\0'; 7];
+        for (index, value) in values.into_iter().enumerate() {
+            let mut characters = value.chars();
+            keys[index] = characters.next().ok_or(StorageError::Corrupt)?;
+            if characters.next().is_some() {
+                return Err(StorageError::Corrupt);
+            }
+        }
+        let bindings = Self {
+            fold: keys[0],
+            brush: keys[1],
+            undo: keys[2],
+            reset: keys[3],
+            preview: keys[4],
+            help: keys[5],
+            quit: keys[6],
+        };
+        bindings
+            .is_conflict_free()
+            .then_some(bindings)
+            .ok_or(StorageError::Corrupt)
+    }
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            fold: 'f',
+            brush: 'b',
+            undo: 'u',
+            reset: 'r',
+            preview: ' ',
+            help: '?',
+            quit: 'q',
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Settings {
     pub color_mode: ColorMode,
     pub glyph_mode: GlyphMode,
     pub reduced_motion: bool,
     pub instant_reveal: bool,
+    pub lesson_complete: bool,
+    pub bindings: KeyBindings,
 }
 
 impl Default for Settings {
@@ -116,6 +202,8 @@ impl Default for Settings {
             glyph_mode: GlyphMode::Unicode,
             reduced_motion: false,
             instant_reveal: false,
+            lesson_complete: false,
+            bindings: KeyBindings::default(),
         }
     }
 }
@@ -132,12 +220,24 @@ pub struct PuzzleProgress {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgressPage {
+    pub entries: Vec<PuzzleProgress>,
+    pub has_more: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DailyHistory {
     pub day: CalendarDate,
     pub generator_version: u16,
     pub pack_id: Box<str>,
     pub puzzle_id: Box<str>,
     pub completed: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DailyKey {
+    pub day: CalendarDate,
+    pub generator_version: u16,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -194,6 +294,7 @@ pub enum StorageError {
     UnsupportedSchema { found: u32, supported: u32 },
     UnsupportedPageSize { found: u64, required: u64 },
     ResourceLimit,
+    InvalidSettings,
     InvalidCompletion,
     ReplayData,
     Pack(PackError),
@@ -226,6 +327,7 @@ impl fmt::Display for StorageError {
             Self::ResourceLimit => {
                 formatter.write_str("a local storage resource bound was reached")
             }
+            Self::InvalidSettings => formatter.write_str("the requested settings are invalid"),
             Self::InvalidCompletion => {
                 formatter.write_str("only a valid successful replay can be saved as a completion")
             }
@@ -379,18 +481,38 @@ impl Storage {
     ///
     /// Returns when persisted settings are corrupt or SQLite cannot read them.
     pub fn settings(&self) -> Result<Settings, StorageError> {
-        let (color, glyphs, reduced_motion, instant_reveal): (String, String, bool, bool) =
-            self.connection.query_row(
-                "SELECT color_mode, glyph_mode, reduced_motion, instant_reveal
-                 FROM settings WHERE singleton = 1",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )?;
+        let row = self.connection.query_row(
+            "SELECT color_mode, glyph_mode, reduced_motion, instant_reveal,
+                    lesson_complete, bind_fold, bind_brush, bind_undo, bind_reset,
+                    bind_preview, bind_help, bind_quit
+             FROM settings WHERE singleton = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, bool>(2)?,
+                    row.get::<_, bool>(3)?,
+                    row.get::<_, bool>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, String>(9)?,
+                    row.get::<_, String>(10)?,
+                    row.get::<_, String>(11)?,
+                ))
+            },
+        )?;
         Ok(Settings {
-            color_mode: ColorMode::from_database(&color)?,
-            glyph_mode: GlyphMode::from_database(&glyphs)?,
-            reduced_motion,
-            instant_reveal,
+            color_mode: ColorMode::from_database(&row.0)?,
+            glyph_mode: GlyphMode::from_database(&row.1)?,
+            reduced_motion: row.2,
+            instant_reveal: row.3,
+            lesson_complete: row.4,
+            bindings: KeyBindings::from_database([
+                &row.5, &row.6, &row.7, &row.8, &row.9, &row.10, &row.11,
+            ])?,
         })
     }
 
@@ -400,19 +522,36 @@ impl Storage {
     ///
     /// Returns a typed database or filesystem error with prior settings intact.
     pub fn save_settings(&mut self, settings: Settings) -> Result<(), StorageError> {
+        if !settings.bindings.is_conflict_free() {
+            return Err(StorageError::InvalidSettings);
+        }
         self.verify_footprint()?;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let color = settings.color_mode.database_value();
+        let glyphs = settings.glyph_mode.database_value();
+        let bindings = settings.bindings.database_values();
         let changed = transaction.execute(
             "UPDATE settings
-             SET color_mode = ?1, glyph_mode = ?2, reduced_motion = ?3, instant_reveal = ?4
+             SET color_mode = ?1, glyph_mode = ?2, reduced_motion = ?3,
+                 instant_reveal = ?4, lesson_complete = ?5, bind_fold = ?6,
+                 bind_brush = ?7, bind_undo = ?8, bind_reset = ?9,
+                 bind_preview = ?10, bind_help = ?11, bind_quit = ?12
              WHERE singleton = 1",
             params![
-                settings.color_mode.database_value(),
-                settings.glyph_mode.database_value(),
+                color,
+                glyphs,
                 settings.reduced_motion,
-                settings.instant_reveal
+                settings.instant_reveal,
+                settings.lesson_complete,
+                bindings[0],
+                bindings[1],
+                bindings[2],
+                bindings[3],
+                bindings[4],
+                bindings[5],
+                bindings[6],
             ],
         )?;
         if changed != 1 {
@@ -435,6 +574,52 @@ impl Storage {
         completed_at_unix_seconds: i64,
         undo_count: u64,
         hints_used: bool,
+    ) -> Result<PuzzleProgress, StorageError> {
+        self.record_completion_inner(
+            puzzle,
+            replay,
+            completed_at_unix_seconds,
+            undo_count,
+            hints_used,
+            None,
+        )
+    }
+
+    /// Saves a successful daily attempt and marks its day complete atomically.
+    ///
+    /// # Errors
+    ///
+    /// Uses the same validation and rollback guarantees as [`Self::record_completion`].
+    pub fn record_daily_completion(
+        &mut self,
+        daily: DailyKey,
+        puzzle: &Puzzle,
+        replay: &Replay,
+        completed_at_unix_seconds: i64,
+        undo_count: u64,
+        hints_used: bool,
+    ) -> Result<PuzzleProgress, StorageError> {
+        if daily.generator_version == 0 {
+            return Err(StorageError::ResourceLimit);
+        }
+        self.record_completion_inner(
+            puzzle,
+            replay,
+            completed_at_unix_seconds,
+            undo_count,
+            hints_used,
+            Some((daily.day, daily.generator_version)),
+        )
+    }
+
+    fn record_completion_inner(
+        &mut self,
+        puzzle: &Puzzle,
+        replay: &Replay,
+        completed_at_unix_seconds: i64,
+        undo_count: u64,
+        hints_used: bool,
+        daily: Option<(CalendarDate, u16)>,
     ) -> Result<PuzzleProgress, StorageError> {
         let attempt = replay
             .execute(puzzle)
@@ -461,6 +646,25 @@ impl Storage {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let (replay_id, previous, is_best) = insert_completion_rows(&transaction, &record)?;
         let progress = update_progress(&transaction, &record, replay_id, previous, is_best)?;
+        if let Some((day, generator_version)) = daily {
+            let changed = transaction.execute(
+                "INSERT INTO daily_history(day, generator_version, pack_id, puzzle_id, completed)
+                 VALUES (?1, ?2, ?3, ?4, 1)
+                 ON CONFLICT(day, generator_version) DO UPDATE SET
+                   completed = 1
+                 WHERE daily_history.pack_id = excluded.pack_id
+                   AND daily_history.puzzle_id = excluded.puzzle_id",
+                params![
+                    day.to_string(),
+                    generator_version,
+                    record.pack_id,
+                    record.puzzle_id,
+                ],
+            )?;
+            if changed != 1 {
+                return Err(StorageError::Corrupt);
+            }
+        }
         prune_puzzle_history(&transaction, record.pack_id, record.puzzle_id)?;
         let reserve_restored = restore_nonessential_reserve(&transaction)?;
         if !reserve_restored && !is_best {
@@ -519,6 +723,60 @@ impl Storage {
         .transpose()
     }
 
+    /// Returns one bounded page of saved puzzle summaries, newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns when a row is corrupt or SQLite cannot complete the read.
+    pub fn progress_page(&self, offset: u64) -> Result<ProgressPage, StorageError> {
+        let offset = i64::try_from(offset).map_err(|_| StorageError::ResourceLimit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT pack_id, puzzle_id, attempt_count, best_folds, best_strokes,
+                    best_replay_id, updated_at
+             FROM progress ORDER BY updated_at DESC, pack_id, puzzle_id LIMIT ?1 OFFSET ?2",
+        )?;
+        let rows = statement.query_map(params![PROGRESS_PAGE_QUERY_DB, offset], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, u8>(3)?,
+                row.get::<_, u8>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
+            ))
+        })?;
+        let mut progress = Vec::with_capacity(PROGRESS_PAGE_SIZE + 1);
+        for row in rows {
+            let (pack_id, puzzle_id, attempt_count, folds, strokes, replay_id, updated_at) = row?;
+            PuzzleIdentity::new(&pack_id, &puzzle_id).map_err(|_| StorageError::Corrupt)?;
+            progress.push(PuzzleProgress {
+                pack_id: pack_id.into_boxed_str(),
+                puzzle_id: puzzle_id.into_boxed_str(),
+                attempt_count: i64_to_u64(attempt_count)?,
+                best_folds: folds,
+                best_strokes: strokes,
+                best_replay_id: replay_id,
+                updated_at_unix_seconds: updated_at,
+            });
+        }
+        let has_more = progress.len() > PROGRESS_PAGE_SIZE;
+        progress.truncate(PROGRESS_PAGE_SIZE);
+        Ok(ProgressPage {
+            entries: progress,
+            has_more,
+        })
+    }
+
+    /// Returns the newest bounded page of saved puzzle summaries.
+    ///
+    /// # Errors
+    ///
+    /// Returns when a row is corrupt or SQLite cannot complete the read.
+    pub fn recent_progress(&self) -> Result<Vec<PuzzleProgress>, StorageError> {
+        self.progress_page(0).map(|page| page.entries)
+    }
+
     /// Loads and validates the current best replay document.
     ///
     /// # Errors
@@ -571,13 +829,13 @@ impl Storage {
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute(
+        let changed = transaction.execute(
             "INSERT INTO daily_history(day, generator_version, pack_id, puzzle_id, completed)
              VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(day, generator_version) DO UPDATE SET
-               pack_id = excluded.pack_id,
-               puzzle_id = excluded.puzzle_id,
-               completed = excluded.completed",
+               completed = daily_history.completed OR excluded.completed
+             WHERE daily_history.pack_id = excluded.pack_id
+               AND daily_history.puzzle_id = excluded.puzzle_id",
             params![
                 day,
                 generator_version,
@@ -586,6 +844,9 @@ impl Storage {
                 completed
             ],
         )?;
+        if changed != 1 {
+            return Err(StorageError::Corrupt);
+        }
         if !restore_nonessential_reserve(&transaction)? {
             return Err(StorageError::Full);
         }
@@ -693,6 +954,12 @@ impl Storage {
         let loaded = self.read_managed_pack(&summary, &managed_name)?;
         self.loaded_pack = Some(loaded);
         Ok(self.loaded_pack.as_ref())
+    }
+
+    /// Discards the validated pack cache after a caller has copied the bounded
+    /// playable projection it needs.
+    pub(crate) fn clear_loaded_pack(&mut self) {
+        self.loaded_pack = None;
     }
 
     /// Removes a pack from play before deleting its managed files. Puzzle
@@ -1281,6 +1548,7 @@ fn configure_runtime_limits(connection: &Connection) -> Result<(), StorageError>
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn migrate(connection: &mut Connection, version: u32) -> Result<(), StorageError> {
     if version == SCHEMA_VERSION {
         return Ok(());
@@ -1298,7 +1566,15 @@ fn migrate(connection: &mut Connection, version: u32) -> Result<(), StorageError
                  color_mode TEXT NOT NULL CHECK(color_mode IN ('auto', 'color', 'monochrome')),
                  glyph_mode TEXT NOT NULL CHECK(glyph_mode IN ('unicode', 'ascii')),
                  reduced_motion INTEGER NOT NULL CHECK(reduced_motion IN (0, 1)),
-                 instant_reveal INTEGER NOT NULL CHECK(instant_reveal IN (0, 1))
+                 instant_reveal INTEGER NOT NULL CHECK(instant_reveal IN (0, 1)),
+                 lesson_complete INTEGER NOT NULL CHECK(lesson_complete IN (0, 1)),
+                 bind_fold TEXT NOT NULL CHECK(length(bind_fold) = 1),
+                 bind_brush TEXT NOT NULL CHECK(length(bind_brush) = 1),
+                 bind_undo TEXT NOT NULL CHECK(length(bind_undo) = 1),
+                 bind_reset TEXT NOT NULL CHECK(length(bind_reset) = 1),
+                 bind_preview TEXT NOT NULL CHECK(length(bind_preview) = 1),
+                 bind_help TEXT NOT NULL CHECK(length(bind_help) = 1),
+                 bind_quit TEXT NOT NULL CHECK(length(bind_quit) = 1)
              ) STRICT;
              CREATE TABLE progress(
                  pack_id TEXT NOT NULL,
@@ -1310,6 +1586,8 @@ fn migrate(connection: &mut Connection, version: u32) -> Result<(), StorageError
                  updated_at INTEGER NOT NULL,
                  PRIMARY KEY(pack_id, puzzle_id)
              ) STRICT;
+             CREATE INDEX progress_recent
+                 ON progress(updated_at DESC, pack_id, puzzle_id);
              CREATE TABLE attempts(
                  id INTEGER PRIMARY KEY,
                  pack_id TEXT NOT NULL,
@@ -1363,15 +1641,39 @@ fn migrate(connection: &mut Connection, version: u32) -> Result<(), StorageError
                  ('journal-mode', 'delete'),
                  ('page-size', '4096');
              INSERT INTO settings(
-                 singleton, color_mode, glyph_mode, reduced_motion, instant_reveal
-             ) VALUES (1, 'auto', 'unicode', 0, 0);
-             PRAGMA user_version = 2;",
+                 singleton, color_mode, glyph_mode, reduced_motion, instant_reveal,
+                 lesson_complete, bind_fold, bind_brush, bind_undo, bind_reset,
+                 bind_preview, bind_help, bind_quit
+             ) VALUES (1, 'auto', 'unicode', 0, 0, 0, 'f', 'b', 'u', 'r', ' ', '?', 'q');
+             PRAGMA user_version = 3;",
         )?;
-    } else if version == 1 {
+    } else {
+        if version == 1 {
+            transaction.execute_batch(
+                "ALTER TABLE settings ADD COLUMN glyph_mode TEXT NOT NULL DEFAULT 'unicode'
+                     CHECK(glyph_mode IN ('unicode', 'ascii'));",
+            )?;
+        }
         transaction.execute_batch(
-            "ALTER TABLE settings ADD COLUMN glyph_mode TEXT NOT NULL DEFAULT 'unicode'
-                 CHECK(glyph_mode IN ('unicode', 'ascii'));
-             PRAGMA user_version = 2;",
+            "ALTER TABLE settings ADD COLUMN lesson_complete INTEGER NOT NULL DEFAULT 0
+                 CHECK(lesson_complete IN (0, 1));
+             ALTER TABLE settings ADD COLUMN bind_fold TEXT NOT NULL DEFAULT 'f'
+                 CHECK(length(bind_fold) = 1);
+             ALTER TABLE settings ADD COLUMN bind_brush TEXT NOT NULL DEFAULT 'b'
+                 CHECK(length(bind_brush) = 1);
+             ALTER TABLE settings ADD COLUMN bind_undo TEXT NOT NULL DEFAULT 'u'
+                 CHECK(length(bind_undo) = 1);
+             ALTER TABLE settings ADD COLUMN bind_reset TEXT NOT NULL DEFAULT 'r'
+                 CHECK(length(bind_reset) = 1);
+             ALTER TABLE settings ADD COLUMN bind_preview TEXT NOT NULL DEFAULT ' '
+                 CHECK(length(bind_preview) = 1);
+             ALTER TABLE settings ADD COLUMN bind_help TEXT NOT NULL DEFAULT '?'
+                 CHECK(length(bind_help) = 1);
+             ALTER TABLE settings ADD COLUMN bind_quit TEXT NOT NULL DEFAULT 'q'
+                 CHECK(length(bind_quit) = 1);
+             CREATE INDEX progress_recent
+                 ON progress(updated_at DESC, pack_id, puzzle_id);
+             PRAGMA user_version = 3;",
         )?;
     }
     transaction.commit()?;
@@ -1379,7 +1681,7 @@ fn migrate(connection: &mut Connection, version: u32) -> Result<(), StorageError
 }
 
 fn verify_migration_source(connection: &Connection, version: u32) -> Result<(), StorageError> {
-    if version == 1 {
+    if matches!(version, 1 | 2) {
         verify_database(connection)?;
     }
     Ok(())

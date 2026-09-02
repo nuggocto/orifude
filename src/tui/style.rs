@@ -100,6 +100,11 @@ impl StyleProfile {
     }
 
     #[must_use]
+    pub fn highlighted_title() -> Style {
+        Style::default().add_modifier(Modifier::BOLD | Modifier::REVERSED)
+    }
+
+    #[must_use]
     pub fn border(self) -> Style {
         self.foreground(PaletteColor::Branch)
     }

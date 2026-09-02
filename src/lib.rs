@@ -13,6 +13,7 @@
 //! ```
 
 mod cli;
+mod content;
 pub mod domain;
 mod error;
 pub mod generator;

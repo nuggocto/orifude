@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [shrek]
+    tags: ["v*"]
   pull_request:
     branches: [shrek]
   workflow_dispatch:
@@ -77,3 +78,44 @@ jobs:
         env:
           MISE_GITHUB_TOKEN: ""
         run: mise run terminal-smoke
+
+  native-player:
+    name: native player (${{ matrix.platform }})
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux x86_64
+            runner: ubuntu-24.04
+          - platform: Linux ARM64
+            runner: ubuntu-24.04-arm
+          - platform: macOS Intel
+            runner: macos-15-intel
+          - platform: macOS Apple Silicon
+            runner: macos-15
+          - platform: Windows x86_64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the declared Rust toolchain
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.8.16
+          install: "true"
+          install_args: "--locked rust"
+          cache: "false"
+
+      - name: Exercise the complete player journey
+        env:
+          MISE_GITHUB_TOKEN: ""
+        run: mise run test-native

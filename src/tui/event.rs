@@ -19,6 +19,7 @@ pub(crate) enum RuntimeEvent {
     Resize(u16, u16),
     Focus(bool),
     Tick(Instant),
+    WorkReady(u64),
 }
 
 impl RuntimeEvent {
@@ -68,12 +69,14 @@ impl std::error::Error for EventError {
 
 struct QueueState {
     events: VecDeque<RuntimeEvent>,
+    work_ready: Option<u64>,
 }
 
 impl QueueState {
     fn new() -> Self {
         Self {
             events: VecDeque::with_capacity(EVENT_QUEUE_CAPACITY),
+            work_ready: None,
         }
     }
 
@@ -152,18 +155,38 @@ impl SharedQueue {
             .lock()
             .map_err(|_| EventError::QueueUnavailable)?;
 
-        while state.events.is_empty() && !self.shutdown.load(Ordering::Acquire) {
+        while state.events.is_empty()
+            && state.work_ready.is_none()
+            && !self.shutdown.load(Ordering::Acquire)
+        {
             state = self
                 .not_empty
                 .wait(state)
                 .map_err(|_| EventError::QueueUnavailable)?;
         }
 
-        let event = state.events.pop_front();
+        let event = state
+            .work_ready
+            .take()
+            .map(RuntimeEvent::WorkReady)
+            .or_else(|| state.events.pop_front());
         if event.is_some() {
             self.not_full.notify_one();
         }
         Ok(event)
+    }
+
+    fn notify_work_ready(&self, job_id: u64) -> Result<(), EventError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| EventError::QueueUnavailable)?;
+        if self.shutdown.load(Ordering::Acquire) {
+            return Err(EventError::QueueUnavailable);
+        }
+        state.work_ready = Some(job_id);
+        self.not_empty.notify_one();
+        Ok(())
     }
 
     fn begin_shutdown(&self) {
@@ -177,6 +200,24 @@ pub(crate) struct EventPump {
     shared: Arc<SharedQueue>,
     failure: Arc<Mutex<Option<EventError>>>,
     worker: Option<JoinHandle<()>>,
+}
+
+#[derive(Clone)]
+pub(crate) struct EventNotifier {
+    shared: Arc<SharedQueue>,
+}
+
+impl EventNotifier {
+    pub(crate) fn work_ready(&self, job_id: u64) -> Result<(), EventError> {
+        self.shared.notify_work_ready(job_id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn isolated() -> Self {
+        Self {
+            shared: Arc::new(SharedQueue::new()),
+        }
+    }
 }
 
 impl EventPump {
@@ -215,6 +256,12 @@ impl EventPump {
             return Err(error);
         }
         Ok(event)
+    }
+
+    pub(crate) fn notifier(&self) -> EventNotifier {
+        EventNotifier {
+            shared: Arc::clone(&self.shared),
+        }
     }
 
     pub(crate) fn set_animation_active(&self, active: bool) {
@@ -379,6 +426,26 @@ mod tests {
 
         assert_eq!(state.events.len(), EVENT_QUEUE_CAPACITY);
         assert_eq!(state.events.capacity(), EVENT_QUEUE_CAPACITY);
+    }
+
+    #[test]
+    fn completed_work_stays_observable_without_waiting_for_queue_capacity() {
+        let queue = SharedQueue::new();
+        for _ in 0..EVENT_QUEUE_CAPACITY {
+            queue.send(key('x')).expect("fill queue");
+        }
+
+        queue
+            .notify_work_ready(7)
+            .expect("bounded work slot remains available");
+        assert_eq!(
+            queue.receive().expect("work result"),
+            Some(RuntimeEvent::WorkReady(7))
+        );
+        assert_eq!(
+            queue.receive().expect("keys remain ordered"),
+            Some(key('x'))
+        );
     }
 
     #[test]

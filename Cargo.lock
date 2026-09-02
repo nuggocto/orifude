@@ -594,6 +594,7 @@ dependencies = [
  "sha2",
  "spdx",
  "tempfile",
+ "time",
  "toml",
  "winapi-util",
  "zip",

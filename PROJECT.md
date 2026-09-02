@@ -15,9 +15,9 @@ contract, and only phase tracker for Orifude v1.
 ## Current work
 
 - Current phase: **Phase 7, complete playable loop**
-- Current checklist item: **Implement first-launch capability checks and the
-  interactive lesson using the shared visual teaching components.**
-- Last updated: **2026-09-02**
+- Current checklist item: **Run the full supported operating-system and
+  architecture matrix on `shrek` and by manual dispatch.**
+- Last updated: **2026-09-03**
 
 Checkbox rules:
 
@@ -151,6 +151,13 @@ available ways to play:
 - Open settings and help.
 
 The first launch gives a short interactive lesson instead of a wall of text.
+Before the paper appears, one compact view states the exact goal and the fold,
+cursor, brush, and open controls. It must fit the minimum interactive layout.
+When the paper appears, spare room in the target pane holds the squirrel and
+one short speech bubble that names the next action and why it matters. The
+bubble follows the real paper, draft, and cursor state. Compact layouts keep
+the same directions in the controls area instead of squeezing the mascot into
+the board.
 The player can replay the lesson later.
 
 ### How to play
@@ -372,6 +379,8 @@ has a word, symbol, or shape in addition to color.
 - Smaller terminals show a stable resize message and retain state.
 - Wide layouts show target and folded paper side by side.
 - Narrow layouts switch between target and paper without horizontal scrolling.
+- Large papers keep the cursor's row inside a bounded vertical window when the
+  whole board cannot fit.
 - Resizing during a fold, reveal, dialog, or error must not panic or lose input.
 
 ### Input
@@ -384,6 +393,9 @@ The default bindings are familiar but not modal-editor cosplay:
 - `u` undoes one action.
 - `r` asks before resetting an in-progress attempt.
 - `Space` previews the unfolded paper.
+- `t` switches between the target and paper in compact puzzle layouts.
+- `Tab` and `Shift+Tab` move forward and backward through the available fold
+  and brush actions.
 - `Enter` confirms the focused action.
 - `Esc` cancels the current transient action.
 - `?` opens contextual help.
@@ -1771,33 +1783,42 @@ Exit gate:
 Goal: connect the domain engine, persistence, and TUI into the complete player
 journey.
 
-- [ ] Implement first-launch capability checks and the interactive lesson using
+- [x] Implement first-launch capability checks and the interactive lesson using
   the shared visual teaching components.
-- [ ] Implement the home branch and progress summary.
-- [ ] Implement journey selection and locked or completed states.
-- [ ] Implement the puzzle target view.
-- [ ] Implement folded-paper and stack rendering.
-- [ ] Implement fold selection, crease preview, direction selection, and
+- [x] Implement the home branch and progress summary.
+- [x] Implement journey selection and locked or completed states.
+- [x] Implement the puzzle target view.
+- [x] Implement folded-paper and stack rendering.
+- [x] Implement fold selection, crease preview, direction selection, and
   confirmation.
-- [ ] Implement brush selection, footprint preview, and application.
-- [ ] Implement undo, reset confirmation, and unfolded preview.
-- [ ] Implement result comparison with separate missing and extra ink.
-- [ ] Implement bounded, interruptible reveal animation.
-- [ ] Implement success, par, and saved-keepsake screens.
-- [ ] Save completion before confirming durable success to the player.
-- [ ] Implement daily mode with an injected local date.
-- [ ] Implement endless mode with visible solver or generator exhaustion errors.
-- [ ] Implement installed pack selection and missing-pack history behavior.
-- [ ] Implement the replayable `How to play` view with a bounded, engine-derived
+- [x] Implement brush selection, footprint preview, and application.
+- [x] Implement undo, reset confirmation, and unfolded preview.
+- [x] Implement result comparison with separate missing and extra ink.
+- [x] Implement bounded, interruptible reveal animation.
+- [x] Implement success, par, and saved-keepsake screens.
+- [x] Save completion before confirming durable success to the player.
+- [x] Implement daily mode with an injected local date.
+- [x] Implement endless mode with visible solver or generator exhaustion errors.
+- [x] Implement installed pack selection and missing-pack history behavior.
+- [x] Implement the replayable `How to play` view with a bounded, engine-derived
   fold, stack, ink, unfold, and comparison sequence.
-- [ ] Implement settings, contextual help, and key-conflict validation.
-- [ ] Implement spoiler-free text result export.
-- [ ] Preserve drafts and attempt state across unrelated dialogs and resizes.
-- [ ] Add end-to-end journeys through the actual binary.
+- [x] Implement settings, contextual help, and key-conflict validation.
+- [x] Implement spoiler-free text result export.
+- [x] Preserve drafts and attempt state across unrelated dialogs and resizes.
+- [x] Add end-to-end journeys through the actual binary.
 - [ ] Add the bounded `mise run test-native` task and run the full supported
   operating-system and architecture matrix on `shrek`, manual
   dispatch, and release candidates.
-- [ ] QA the loop with keyboard-only use and no knowledge of internal commands.
+- [x] QA the loop with keyboard-only use and no knowledge of internal commands.
+
+Local x86_64 Linux evidence covers the complete locked check, the bounded
+native task, the shipped-binary fresh-player and returning-player journey, and
+keyboard-only runs at 100 by 30 and 60 by 20. Daily and endless generation,
+Unicode and ASCII output, result comparison, persistence, restart, replay,
+text export, and normal terminal restoration were exercised. The local
+Windows-target check reached bundled SQLite and stopped at the expected missing
+MSVC librarian on the Linux host. The five native jobs are configured but have
+not run against this work, so the matrix item and exit gate remain open.
 
 Exit gate:
 

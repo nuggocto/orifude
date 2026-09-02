@@ -900,9 +900,203 @@ then passed the full check and the native terminal smoke on Linux x86_64, macOS
 Apple Silicon, and Windows x86_64 without retries in
 [run 33648348790](https://github.com/nuggocto/orifude/actions/runs/33648348790).
 
+## Playable loop
+
+The playable shell keeps one mutable source for an active paper. The common
+operations are moving one cursor, preparing one action, applying through the
+production engine, opening a bounded overlay, rendering at most 144 cells, and
+saving one successful replay. One session owns the validated puzzle, attempt,
+draft, reveal, and result. Screens select a view of that session; they do not
+copy its paper state.
+
+```mermaid
+flowchart LR
+    Input["Key input"] --> App["App navigation and overlays"]
+    App --> Session["One PlaySession<br/>puzzle, attempt, draft, result"]
+    Session --> Engine["Production domain engine<br/>at most 144 cells and 64 actions"]
+    Session --> View["Derived target, stack, and comparison views"]
+    Engine --> Save["One completion transaction"]
+    Save -->|commit| Keepsake["Saved result and replay"]
+    Save -->|error| Session
+    Generator["One owned cancellable generation job"] --> Session
+```
+
+A separate mutable model for each puzzle, lesson, result, and replay screen was
+rejected. It would make undo, resize, help, storage failure, and replay update
+several copies in lockstep. Read-only lesson and replay frames instead rebuild
+their tiny bounded prefixes through the engine. The generation worker is the
+only additional mutable owner, runs one job at a time, and must publish one
+result or cancellation before its thread is joined.
+
+[`app.rs`](src/tui/app.rs), [`session.rs`](src/tui/session.rs), and
+[`view.rs`](src/tui/view.rs) now connect the shell to the production engine.
+The first launch checks the terminal and storage before showing a hands-on
+paper. The same session model drives that lesson, the built-in journey,
+generated daily and endless papers, installed packs, and saved replays. The
+home card shows journey progress, locked papers follow durable completion, and
+the keepsake list pages through every protected best solution in groups of 128.
+Removed community packs remain labelled while their embedded replay stays
+usable.
+
+Fold drafts mark the moving side and name the direction and crease. Brush
+drafts follow the cursor and show their complete footprint. The player can
+undo, preview, or open a reset dialog without copying the attempt. Opening a
+finished paper reverses the validated folds one at a time for at most 1.1
+seconds; one input skips the reveal without also triggering the next action.
+The final comparison uses `?` for missing ink and `!` for extra ink. A matched
+paper is not described as saved until its replay, attempt metadata, and
+progress transaction commit. The result can then retry, replay the stored best
+solution, or show a spoiler-free text keepsake.
+
+Fresh-player QA found that `Tab` could appear inert in the lesson. The old
+handler only cycled choices inside an existing draft, and the lesson has one
+allowed fold. The panes also looked like three unlabeled tab stops even though
+only the paper accepts input. [`session.rs`](src/tui/session.rs) now moves
+`Tab` and `Shift+Tab` through one bounded list of fold and brush actions whose
+budgets still have room. After the lesson fold, the next `Tab` selects the dot
+instead of returning to an exhausted fold. [`view.rs`](src/tui/view.rs) labels
+the target as a reference and gives the folded paper a neutral highlighted,
+uppercase title; the stack remains the cursor's bottom-to-top view. The title
+uses the terminal's default colors instead of the moss active-control color.
+Uppercase keeps the distinction when a terminal ignores styling or uses ASCII.
+Focused state and view regressions cover forward and reverse selection, the
+exhausted-budget message, and both the 100 by 30 and 60 by 20 labels. An
+isolated development-binary run reproduced the inert key before the change,
+then confirmed the fold preview, brush selection, reverse selection,
+post-fold selection, compact layout, and complete minimum-size help text after
+the change.
+The shipped-binary new-player journey now uses `Tab` for its first fold, so the
+native end-to-end check fails if application routing drops the key. The final
+tree passed `mise run check` and all three cases in `mise run test-native` on
+x86_64 Arch Linux with Rust 1.98.0.
+
+A screenshot review then found that the highlighted pane still looked like a
+developer focus indicator and that the first paper arrived before the player
+understood the goal. The first-launch card now explains the four-action lesson
+before creating the session: preview the fold, confirm it, move the cursor and
+place ink, then open the paper. The footer names `Enter start` instead of the
+menu-only `Up/Down move`, and each lesson cue gives the exact next key or target
+coordinate. The preferred and minimum layouts keep the goal, all four steps,
+the next-move explanation, help keys, and start prompt visible at once.
+The compact play footer also keeps movement, action, confirmation, help, and
+quit visible within 60 columns. The follow-up tree passed `mise run check` and
+all three native PTY cases on x86_64 Arch Linux with Rust 1.98.0. Isolated
+development-binary runs at 100 by 30 and 60 by 20 confirmed the introduction,
+contextual help, paper emphasis, exact first cue, and unclipped footer. The QA
+state and terminal sessions were removed afterward.
+
+The lesson paper now uses the empty part of its target pane for a small
+squirrel and a speech bubble. The bubble gives one instruction at a time:
+preview, fold, move to the shared stack, choose the dot, place it, then open the
+paper. It derives the ink coordinate from the target cells' current physical
+positions rather than copying the answer into the view. Undo, reset, direct
+action keys, and cursor movement therefore change the advice through the same
+[`PlaySession`](src/tui/session.rs) that owns the attempt.
+If ink arrives before the fold or misses the target stack, the bubble names the
+mistake and shows the configured undo key. It does not pretend the lesson is
+still on its expected path.
+
+```mermaid
+flowchart LR
+    State["Attempt actions, draft,<br/>cursor, and target cells"] --> Coach["Next lesson instruction"]
+    Coach --> Pane["Squirrel bubble in target pane"]
+    State --> Cue["Compact controls cue"]
+```
+
+The coach takes at most seven rows and renders only when the target pane has
+room for the mascot and a 21-column bubble. Smaller terminals retain the exact
+lesson step across the compact controls and status text. A view regression
+drives the complete successful lesson sequence and checks each instruction. A
+second regression places ink before the fold and on the wrong stack, then
+checks the recovery advice. Release-profile captures at 160 by 60 and 100 by
+30 confirmed that the squirrel, bubble, target grid, paper, stack, and controls
+remain separate and readable. At 60 by 20 the coach yields its space while the
+controls retain the preview and confirmation directions.
+
+Compact puzzle rendering now shows either the target or the paper beside the
+selected stack. `t` switches the board, and a cursor-following row window keeps
+the active cell visible when a maximum 12-by-12 paper is taller than the
+available area. Wide layouts retain all three panes. Long journey, pack,
+keepsake, and settings lists use the selected row to scroll their bounded
+viewport instead of letting keyboard focus move below the terminal.
+
+```text
+wide:    [ target ][ folded paper ][ stack ]
+compact: [ target or folded paper ][ stack ]  (t switches)
+```
+
+[`storage/mod.rs`](src/storage/mod.rs) advances the settings schema with the
+lesson marker and seven configurable action keys. Migration accepts both older
+settings shapes only after their database markers pass validation. Movement
+keys, the compact target key, and the fixed replay and export keys stay
+reserved. Space is the default unfolded-preview binding and is the only
+non-graphic character accepted by binding validation. Daily completion and its
+best replay commit in one transaction; reopening that date cannot clear a
+completion or silently replace its deterministic puzzle identity. The indexed
+keepsake query fetches 129 rows, exposes 128, and uses the extra row only to
+decide whether an older page exists. Enter leaves any saved successful result,
+while the same help and quit keys close the dialogs they opened.
+
+The local date boundary in [`clock.rs`](src/tui/clock.rs) uses the locked
+`time` crate with its explicit local-offset feature. Runtime observations ask
+the operating system for its current local offset instead of retaining the
+startup offset across a daylight-saving or timezone change. Native tests inject
+fixed date and timestamp values, the app refreshes the date before a key
+action, and generation receives an explicit `CalendarDate`. The generator
+still never reads a clock.
+
+[`work.rs`](src/tui/work.rs) owns at most one generator thread and always joins
+it after completion or cancellation. Work completion has one separate bounded
+slot in [`event.rs`](src/tui/event.rs), so a full key queue cannot deadlock a
+cancel or shutdown. A late notice from an already joined job is ignored, while
+the result for a current job remains observable. A selected pack is verified
+once, projected into at most 128 playable papers, and its raw validated-file
+cache is then discarded.
+
+The adversarial implementation review confirmed and corrected several paths
+before the final check: live undo metadata was initially lost when saving;
+daily reopening could lower a completed marker; result-skip input could also
+acknowledge the result; line brushes could evaluate a puzzle when their draft
+did not fit; the earliest keepsake page hid older protected best solutions;
+work notification could block a join behind a full queue; and compact layouts
+could clip the active cue or overwrite the home-card border. Focused tests now
+cover each boundary. A follow-up review also found that large papers and long
+menus could move focus off-screen, the documented preview key did not match the
+default, teaching frames omitted the pre-fold and selected-stack states, a save
+could relabel an older keepsake cache as page zero, text export flattened its
+line breaks, and contextual help clipped its final controls. Those paths now
+have behavior-level regressions. The separate work-ready slot was reviewed but
+not changed: [`work.rs`](src/tui/work.rs) owns at most one active job and that
+job publishes exactly once before it can be replaced, so no second completion
+can overwrite an unread one.
+
+[`tests/terminal_pty.rs`](tests/terminal_pty.rs) waits for the shipped binary to
+enter its alternate screen instead of sleeping for an assumed startup time. A
+fresh isolated player completes the lesson, solves and saves a journey paper,
+replays it, quits, restarts, revisits the keepsake, exports text, and exits with
+the terminal restored. Additional synchronized journeys exercise Space
+preview, undo, both reset choices, Enter from a saved result, a stable injected
+daily paper, recovery from a 59-by-19 terminal, and malformed installed-pack
+reporting. The bounded native task runs all seven PTY cases.
+[`ci.yml`](.github/workflows/ci.yml) assigns it to Linux x86_64 and ARM64,
+macOS Intel and Apple Silicon, and Windows x86_64 for direct branch pushes,
+manual runs, and release tags.
+
+Local x86_64 Linux verification ran the complete locked check: formatting,
+dependency policy, strict all-target Clippy, tests, doctests, and an optimized
+build passed. The suite included 68 library tests, 103 other tests and example
+tests, and seven shipped-binary PTY cases. The native task finished its test
+body in under one second. Keyboard-only exploratory runs at 100 by 30 and the
+minimum 60 by 20 layout covered first launch, the fold and brush lesson,
+comparison, durable lesson completion, the home summary, daily generation,
+endless generation, compact stack order, cues, and normal exit. ASCII backend
+tests contain only ASCII cells. A local Windows-target check reached the
+bundled SQLite build before stopping at the Linux host's missing MSVC
+`lib.exe`; macOS and Windows execution still require the configured native
+jobs.
+
 ## What comes next
 
-The current work stays in [`PROJECT.md`](PROJECT.md#current-work). The native
-shell gate is confirmed, so the next implementation can connect the existing
-paper engine and storage to this shell, beginning with capability checks and the
-interactive lesson.
+The ordered build work and its completion evidence stay in
+[`PROJECT.md`](PROJECT.md#current-work). This notebook records the durable
+design and verification context without becoming a second tracker.

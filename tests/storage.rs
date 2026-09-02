@@ -8,8 +8,8 @@ use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 use orifude::domain::replay::Replay;
 use orifude::packs::validate_directory;
 use orifude::storage::{
-    AppPaths, ColorMode, GlyphMode, InstallOutcome, Settings, Storage, StorageError,
-    decode_replay_bytes,
+    AppPaths, ColorMode, DailyKey, GlyphMode, InstallOutcome, KeyBindings, Settings, Storage,
+    StorageError, decode_replay_bytes,
 };
 use rusqlite::{Connection, params};
 use zip::write::SimpleFileOptions;
@@ -50,7 +50,11 @@ impl Drop for TestDirectory {
 }
 
 fn solved_replay(pack_id: &str) -> (Puzzle, Replay) {
-    let identity = PuzzleIdentity::new(pack_id, "berry").unwrap();
+    solved_replay_for(pack_id, "berry")
+}
+
+fn solved_replay_for(pack_id: &str, puzzle_id: &str) -> (Puzzle, Replay) {
+    let identity = PuzzleIdentity::new(pack_id, puzzle_id).unwrap();
     let dimensions = orifude::domain::paper::Dimensions::new(4, 4).unwrap();
     let coordinate = dimensions.coordinate(0, 0).unwrap();
     let target = dimensions.cell_id(coordinate).unwrap();
@@ -65,6 +69,29 @@ fn solved_replay(pack_id: &str) -> (Puzzle, Replay) {
     attempt.apply(PaperAction::Dot(coordinate)).unwrap();
     let replay = Replay::from_attempt(&attempt);
     (puzzle, replay)
+}
+
+#[test]
+fn saved_progress_pages_reach_older_best_solutions_without_unbounded_reads() {
+    let root = TestDirectory::new("progress-pages");
+    let mut storage = Storage::open(root.paths()).unwrap();
+    for index in 0..129 {
+        let puzzle_id = format!("paper-{index}");
+        let (puzzle, replay) = solved_replay_for("many-papers", &puzzle_id);
+        storage
+            .record_completion(&puzzle, &replay, i64::from(index), 0, false)
+            .unwrap();
+    }
+
+    let newest = storage.progress_page(0).unwrap();
+    assert_eq!(newest.entries.len(), 128);
+    assert!(newest.has_more);
+    assert_eq!(newest.entries[0].puzzle_id.as_ref(), "paper-128");
+
+    let oldest = storage.progress_page(128).unwrap();
+    assert_eq!(oldest.entries.len(), 1);
+    assert!(!oldest.has_more);
+    assert_eq!(oldest.entries[0].puzzle_id.as_ref(), "paper-0");
 }
 
 fn write_pack(root: &Path, pack_id: &str) {
@@ -107,6 +134,8 @@ fn settings_completion_and_best_replay_survive_restart() {
                 glyph_mode: GlyphMode::Ascii,
                 reduced_motion: true,
                 instant_reveal: true,
+                lesson_complete: true,
+                ..Settings::default()
             })
             .unwrap();
         storage
@@ -128,6 +157,7 @@ fn settings_completion_and_best_replay_survive_restart() {
     assert_eq!(settings.glyph_mode, GlyphMode::Ascii);
     assert!(settings.reduced_motion);
     assert!(settings.instant_reveal);
+    assert!(settings.lesson_complete);
     let progress = storage.progress("built-in", "berry").unwrap().unwrap();
     assert_eq!(progress.attempt_count, 1);
     let saved = storage.best_replay("built-in", "berry").unwrap().unwrap();
@@ -152,6 +182,27 @@ fn settings_completion_and_best_replay_survive_restart() {
 }
 
 #[test]
+fn reopening_a_daily_paper_does_not_clear_its_completion() {
+    let root = TestDirectory::new("daily-reopen");
+    let (puzzle, _) = solved_replay("orifude-daily");
+    let day = orifude::generator::CalendarDate::new(2026, 9, 2).unwrap();
+    let mut storage = Storage::open(root.paths()).unwrap();
+    storage.record_daily(day, 1, &puzzle, true).unwrap();
+    storage.record_daily(day, 1, &puzzle, false).unwrap();
+
+    assert!(storage.daily_history(day, 1).unwrap().unwrap().completed);
+
+    let (different, _) = solved_replay("different-daily");
+    assert!(matches!(
+        storage.record_daily(day, 1, &different, false),
+        Err(StorageError::Corrupt)
+    ));
+    let history = storage.daily_history(day, 1).unwrap().unwrap();
+    assert!(history.completed);
+    assert_eq!(history.pack_id.as_ref(), "orifude-daily");
+}
+
+#[test]
 fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
     let root = TestDirectory::new("ownership");
     let paths = root.paths();
@@ -173,15 +224,15 @@ fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
 
     let connection = Connection::open(paths.database()).unwrap();
     connection
-        .execute_batch("PRAGMA journal_mode = WAL; PRAGMA user_version = 3")
+        .execute_batch("PRAGMA journal_mode = WAL; PRAGMA user_version = 4")
         .unwrap();
     drop(connection);
     let database_before = fs::read(paths.database()).unwrap();
     assert!(matches!(
         Storage::open(paths.clone()),
         Err(StorageError::UnsupportedSchema {
-            found: 3,
-            supported: 2
+            found: 4,
+            supported: 3
         })
     ));
     assert_eq!(fs::read(paths.database()).unwrap(), database_before);
@@ -240,6 +291,101 @@ fn rejected_settings_write_leaves_the_durable_value_unchanged() {
 }
 
 #[test]
+fn conflicting_bindings_are_rejected_before_storage_changes() {
+    let root = TestDirectory::new("binding-conflict");
+    let mut storage = Storage::open(root.paths()).unwrap();
+    let settings = Settings {
+        bindings: KeyBindings {
+            brush: 'f',
+            ..KeyBindings::default()
+        },
+        ..Settings::default()
+    };
+
+    assert!(matches!(
+        storage.save_settings(settings),
+        Err(StorageError::InvalidSettings)
+    ));
+    assert_eq!(storage.settings().unwrap(), Settings::default());
+
+    let result_conflict = Settings {
+        bindings: KeyBindings {
+            preview: 'v',
+            ..KeyBindings::default()
+        },
+        ..Settings::default()
+    };
+    assert!(matches!(
+        storage.save_settings(result_conflict),
+        Err(StorageError::InvalidSettings)
+    ));
+
+    let fixed_target_control_conflict = Settings {
+        bindings: KeyBindings {
+            fold: 't',
+            ..KeyBindings::default()
+        },
+        ..Settings::default()
+    };
+    assert!(matches!(
+        storage.save_settings(fixed_target_control_conflict),
+        Err(StorageError::InvalidSettings)
+    ));
+
+    assert_eq!(KeyBindings::default().preview, ' ');
+    storage
+        .save_settings(Settings::default())
+        .expect("Space remains a valid preview binding");
+}
+
+#[test]
+fn failed_daily_marker_rolls_back_completion_and_replay_together() {
+    let root = TestDirectory::new("daily-atomic");
+    let paths = root.paths();
+    drop(Storage::open(paths.clone()).unwrap());
+    let connection = Connection::open(paths.database()).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_daily BEFORE INSERT ON daily_history
+             BEGIN SELECT RAISE(ABORT, 'injected daily failure'); END;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let (puzzle, replay) = solved_replay("orifude-daily");
+    let day = orifude::generator::CalendarDate::new(2026, 9, 2).unwrap();
+    let mut storage = Storage::open(paths).unwrap();
+    assert!(
+        storage
+            .record_daily_completion(
+                DailyKey {
+                    day,
+                    generator_version: 1,
+                },
+                &puzzle,
+                &replay,
+                1_788_307_200,
+                0,
+                false,
+            )
+            .is_err()
+    );
+    assert!(
+        storage
+            .progress("orifude-daily", "berry")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        storage
+            .best_replay("orifude-daily", "berry")
+            .unwrap()
+            .is_none()
+    );
+    assert!(storage.daily_history(day, 1).unwrap().is_none());
+}
+
+#[test]
 fn schema_one_settings_gain_the_unicode_glyph_default() {
     let root = TestDirectory::new("settings-migration");
     let paths = root.paths();
@@ -247,7 +393,16 @@ fn schema_one_settings_gain_the_unicode_glyph_default() {
     let connection = Connection::open(paths.database()).unwrap();
     connection
         .execute_batch(
-            "ALTER TABLE settings DROP COLUMN glyph_mode;
+            "DROP INDEX progress_recent;
+             ALTER TABLE settings DROP COLUMN bind_quit;
+             ALTER TABLE settings DROP COLUMN bind_help;
+             ALTER TABLE settings DROP COLUMN bind_preview;
+             ALTER TABLE settings DROP COLUMN bind_reset;
+             ALTER TABLE settings DROP COLUMN bind_undo;
+             ALTER TABLE settings DROP COLUMN bind_brush;
+             ALTER TABLE settings DROP COLUMN bind_fold;
+             ALTER TABLE settings DROP COLUMN lesson_complete;
+             ALTER TABLE settings DROP COLUMN glyph_mode;
              PRAGMA user_version = 1;",
         )
         .unwrap();
@@ -261,7 +416,33 @@ fn schema_one_settings_gain_the_unicode_glyph_default() {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
+}
+
+#[test]
+fn schema_two_settings_gain_player_defaults() {
+    let root = TestDirectory::new("player-settings-migration");
+    let paths = root.paths();
+    drop(Storage::open(paths.clone()).unwrap());
+    let connection = Connection::open(paths.database()).unwrap();
+    connection
+        .execute_batch(
+            "DROP INDEX progress_recent;
+             ALTER TABLE settings DROP COLUMN bind_quit;
+             ALTER TABLE settings DROP COLUMN bind_help;
+             ALTER TABLE settings DROP COLUMN bind_preview;
+             ALTER TABLE settings DROP COLUMN bind_reset;
+             ALTER TABLE settings DROP COLUMN bind_undo;
+             ALTER TABLE settings DROP COLUMN bind_brush;
+             ALTER TABLE settings DROP COLUMN bind_fold;
+             ALTER TABLE settings DROP COLUMN lesson_complete;
+             PRAGMA user_version = 2;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let storage = Storage::open(paths).unwrap();
+    assert_eq!(storage.settings().unwrap(), Settings::default());
 }
 
 #[test]

@@ -32,6 +32,10 @@ run = "cargo test --locked --all-targets --features isolated-test-paths"
 description = "Exercise terminal startup and restoration in a native pseudoterminal"
 run = "cargo test --locked --test terminal_pty --features isolated-test-paths"
 
+[tasks.test-native]
+description = "Exercise the complete player journey in a native pseudoterminal"
+run = "cargo test --locked --test terminal_pty --features isolated-test-paths"
+
 [tasks.doctest]
 description = "Test Rust documentation examples"
 run = "cargo test --locked --doc"

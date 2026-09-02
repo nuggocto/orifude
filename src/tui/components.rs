@@ -5,7 +5,7 @@ use ratatui::symbols::border;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use crate::storage::{ColorMode, GlyphMode, Settings};
+use crate::storage::GlyphMode;
 
 use super::app::{MARK_FRAME_COUNT, Overlay};
 use super::layout::centered;
@@ -84,10 +84,28 @@ pub(crate) struct Paper;
 
 impl Paper {
     pub(crate) fn block(title: &str, profile: StyleProfile) -> Block<'_> {
+        Self::styled_block(title, profile.border(), profile.title(), profile)
+    }
+
+    pub(crate) fn highlighted_block(title: &str, profile: StyleProfile) -> Block<'_> {
+        Self::styled_block(
+            title,
+            profile.border(),
+            StyleProfile::highlighted_title(),
+            profile,
+        )
+    }
+
+    fn styled_block(
+        title: &str,
+        border_style: Style,
+        title_style: Style,
+        profile: StyleProfile,
+    ) -> Block<'_> {
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(profile.border())
-            .title(Span::styled(title, profile.title()));
+            .border_style(border_style)
+            .title(Span::styled(title, title_style));
         match profile.glyph_mode() {
             GlyphMode::Unicode => block.border_set(border::ROUNDED),
             GlyphMode::Ascii => block.border_set(ASCII_BORDER),
@@ -135,10 +153,11 @@ impl BranchChoices {
         frame: &mut Frame<'_>,
         area: Rect,
         selected: usize,
+        title: &str,
         profile: StyleProfile,
     ) {
         let card = centered(area, 32, 9);
-        FocusList::new(&BRANCH_CHOICES, selected).render(frame, card, "Home branch", profile);
+        FocusList::new(&BRANCH_CHOICES, selected).render(frame, card, title, profile);
         if card.bottom().saturating_add(1) < area.bottom() {
             let note = Rect::new(card.x, card.bottom().saturating_add(1), card.width, 1);
             frame.render_widget(
@@ -369,15 +388,11 @@ fn ink_has_arrived(x: usize, y: usize, width: usize, height: usize, mark_frame: 
 pub(crate) struct StatusBar;
 
 impl StatusBar {
-    pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, focused: bool, profile: StyleProfile) {
-        let separator = match profile.glyph_mode() {
-            GlyphMode::Unicode => " · ",
-            GlyphMode::Ascii => " | ",
-        };
+    pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, focused: bool, focused_text: &str) {
         let text = if focused {
-            ["Up/Down move", "Enter open", "? help", "q quit"].join(separator)
+            focused_text
         } else {
-            "Terminal focus is elsewhere. Orifude is waiting.".to_owned()
+            "Terminal focus is elsewhere. Orifude is waiting."
         };
         frame.render_widget(
             Paragraph::new(text)
@@ -386,81 +401,6 @@ impl StatusBar {
             area,
         );
     }
-}
-
-pub(crate) struct RulesStep;
-
-impl RulesStep {
-    pub(crate) fn render(
-        frame: &mut Frame<'_>,
-        area: Rect,
-        selected: usize,
-        profile: StyleProfile,
-    ) {
-        let inner = Paper::block("How to play", profile).inner(area);
-        frame.render_widget(Paper::block("How to play", profile), area);
-        let copy = [
-            Line::styled("A small sheet is waiting.", profile.title()),
-            Line::from(""),
-            Line::from("Fold the paper, brush ink through its stacked layers,"),
-            Line::from("then unfold it to match the target exactly."),
-            Line::from(""),
-            Line::styled(
-                "The complete interactive lesson arrives with the puzzle screen.",
-                StyleProfile::muted(),
-            ),
-        ];
-        frame.render_widget(
-            Paragraph::new(Vec::from(copy)).wrap(Wrap { trim: true }),
-            inner,
-        );
-
-        let buttons = ["Back to the branch", "Open lesson preview"];
-        let controls = Rect::new(
-            inner.x,
-            inner.bottom().saturating_sub(4),
-            inner.width,
-            4.min(inner.height),
-        );
-        FocusList::new(&buttons, selected).render(frame, controls, "Actions", profile);
-    }
-}
-
-pub(crate) struct SettingsPanel;
-
-impl SettingsPanel {
-    pub(crate) fn render(
-        frame: &mut Frame<'_>,
-        area: Rect,
-        settings: Settings,
-        selected: usize,
-        profile: StyleProfile,
-    ) {
-        let color = match settings.color_mode {
-            ColorMode::Auto => "Automatic",
-            ColorMode::Color => "Color",
-            ColorMode::Monochrome => "Monochrome",
-        };
-        let glyphs = match settings.glyph_mode {
-            GlyphMode::Unicode => "Unicode",
-            GlyphMode::Ascii => "ASCII only",
-        };
-        let reduced_motion = enabled(settings.reduced_motion);
-        let instant_reveal = enabled(settings.instant_reveal);
-        let choices = [
-            format!("Color: {color}"),
-            format!("Symbols: {glyphs}"),
-            format!("Reduced motion: {reduced_motion}"),
-            format!("Instant reveal: {instant_reveal}"),
-            "Back to the branch".to_owned(),
-        ];
-        let references = choices.iter().map(String::as_str).collect::<Vec<_>>();
-        FocusList::new(&references, selected).render(frame, area, "Terminal settings", profile);
-    }
-}
-
-fn enabled(value: bool) -> &'static str {
-    if value { "On" } else { "Off" }
 }
 
 pub(crate) struct Dialog;
@@ -475,7 +415,21 @@ impl Dialog {
         style: Style,
         profile: StyleProfile,
     ) {
-        let area = centered(host, 56, 10);
+        Self::render_with_height(frame, host, title, body, footer, style, profile, 10);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_with_height(
+        frame: &mut Frame<'_>,
+        host: Rect,
+        title: &str,
+        body: Vec<Line<'_>>,
+        footer: &str,
+        style: Style,
+        profile: StyleProfile,
+        height: u16,
+    ) {
+        let area = centered(host, 56, height);
         frame.render_widget(Clear, area);
         let block = Paper::block(title, profile).border_style(style);
         frame.render_widget(
@@ -503,20 +457,16 @@ impl Dialog {
 pub(crate) struct HelpPanel;
 
 impl HelpPanel {
-    pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, profile: StyleProfile) {
-        Dialog::render(
+    pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, message: &str, profile: StyleProfile) {
+        Dialog::render_with_height(
             frame,
             area,
             "Keyboard help",
-            vec![
-                Line::from("Up/Down or j/k moves focus."),
-                Line::from("Enter opens the focused path."),
-                Line::from("Esc returns or cancels. q asks before leaving."),
-                Line::from("? opens and closes this help."),
-            ],
-            "Esc, Enter, or ? closes help",
+            vec![Line::from(message)],
+            "Esc or Enter closes help",
             profile.border(),
             profile,
+            area.height.min(18),
         );
     }
 }
@@ -547,13 +497,13 @@ impl DialogLayer {
         profile: StyleProfile,
     ) {
         match overlay {
-            Overlay::Help => HelpPanel::render(frame, area, profile),
+            Overlay::Help(message) => HelpPanel::render(frame, area, message.as_str(), profile),
             Overlay::Quit => Dialog::render(
                 frame,
                 area,
                 "Leave Orifude?",
                 vec![Line::from(
-                    "Your saved settings are already tucked away. Leave the branch?",
+                    "Saved progress is safe. An unfinished paper is not saved. Leave Orifude?",
                 )],
                 "y or Enter leaves; n or Esc stays",
                 profile.border(),
@@ -562,6 +512,24 @@ impl DialogLayer {
             Overlay::Error(message) => {
                 ErrorPanel::render(frame, area, message.as_str(), profile);
             }
+            Overlay::Reset => Dialog::render(
+                frame,
+                area,
+                "Smooth this paper flat?",
+                vec![Line::from("Every action on this attempt will be cleared.")],
+                "y or Enter resets; n or Esc keeps the draft",
+                profile.border(),
+                profile,
+            ),
+            Overlay::Export(lines) => Dialog::render(
+                frame,
+                area,
+                "Text keepsake",
+                lines.iter().map(|line| Line::from(line.as_str())).collect(),
+                "Copy the text, then Enter or Esc returns",
+                profile.border(),
+                profile,
+            ),
         }
     }
 }
@@ -583,14 +551,25 @@ mod tests {
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
         terminal
             .draw(|frame| {
-                BranchChoices::render(frame, Rect::new(0, 0, 30, 12), 0, profile);
+                BranchChoices::render(
+                    frame,
+                    Rect::new(0, 0, 30, 12),
+                    0,
+                    "Home | Journey 0/3 | Saved no",
+                    profile,
+                );
                 TerminalMark::render(
                     frame,
                     Rect::new(30, 0, 30, 12),
                     MARK_FRAME_COUNT - 1,
                     profile,
                 );
-                StatusBar::render(frame, Rect::new(0, 18, 60, 2), true, profile);
+                StatusBar::render(
+                    frame,
+                    Rect::new(0, 18, 60, 2),
+                    true,
+                    "Up/Down move | Enter open | ? help | q quit",
+                );
             })
             .expect("render succeeds");
 
