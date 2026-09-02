@@ -27,7 +27,7 @@ use crate::packs::{
 pub use paths::{AppPaths, PathError};
 pub use replay::{CURRENT_REPLAY_FORMAT_VERSION, DecodedReplay, MAX_REPLAY_BYTES};
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 const PAGE_SIZE: u64 = 4 * 1024;
 const PAGE_SIZE_DB: i64 = 4 * 1024;
 const MAIN_FILE_LIMIT: u64 = 128 * 1024 * 1024;
@@ -59,6 +59,29 @@ pub enum ColorMode {
     Monochrome,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GlyphMode {
+    Unicode,
+    Ascii,
+}
+
+impl GlyphMode {
+    const fn database_value(self) -> &'static str {
+        match self {
+            Self::Unicode => "unicode",
+            Self::Ascii => "ascii",
+        }
+    }
+
+    fn from_database(value: &str) -> Result<Self, StorageError> {
+        match value {
+            "unicode" => Ok(Self::Unicode),
+            "ascii" => Ok(Self::Ascii),
+            _ => Err(StorageError::Corrupt),
+        }
+    }
+}
+
 impl ColorMode {
     const fn database_value(self) -> &'static str {
         match self {
@@ -81,6 +104,7 @@ impl ColorMode {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Settings {
     pub color_mode: ColorMode,
+    pub glyph_mode: GlyphMode,
     pub reduced_motion: bool,
     pub instant_reveal: bool,
 }
@@ -89,6 +113,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             color_mode: ColorMode::Auto,
+            glyph_mode: GlyphMode::Unicode,
             reduced_motion: false,
             instant_reveal: false,
         }
@@ -321,10 +346,10 @@ impl Storage {
                 | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
         connection.busy_timeout(Duration::ZERO)?;
-        check_schema_version(&connection)?;
+        let schema_version = check_schema_version(&connection)?;
         configure_runtime_limits(&connection)?;
         configure_database(&connection)?;
-        migrate(&mut connection)?;
+        migrate(&mut connection, schema_version)?;
         verify_database(&connection)?;
         sync_directory(paths.data())?;
 
@@ -354,13 +379,16 @@ impl Storage {
     ///
     /// Returns when persisted settings are corrupt or SQLite cannot read them.
     pub fn settings(&self) -> Result<Settings, StorageError> {
-        let (color, reduced_motion, instant_reveal): (String, bool, bool) = self.connection.query_row(
-            "SELECT color_mode, reduced_motion, instant_reveal FROM settings WHERE singleton = 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
+        let (color, glyphs, reduced_motion, instant_reveal): (String, String, bool, bool) =
+            self.connection.query_row(
+                "SELECT color_mode, glyph_mode, reduced_motion, instant_reveal
+                 FROM settings WHERE singleton = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )?;
         Ok(Settings {
             color_mode: ColorMode::from_database(&color)?,
+            glyph_mode: GlyphMode::from_database(&glyphs)?,
             reduced_motion,
             instant_reveal,
         })
@@ -372,13 +400,17 @@ impl Storage {
     ///
     /// Returns a typed database or filesystem error with prior settings intact.
     pub fn save_settings(&mut self, settings: Settings) -> Result<(), StorageError> {
+        self.verify_footprint()?;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let changed = transaction.execute(
-            "UPDATE settings SET color_mode = ?1, reduced_motion = ?2, instant_reveal = ?3 WHERE singleton = 1",
+            "UPDATE settings
+             SET color_mode = ?1, glyph_mode = ?2, reduced_motion = ?3, instant_reveal = ?4
+             WHERE singleton = 1",
             params![
                 settings.color_mode.database_value(),
+                settings.glyph_mode.database_value(),
                 settings.reduced_motion,
                 settings.instant_reveal
             ],
@@ -386,8 +418,7 @@ impl Storage {
         if changed != 1 {
             return Err(StorageError::Corrupt);
         }
-        transaction.commit()?;
-        self.verify_footprint()
+        transaction.commit().map_err(StorageError::from)
     }
 
     /// Saves one successful attempt, replay, and best-progress update in one
@@ -424,6 +455,7 @@ impl Storage {
             hints_used,
             payload: &payload,
         };
+        self.verify_footprint()?;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -441,7 +473,6 @@ impl Storage {
             )?;
         }
         transaction.commit()?;
-        self.verify_footprint()?;
         Ok(progress)
     }
 
@@ -535,6 +566,7 @@ impl Storage {
         if generator_version == 0 {
             return Err(StorageError::ResourceLimit);
         }
+        self.verify_footprint()?;
         let day = day.to_string();
         let transaction = self
             .connection
@@ -557,8 +589,7 @@ impl Storage {
         if !restore_nonessential_reserve(&transaction)? {
             return Err(StorageError::Full);
         }
-        transaction.commit()?;
-        self.verify_footprint()
+        transaction.commit().map_err(StorageError::from)
     }
 
     /// Reads one generator-versioned daily selection.
@@ -781,6 +812,7 @@ impl Storage {
         if final_path.exists() {
             return Err(StorageError::PackConflict);
         }
+        self.verify_footprint()?;
         let staging = self.paths.pack_staging();
         if staging.exists() {
             fs::remove_dir_all(&staging).map_err(|_| StorageError::PackCleanup)?;
@@ -830,7 +862,6 @@ impl Storage {
             &final_name,
             installed_at_unix_seconds,
         )?;
-        self.verify_footprint()?;
         Ok(InstallOutcome::Installed(summary))
     }
 
@@ -1206,7 +1237,7 @@ fn configure_database(connection: &Connection) -> Result<(), StorageError> {
     Ok(())
 }
 
-fn check_schema_version(connection: &Connection) -> Result<(), StorageError> {
+fn check_schema_version(connection: &Connection) -> Result<u32, StorageError> {
     let version: u32 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     if version > SCHEMA_VERSION {
         return Err(StorageError::UnsupportedSchema {
@@ -1214,7 +1245,7 @@ fn check_schema_version(connection: &Connection) -> Result<(), StorageError> {
             supported: SCHEMA_VERSION,
         });
     }
-    Ok(())
+    Ok(version)
 }
 
 fn verify_database_path(path: &Path) -> Result<(), StorageError> {
@@ -1250,17 +1281,11 @@ fn configure_runtime_limits(connection: &Connection) -> Result<(), StorageError>
     Ok(())
 }
 
-fn migrate(connection: &mut Connection) -> Result<(), StorageError> {
-    let version: u32 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version > SCHEMA_VERSION {
-        return Err(StorageError::UnsupportedSchema {
-            found: version,
-            supported: SCHEMA_VERSION,
-        });
-    }
+fn migrate(connection: &mut Connection, version: u32) -> Result<(), StorageError> {
     if version == SCHEMA_VERSION {
         return Ok(());
     }
+    verify_migration_source(connection, version)?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     if version == 0 {
         transaction.execute_batch(
@@ -1271,6 +1296,7 @@ fn migrate(connection: &mut Connection) -> Result<(), StorageError> {
              CREATE TABLE settings(
                  singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
                  color_mode TEXT NOT NULL CHECK(color_mode IN ('auto', 'color', 'monochrome')),
+                 glyph_mode TEXT NOT NULL CHECK(glyph_mode IN ('unicode', 'ascii')),
                  reduced_motion INTEGER NOT NULL CHECK(reduced_motion IN (0, 1)),
                  instant_reveal INTEGER NOT NULL CHECK(instant_reveal IN (0, 1))
              ) STRICT;
@@ -1336,12 +1362,26 @@ fn migrate(connection: &mut Connection) -> Result<(), StorageError> {
                  ('schema', 'orifude-storage'),
                  ('journal-mode', 'delete'),
                  ('page-size', '4096');
-             INSERT INTO settings(singleton, color_mode, reduced_motion, instant_reveal)
-                 VALUES (1, 'auto', 0, 0);
-             PRAGMA user_version = 1;",
+             INSERT INTO settings(
+                 singleton, color_mode, glyph_mode, reduced_motion, instant_reveal
+             ) VALUES (1, 'auto', 'unicode', 0, 0);
+             PRAGMA user_version = 2;",
+        )?;
+    } else if version == 1 {
+        transaction.execute_batch(
+            "ALTER TABLE settings ADD COLUMN glyph_mode TEXT NOT NULL DEFAULT 'unicode'
+                 CHECK(glyph_mode IN ('unicode', 'ascii'));
+             PRAGMA user_version = 2;",
         )?;
     }
     transaction.commit()?;
+    Ok(())
+}
+
+fn verify_migration_source(connection: &Connection, version: u32) -> Result<(), StorageError> {
+    if version == 1 {
+        verify_database(connection)?;
+    }
     Ok(())
 }
 

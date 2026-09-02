@@ -15,8 +15,8 @@ contract, and only phase tracker for Orifude v1.
 ## Current work
 
 - Current phase: **Phase 6, terminal foundation**
-- Current checklist item: **Add and pin the selected Ratatui and Crossterm
-  versions.**
+- Current checklist item: **Verify the empty application shell on every
+  supported native platform.**
 - Last updated: **2026-09-02**
 
 Checkbox rules:
@@ -684,6 +684,7 @@ resource estimate, tests, and a documented decision here.
 | Solver memory budget | 128 MiB |
 | Generator candidate attempts | 512 |
 | TUI event queue | 256 events |
+| TUI render viewport | 160 columns by 60 rows |
 | Animation refresh rate | 30 frames per second |
 | One reveal animation | 1,200 milliseconds |
 | Recent replays per puzzle | 20 |
@@ -828,7 +829,9 @@ CI grows with the behavior it can verify:
   Pull requests remain available but are optional.
 - The terminal foundation adds a small native smoke matrix on Linux x86_64,
   macOS Apple Silicon, and Windows x86_64. It exercises terminal startup and
-  restoration on pull requests without duplicating the complete test suite.
+  restoration on pull requests without duplicating the complete test suite. A
+  manual dispatch can run the same matrix for a direct `shrek` push before its
+  native gate closes.
 - The complete playable loop adds `mise run test-native`. The full supported
   operating-system and architecture matrix runs on `shrek`, manual
   dispatch, and each release candidate rather than on every source edit.
@@ -1697,33 +1700,63 @@ Exit gate:
 Goal: create a portable terminal lifecycle and rendering base before filling it
 with game screens.
 
-- [ ] Add and pin the selected Ratatui and Crossterm versions.
-- [ ] Enter raw mode and the alternate screen through one owned lifecycle.
-- [ ] Restore terminal state after normal quit and every handled startup or
+Ratatui 0.30.2 and Crossterm 0.29.0 are exact application dependencies. The
+Ratatui default feature set stays disabled, and only its matching Crossterm
+backend is enabled. Crossterm input remains blocking and owned by one joined
+worker; the application does not add an async runtime. Ratatui's dependency
+graph necessarily carries `hashbrown` 0.16 and 0.17 and `syn` 2 and 3, so the
+dependency policy permits only the exact older versions while continuing to
+deny every other duplicate.
+
+The renderer caps its centered viewport at 160 columns by 60 rows. That bound
+keeps Ratatui's two cell buffers and every frame walk independent of a hostile
+or accidental giant terminal size while leaving the preferred and minimum
+layouts unchanged. The launch composition centers a second 120-by-38 shell
+inside that viewport so artwork and menus do not stretch across large
+terminals. The opening mark uses 24 diagonal ink-wash states over 1.1 seconds,
+leaving scheduling margin below the 1.2-second hard limit. Primary text and
+borders use the terminal's adaptive foreground; color remains an additional
+accent instead of the only signal.
+
+- [x] Add and pin the selected Ratatui and Crossterm versions.
+- [x] Enter raw mode and the alternate screen through one owned lifecycle.
+- [x] Restore terminal state after normal quit and every handled startup or
   runtime failure.
-- [ ] Define the panic policy and best-effort terminal restoration without
+- [x] Define the panic policy and best-effort terminal restoration without
   treating malformed input as a panic.
-- [ ] Implement the bounded event queue and input loop.
-- [ ] Preserve key order, coalesce tick and resize notifications, apply
+- [x] Implement the bounded event queue and input loop.
+- [x] Preserve key order, coalesce tick and resize notifications, apply
   backpressure at capacity, and keep shutdown independently observable.
-- [ ] Own tick timing, animation timing, cancellation, and shutdown.
-- [ ] Avoid detached background work.
-- [ ] Detect terminal size and supported color capability.
-- [ ] Implement true-color, ANSI 256, ANSI 16, monochrome, and ASCII choices.
-- [ ] Implement preferred, narrow, and resize-message layouts.
-- [ ] Keep resize handling valid during every transient state.
-- [ ] Define reusable focus, dialog, help, rules-step, error, paper, branch, and
+- [x] Own tick timing, animation timing, cancellation, and shutdown.
+- [x] Avoid detached background work.
+- [x] Detect terminal size and supported color capability.
+- [x] Implement true-color, ANSI 256, ANSI 16, monochrome, and ASCII choices.
+- [x] Implement preferred, narrow, and resize-message layouts.
+- [x] Keep resize handling valid during every transient state.
+- [x] Define reusable focus, dialog, help, rules-step, error, paper, branch, and
   status components.
-- [ ] Convert the monochrome Orifude mark into reviewed terminal-safe artwork.
-- [ ] Add reduced-motion and instant-reveal settings.
-- [ ] Sanitize external display strings before they reach rendering.
-- [ ] Test view behavior with Ratatui's test backend using small audited
+- [x] Convert the monochrome Orifude mark into reviewed terminal-safe artwork.
+- [x] Add reduced-motion and instant-reveal settings.
+- [x] Sanitize external display strings before they reach rendering.
+- [x] Test view behavior with Ratatui's test backend using small audited
   expectations.
-- [ ] Add a shipped-binary smoke test that verifies terminal restoration.
-- [ ] Add the pull-request native smoke matrix for Linux x86_64, macOS Apple
-  Silicon, and Windows x86_64 through mise.
-- [ ] Run exploratory QA in common light, dark, limited-color, and monochrome
+- [x] Add a shipped-binary smoke test that verifies terminal restoration.
+- [x] Add the pull-request and manual native smoke matrix for Linux x86_64,
+  macOS Apple Silicon, and Windows x86_64 through mise.
+- [x] Run exploratory QA in common light, dark, limited-color, and monochrome
   terminals.
+
+Local release QA on x86_64 Linux exercised true color, ANSI 16, `NO_COLOR`,
+ASCII, preferred and minimum layouts, an undersized resize with an open error,
+settings persistence, navigation, and normal quit. A fresh database reached a
+usable screen in 93.583 milliseconds including tmux startup; one key-to-visible
+frame sample took 4.906 milliseconds; settled idle use was 0.0 percent CPU and
+6,256 KiB resident memory. Ratatui backend tests, injected lifecycle failures,
+queue saturation tests, and the shipped-binary PTY smoke passed locally. The
+Windows target reached and checked the Rust terminal dependencies, including
+ConPTY, before the Linux host stopped at the expected missing MSVC SQLite C
+toolchain. The hosted macOS and Windows smoke results remain required before
+checking the cross-platform exit gate.
 
 Exit gate:
 

@@ -8,7 +8,8 @@ use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 use orifude::domain::replay::Replay;
 use orifude::packs::validate_directory;
 use orifude::storage::{
-    AppPaths, ColorMode, InstallOutcome, Settings, Storage, StorageError, decode_replay_bytes,
+    AppPaths, ColorMode, GlyphMode, InstallOutcome, Settings, Storage, StorageError,
+    decode_replay_bytes,
 };
 use rusqlite::{Connection, params};
 use zip::write::SimpleFileOptions;
@@ -103,6 +104,7 @@ fn settings_completion_and_best_replay_survive_restart() {
         storage
             .save_settings(Settings {
                 color_mode: ColorMode::Monochrome,
+                glyph_mode: GlyphMode::Ascii,
                 reduced_motion: true,
                 instant_reveal: true,
             })
@@ -121,10 +123,11 @@ fn settings_completion_and_best_replay_survive_restart() {
     }
 
     let storage = Storage::open(paths).unwrap();
-    assert_eq!(
-        storage.settings().unwrap().color_mode,
-        ColorMode::Monochrome
-    );
+    let settings = storage.settings().unwrap();
+    assert_eq!(settings.color_mode, ColorMode::Monochrome);
+    assert_eq!(settings.glyph_mode, GlyphMode::Ascii);
+    assert!(settings.reduced_motion);
+    assert!(settings.instant_reveal);
     let progress = storage.progress("built-in", "berry").unwrap().unwrap();
     assert_eq!(progress.attempt_count, 1);
     let saved = storage.best_replay("built-in", "berry").unwrap().unwrap();
@@ -170,15 +173,15 @@ fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
 
     let connection = Connection::open(paths.database()).unwrap();
     connection
-        .execute_batch("PRAGMA journal_mode = WAL; PRAGMA user_version = 2")
+        .execute_batch("PRAGMA journal_mode = WAL; PRAGMA user_version = 3")
         .unwrap();
     drop(connection);
     let database_before = fs::read(paths.database()).unwrap();
     assert!(matches!(
         Storage::open(paths.clone()),
         Err(StorageError::UnsupportedSchema {
-            found: 2,
-            supported: 1
+            found: 3,
+            supported: 2
         })
     ));
     assert_eq!(fs::read(paths.database()).unwrap(), database_before);
@@ -195,13 +198,70 @@ fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
 
 #[test]
 fn a_database_claiming_the_schema_without_its_markers_is_rejected() {
-    let root = TestDirectory::new("false-schema");
+    for version in [1, 2] {
+        let root = TestDirectory::new("false-schema");
+        let paths = root.paths();
+        fs::create_dir_all(paths.data()).unwrap();
+        let connection = Connection::open(paths.database()).unwrap();
+        connection
+            .pragma_update(None, "user_version", version)
+            .unwrap();
+        drop(connection);
+        let database_before = fs::read(paths.database()).unwrap();
+        assert!(matches!(
+            Storage::open(paths.clone()),
+            Err(StorageError::Corrupt)
+        ));
+        assert_eq!(fs::read(paths.database()).unwrap(), database_before);
+    }
+}
+
+#[test]
+fn rejected_settings_write_leaves_the_durable_value_unchanged() {
+    let root = TestDirectory::new("settings-footprint");
     let paths = root.paths();
-    fs::create_dir_all(paths.data()).unwrap();
+    let mut storage = Storage::open(paths.clone()).unwrap();
+    let mut shared_memory_name = paths.database().into_os_string();
+    shared_memory_name.push("-shm");
+    fs::File::create(PathBuf::from(shared_memory_name))
+        .unwrap()
+        .set_len(Storage::transient_sidecar_limit() + 1)
+        .unwrap();
+
+    let changed = Settings {
+        color_mode: ColorMode::Monochrome,
+        ..Settings::default()
+    };
+    assert!(matches!(
+        storage.save_settings(changed),
+        Err(StorageError::Full)
+    ));
+    assert_eq!(storage.settings().unwrap(), Settings::default());
+}
+
+#[test]
+fn schema_one_settings_gain_the_unicode_glyph_default() {
+    let root = TestDirectory::new("settings-migration");
+    let paths = root.paths();
+    drop(Storage::open(paths.clone()).unwrap());
     let connection = Connection::open(paths.database()).unwrap();
-    connection.execute_batch("PRAGMA user_version = 1").unwrap();
+    connection
+        .execute_batch(
+            "ALTER TABLE settings DROP COLUMN glyph_mode;
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
     drop(connection);
-    assert!(matches!(Storage::open(paths), Err(StorageError::Corrupt)));
+
+    let storage = Storage::open(paths.clone()).unwrap();
+    assert_eq!(storage.settings().unwrap().glyph_mode, GlyphMode::Unicode);
+    drop(storage);
+
+    let connection = Connection::open(paths.database()).unwrap();
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, 2);
 }
 
 #[test]

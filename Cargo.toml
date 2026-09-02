@@ -12,6 +12,9 @@ publish = false
 
 resolver = "3"
 
+[features]
+isolated-test-paths = []
+
 [[bin]]
 name = "orifude"
 path = "src/main.rs"
@@ -35,7 +38,9 @@ minimum-version = "10 22H2"
 targets = ["x86_64-pc-windows-msvc"]
 
 [dependencies]
+crossterm = "=0.29.0"
 directories = "6.0.0"
+ratatui = { version = "=0.30.2", default-features = false, features = ["crossterm_0_29"] }
 rusqlite = { version = "0.40.2", default-features = false, features = ["bundled", "limits"] }
 serde = { version = "1.0.229", features = ["derive"] }
 sha2 = "0.11.0"
@@ -45,6 +50,12 @@ zip = { version = "8.1.0", default-features = false, features = ["deflate-flate2
 
 [target.'cfg(windows)'.dependencies]
 winapi-util = "0.1.11"
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+
+[target.'cfg(windows)'.dev-dependencies]
+conpty-oxide = { version = "=0.1.2", default-features = false, features = ["blocking"] }
 
 [lints.rust]
 unsafe_code = "deny"

@@ -11,12 +11,18 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_orifude"))
+    let state = tempfile::tempdir().expect("isolated command state");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_orifude"));
+    command
         .args(arguments)
+        .env("XDG_DATA_HOME", state.path().join("data"))
+        .env("XDG_CONFIG_HOME", state.path().join("config"))
+        .env("XDG_CACHE_HOME", state.path().join("cache"))
+        .env("APPDATA", state.path().join("config"))
+        .env("LOCALAPPDATA", state.path().join("data"))
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("the Orifude binary should start");
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().expect("the Orifude binary should start");
     let started = Instant::now();
 
     loop {
@@ -66,15 +72,14 @@ fn assert_usage_error(output: &Output) {
 }
 
 #[test]
-fn starting_without_arguments_reports_the_current_product_state() {
+fn starting_without_an_interactive_terminal_fails_without_control_sequences() {
     let output = run(&[] as &[&str]);
-    let stdout = utf8(&output.stdout);
+    let stderr = utf8(&output.stderr);
 
-    assert!(output.status.success());
-    assert!(stdout.contains("quiet, offline puzzle game"));
-    assert!(stdout.contains("not available in this build yet"));
-    assert!(stdout.contains("orifude --help"));
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(stderr.contains("needs an interactive terminal"));
+    assert!(!stderr.contains('\u{1b}'));
 }
 
 #[test]

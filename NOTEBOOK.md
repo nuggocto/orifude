@@ -32,6 +32,7 @@ into another checklist.
 | Local commands | [`mise.toml`](mise.toml), [`mise.lock`](mise.lock) |
 | Ordinary CI | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 | Process and command line | [entry](src/main.rs), [CLI](src/cli.rs), [errors](src/error.rs) |
+| Terminal shell | [runtime](src/tui), [native smoke](tests/terminal_pty.rs) |
 | Paper and game rules | [`src/domain`](src/domain) |
 | Plain-text exercise | [`examples/paper.rs`](examples/paper.rs) |
 | Representation measurements | [paper](examples/paper_measure.rs), [solver](examples/solver_measure.rs) |
@@ -39,7 +40,7 @@ into another checklist.
 | Search and generation | [solver](src/solver), [generator](src/generator) |
 | Local persistence | [`src/storage`](src/storage) |
 | Community content | [`src/packs`](src/packs) |
-| Behavior tests | [CLI](tests/cli.rs), [paper](tests/paper.rs), [engine](tests/engine.rs), [solver](tests/solver.rs), [generator](tests/generator.rs), [storage](tests/storage.rs), [storage recovery](tests/storage_recovery.rs), [packs](tests/packs.rs) |
+| Behavior tests | [CLI](tests/cli.rs), [terminal](tests/terminal_pty.rs), [paper](tests/paper.rs), [engine](tests/engine.rs), [solver](tests/solver.rs), [generator](tests/generator.rs), [storage](tests/storage.rs), [storage recovery](tests/storage_recovery.rs), [packs](tests/packs.rs) |
 
 ## Product contract
 
@@ -131,9 +132,9 @@ What was built:
   small enough that a hand-written parser is easier to audit than a parser
   framework. Later storage work added only its bounded persistence and content
   dependencies.
-- [`src/cli.rs`](src/cli.rs) handles the default message, help, version, and
-  invalid usage. It inspects at most two arguments and never reflects unknown
-  argument bytes into terminal output.
+- [`src/cli.rs`](src/cli.rs) separates an empty interactive launch from help,
+  version, and invalid usage. It inspects at most two arguments and never
+  reflects unknown argument bytes into terminal output.
 - Exit codes are stable: success is 0, operational failure is 1, and invalid
   usage is 2. Output failures retain their I/O cause instead of becoming a
   vague top-level message.
@@ -143,7 +144,9 @@ What was built:
   tests, doctests, release builds, dependency policy, the paper exercise,
   measurements, and domain fuzzing.
 - [`deny.toml`](deny.toml) rejects unknown dependency sources, wildcard
-  dependencies, duplicate versions, unreviewed licenses, and known advisories.
+  dependencies, unreviewed licenses, and known advisories. Duplicate versions
+  remain denied except for two exact Ratatui dependency versions whose upstream
+  graph cannot unify yet.
 - [Ordinary CI](.github/workflows/ci.yml) runs `mise run check` on Linux for
   pull requests and pushes to `shrek`. It has read-only repository permission,
   no publication credentials, a 15-minute timeout, pinned actions, and no
@@ -705,9 +708,180 @@ lives alone in [`tests/storage_recovery.rs`](tests/storage_recovery.rs). The
 storage and recovery binaries then passed 100 consecutive runs, followed by the
 ten complete focused-suite runs recorded above.
 
+## Terminal runtime design
+
+The terminal shell has one main-thread renderer and one owned event worker. Its
+dominant operations are appending a key, replacing a pending resize or tick,
+removing the oldest event, and waking shutdown. The queue can hold at most 256
+fixed-size events, so a preallocated `VecDeque` keeps those operations bounded
+without another index or synchronized collection.
+
+```mermaid
+flowchart LR
+    Input["Crossterm input"] --> Worker["Owned event worker"]
+    Clock["30 Hz animation clock"] --> Worker
+    Worker --> Queue["VecDeque<br/>at most 256 events"]
+    Queue --> Update["App update"]
+    Update --> View["Ratatui view"]
+    View --> Terminal["Owned terminal session"]
+    Stop["Independent shutdown flag"] -.-> Worker
+    Terminal --> Restore["Reverse-order restoration"]
+```
+
+A design with separate key, resize, and tick stores was rejected. It makes the
+total capacity and the position of coalesced events harder to inspect. The one
+queue preserves key order, replaces an existing resize or tick in place, and
+uses condition-variable backpressure when a new entry would exceed the limit.
+Shutdown is not an event, so a full queue cannot hide it.
+
+The terminal session records raw mode, alternate-screen entry, cursor hiding,
+line wrapping, and focus reporting as separate acquired capabilities. Normal
+exit and handled errors restore every capability in reverse order. Successful
+steps are cleared while failed steps remain available for a bounded retry. A
+process-level fallback makes the same restoration as separate best-effort
+operations. The panic hook only performs that fallback on the thread that owns
+the terminal, so a caught event-worker panic returns through the normal error
+path instead of removing the alternate screen under the renderer. The renderer
+uses a centered viewport capped at 160 by 60 cells, so a hostile or accidental
+giant terminal size cannot turn into an unbounded Ratatui buffer.
+
+[`src/tui`](src/tui) now contains the app state, event pump, lifecycle, safe
+text boundary, capability profile, layouts, components, and pure view. The
+shell opens the home branch, help, a rules preview, terminal settings, quit
+confirmation, and readable error dialogs. Preferred, narrow, and undersized
+layouts share the same state. The narrow layout keeps all choices visible, and
+the undersized view keeps dialogs and focus waiting until the terminal returns.
+ASCII, monochrome, reduced-motion, and instant-reveal choices are stored with
+the existing settings through the schema migration in
+[`src/storage/mod.rs`](src/storage/mod.rs). Primary text uses the terminal's
+default foreground so it remains readable on both light and dark backgrounds.
+
+The opening composition now keeps its shape on a large terminal instead of
+inflating two bordered panels to the full render cap. [`layout.rs`](src/tui/layout.rs)
+centers a 120-by-38 shell, gives the courier three fifths of the content width,
+and keeps the seven-choice card at 32 by 9 cells. At 60 by 20 it switches to a
+two-line mark above the complete choice list.
+
+```text
+160 by 60 render viewport
+└── 120 by 38 centered shell
+    ├── title
+    ├── courier mark        32 by 9 branch card
+    └── keyboard status
+```
+
+[`components.rs`](src/tui/components.rs) derives the Unicode mark from the
+supplied monochrome artwork as a fixed Braille raster. This retains the brush
+circle, side-profile squirrel, folded letter, branch, and berries. A separate
+ASCII drawing carries the same composition without Unicode. The opening uses
+24 fixed visual states over 1.1 seconds. Ink moves diagonally across the final
+raster, any key completes it, reduced-motion and instant-reveal modes start on
+the final state, and the event clock stops after the reveal. The work per frame
+is bounded by 48 columns and 15 Braille rows. The full mark starts with the
+artwork itself; the redundant `paper courier` label above it was removed while
+the Orifude wordmark and arrival caption remain.
+
+The view tests use Ratatui's `TestBackend` for the three layout boundaries,
+ASCII-only output, and resize with an open dialog. Queue tests cover exact
+capacity, key order, tick and resize coalescing, backpressure, failure priority,
+and shutdown while full. Lifecycle tests inject each acquisition and
+restoration failure, including a retry that touches only the capability that
+still needs cleanup. [`tests/terminal_pty.rs`](tests/terminal_pty.rs) drives the
+shipped binary through `script` on Linux and macOS and ConPTY on Windows, then
+checks that the alternate screen, cursor, and line wrapping were restored. Its
+opt-in `isolated-test-paths` build feature accepts one absolute temporary root
+and is enabled only by the repository test tasks. The smoke proves that its
+database was created below that root, so native tests cannot migrate or
+reconcile a developer's live data. The Linux launcher passes the binary through
+one quoted environment value, which also keeps paths containing spaces intact.
+The test is not built on unsupported Unix targets. Pull requests and manual
+workflow dispatch run the smoke through mise on Linux x86_64, macOS Apple
+Silicon, and Windows x86_64. Manual dispatch supplies native gate evidence for
+a direct `shrek` push without putting the matrix on every push.
+
+A whole-repository review on 2026-09-02 confirmed and fixed seven other defects
+at their owning boundaries. An unbound key now redraws the completed opening
+mark. Failed settings persistence restores the app's pre-event value without
+making another fallible database read. Storage checks its file budget before
+settings, completion, daily-history, and pack-install mutations, so a reported
+capacity rejection leaves durable state unchanged. Existing schema markers are
+verified before the settings migration changes an older database. The ASCII
+mark uses its actual 33-cell source width, keeping the drawing and reveal sweep
+centered. The cleanup and panic ownership changes described above cover the
+remaining two defects. Focused regressions reproduced each reachable failure
+before the fixes and passed afterward in [`app.rs`](src/tui/app.rs),
+[`terminal.rs`](src/tui/terminal.rs),
+[`components.rs`](src/tui/components.rs), and
+[`tests/storage.rs`](tests/storage.rs).
+
+The same review reread every authored source, test, example, configuration, and
+project document on the dirty tree based on `6001a6c`. The complete locked
+check, the release all-target test suite, and 20 consecutive release PTY
+restoration runs passed on x86_64 Linux. Release-binary QA also covered the 80
+by 24 and 60 by 20 layouts, the 59 by 19 resize message, navigation, errors,
+help and quit dialogs through resize, persisted ASCII settings, normal quit,
+and Ctrl-C. Native macOS and Windows execution remains unverified locally.
+
+Exploratory release QA on the recorded Linux host covered true color, ANSI 16,
+`NO_COLOR`, ASCII, 80 by 24, the exact 60 by 20 minimum, and an undersized
+terminal while an error dialog was open. A fresh database reached a usable
+screen in 93.583 milliseconds including tmux startup. One navigation key was
+visible through tmux in 4.906 milliseconds. After animation settled, `ps`
+reported 0.0 percent CPU and 6,256 KiB resident memory. These are local
+end-to-end samples, not cross-platform distributions. The unstripped,
+dynamically linked release binary was 4,403,224 bytes; packaged and stripped
+artifact size remains release work. The native macOS and Windows smoke jobs
+still need to run on a pull request before the cross-platform exit claim is
+checked.
+
+The launch redesign was checked on the dirty tree based on `6001a6c` with the
+release binary on x86_64 Arch Linux. Unicode captures at 160 by 60, 80 by 24,
+and 60 by 20 kept the courier and menu centered without clipping. Separate
+captures observed the early, middle, and final ink states. A navigation key
+finished the reveal and still moved focus, ASCII mode used only ASCII cells,
+and a persisted reduced-motion setting opened directly on the complete mark.
+One settled release-process sample reported 0.0 percent CPU and 11,840 KiB
+resident memory. The complete locked check, release build, and shipped-binary
+terminal-restoration smoke passed. Native macOS and Windows behavior was not
+rerun by this local design check.
+
+A later hand-drawn courier variant failed owner review and was removed. The
+source-derived Braille raster, matching ASCII drawing, and original ink reveal
+are restored. The focused component tests and an 80 by 24 release capture
+confirmed the rollback on x86_64 Arch Linux.
+
+Dialogs now receive a host region from the active layout. Preferred layouts
+place the modal over the courier column and preserve the complete branch card
+beside it. Narrow layouts clear their shared content region first, so no stacked
+menu row survives above or below the modal.
+
+```text
+preferred  [ modal over courier ]  [ complete Home branch ]
+narrow     [       cleared modal content region          ]
+```
+
+View regressions check both behaviors. Release captures at 160 by 60, 80 by 24,
+and 60 by 20 confirmed the quit text, footer, borders, and surrounding content
+do not collide on x86_64 Arch Linux.
+
+The redundant label above the full courier mark was then removed. Release
+captures at 160 by 60 and 80 by 24 confirmed that the artwork, wordmark, and
+arrival caption remain centered without a blank row. The 60 by 20 compact mark
+was unchanged. This local visual check did not rerun native macOS or Windows.
+
+After the review corrections, `mise run check` passed the locked format,
+dependency-policy, lint, test, doctest, and release-build tasks on x86_64 Linux.
+The release all-target suite passed 135 tests, including both PTY cases. The
+release PTY cases then passed 20 consecutive runs. A release-binary capture sent
+an unbound key during the opening wash and immediately showed the complete mark
+and arrival caption. The installed Windows Rust target again reached bundled
+SQLite before stopping at the host's missing MSVC `lib.exe`; native Windows and
+macOS execution still belongs to the hosted smoke matrix in
+[`ci.yml`](.github/workflows/ci.yml).
+
 ## What comes next
 
 The current work and its acceptance gate stay in
-[`PROJECT.md`](PROJECT.md#current-work). The next implementation establishes one
-owned terminal lifecycle, bounded input delivery, and capability-aware drawing
-on top of the now durable offline core.
+[`PROJECT.md`](PROJECT.md#current-work). Once the hosted native terminal smoke
+has confirmed restoration on macOS and Windows, the next implementation can
+connect the existing paper engine and storage to this shell.
