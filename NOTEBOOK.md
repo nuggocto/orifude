@@ -894,11 +894,15 @@ uses the raw line-wrap assertion only on Unix and keeps its behavioral lifecycle
 coverage on all platforms. The same correction removes a Windows-only unused
 parameter warning in the private-file helper. The failed hosted evidence is
 [run 33647259312](https://github.com/nuggocto/orifude/actions/runs/33647259312);
-a fresh matrix on the correcting commit remains required before the gate moves.
+the corrected commit `b6d5154` passed the full ordinary check in
+[run 33648103544](https://github.com/nuggocto/orifude/actions/runs/33648103544),
+then passed the full check and the native terminal smoke on Linux x86_64, macOS
+Apple Silicon, and Windows x86_64 without retries in
+[run 33648348790](https://github.com/nuggocto/orifude/actions/runs/33648348790).
 
 ## What comes next
 
-The current work and its acceptance gate stay in
-[`PROJECT.md`](PROJECT.md#current-work). Once the hosted native terminal smoke
-has confirmed restoration on macOS and Windows, the next implementation can
-connect the existing paper engine and storage to this shell.
+The current work stays in [`PROJECT.md`](PROJECT.md#current-work). The native
+shell gate is confirmed, so the next implementation can connect the existing
+paper engine and storage to this shell, beginning with capability checks and the
+interactive lesson.

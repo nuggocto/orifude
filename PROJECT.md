@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 6, terminal foundation**
-- Current checklist item: **Verify the empty application shell on every
-  supported native platform.**
+- Current phase: **Phase 7, complete playable loop**
+- Current checklist item: **Implement first-launch capability checks and the
+  interactive lesson using the shared visual teaching components.**
 - Last updated: **2026-09-02**
 
 Checkbox rules:
@@ -1755,12 +1755,15 @@ frame sample took 4.906 milliseconds; settled idle use was 0.0 percent CPU and
 queue saturation tests, and the shipped-binary PTY smoke passed locally. The
 Windows target reached and checked the Rust terminal dependencies, including
 ConPTY, before the Linux host stopped at the expected missing MSVC SQLite C
-toolchain. The hosted macOS and Windows smoke results remain required before
-checking the cross-platform exit gate.
+toolchain. Commit `b6d5154` passed the full ordinary check in
+[hosted run 33648103544](https://github.com/nuggocto/orifude/actions/runs/33648103544).
+The same commit then passed the full check and the shipped-binary terminal smoke
+on Linux x86_64, macOS Apple Silicon, and Windows x86_64 without retries in
+[native run 33648348790](https://github.com/nuggocto/orifude/actions/runs/33648348790).
 
 Exit gate:
 
-- [ ] The empty application shell starts, resizes, navigates, reports errors,
+- [x] The empty application shell starts, resizes, navigates, reports errors,
   and exits without corrupting the terminal on supported native platforms.
 
 ### Phase 7, complete playable loop
