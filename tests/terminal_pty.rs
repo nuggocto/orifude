@@ -77,10 +77,21 @@ fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
 fn shipped_player_exercises_preview_undo_reset_and_saved_result_navigation() {
     let state = tempfile::tempdir().expect("isolated player state");
     let paths = configured_returning_player(state.path());
-    let output = run_in_native_pty(
+    let steps = [
+        PtyStep {
+            input: b"\r\r ",
+            wait_for: b"UNFOL",
+        },
+        PtyStep {
+            input: b"jlb\rub\rr",
+            wait_for: b"Smooth",
+        },
+    ];
+    let output = run_in_native_pty_scripted(
         Path::new(env!("CARGO_BIN_EXE_orifude")),
         state.path(),
-        b"\r\r jlb\rub\rrnryb\r\r\rqy",
+        &steps,
+        b"nryb\r\r\rqy",
     );
 
     assert!(

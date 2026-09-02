@@ -1087,8 +1087,10 @@ an application failure: ConPTY may split styled screen updates inside a
 multiword label or coalesce a transient frame when several inputs arrive in one
 write. Assertions use unique visible words, and the malformed-pack journey
 waits for the pack menu before opening it and for the fingerprint error before
-dismissing it. Durable-state and terminal-restoration checks still cover the
-complete journeys without depending on one PTY backend's byte chunking.
+dismissing it. The controls journey likewise waits for the unfolded preview and
+reset dialog before continuing through both reset choices. Durable-state and
+terminal-restoration checks still cover the complete journeys without
+depending on one PTY backend's byte chunking.
 
 Local x86_64 Linux verification ran the complete locked check: formatting,
 dependency policy, strict all-target Clippy, tests, doctests, and an optimized
