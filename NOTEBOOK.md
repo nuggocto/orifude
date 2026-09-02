@@ -1102,8 +1102,15 @@ comparison, durable lesson completion, the home summary, daily generation,
 endless generation, compact stack order, cues, and normal exit. ASCII backend
 tests contain only ASCII cells. A local Windows-target check reached the
 bundled SQLite build before stopping at the Linux host's missing MSVC
-`lib.exe`; macOS and Windows execution still require the configured native
-jobs.
+`lib.exe`. Commit
+[`7458ca0`](https://github.com/nuggocto/orifude/commit/7458ca080b03c52bdb1480a7722075d8c984fa13)
+then passed the complete locked check and all five native player jobs in
+[push run 33695312454](https://github.com/nuggocto/orifude/actions/runs/33695312454).
+The same commit passed the locked check, three terminal-restoration smoke jobs,
+and all five native player jobs again in
+[manual run 33695504274](https://github.com/nuggocto/orifude/actions/runs/33695504274).
+Together those hosted runs cover Linux x86_64 and ARM64, macOS Intel and Apple
+Silicon, and Windows x86_64 without retries.
 
 ## What comes next
 

@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 7, complete playable loop**
-- Current checklist item: **Run the full supported operating-system and
-  architecture matrix on `shrek` and by manual dispatch.**
+- Current phase: **Phase 8, content and identity**
+- Current checklist item: **Define the journey groups and the mechanic taught
+  by each group.**
 - Last updated: **2026-09-03**
 
 Checkbox rules:
@@ -1806,23 +1806,27 @@ journey.
 - [x] Implement spoiler-free text result export.
 - [x] Preserve drafts and attempt state across unrelated dialogs and resizes.
 - [x] Add end-to-end journeys through the actual binary.
-- [ ] Add the bounded `mise run test-native` task and run the full supported
-  operating-system and architecture matrix on `shrek`, manual
-  dispatch, and release candidates.
+- [x] Add the bounded `mise run test-native` task, run the full supported
+  operating-system and architecture matrix on `shrek` and by manual dispatch,
+  and configure the same gate for release-candidate tags.
 - [x] QA the loop with keyboard-only use and no knowledge of internal commands.
 
 Local x86_64 Linux evidence covers the complete locked check, the bounded
 native task, the shipped-binary fresh-player and returning-player journey, and
 keyboard-only runs at 100 by 30 and 60 by 20. Daily and endless generation,
 Unicode and ASCII output, result comparison, persistence, restart, replay,
-text export, and normal terminal restoration were exercised. The local
-Windows-target check reached bundled SQLite and stopped at the expected missing
-MSVC librarian on the Linux host. The five native jobs are configured but have
-not run against this work, so the matrix item and exit gate remain open.
+text export, and normal terminal restoration were exercised. Commit `7458ca0`
+passed the complete locked check and all five native player jobs in
+[push run 33695312454](https://github.com/nuggocto/orifude/actions/runs/33695312454).
+The same commit passed the locked check, three terminal-restoration smoke jobs,
+and all five native player jobs again in
+[manual run 33695504274](https://github.com/nuggocto/orifude/actions/runs/33695504274).
+The native matrix covered Linux x86_64 and ARM64, macOS Intel and Apple Silicon,
+and Windows x86_64 without retries.
 
 Exit gate:
 
-- [ ] A new player can learn, solve, save, revisit, and replay a puzzle without
+- [x] A new player can learn, solve, save, revisit, and replay a puzzle without
   leaving the TUI or consulting the source code.
 
 ### Phase 8, content and identity
