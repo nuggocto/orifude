@@ -15,7 +15,9 @@ mod cli;
 pub mod domain;
 mod error;
 pub mod generator;
+pub mod packs;
 pub mod solver;
+pub mod storage;
 
 pub use cli::{ExitStatus, run};
 pub use error::{OutputError, OutputStream};

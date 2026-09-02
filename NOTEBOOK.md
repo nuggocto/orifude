@@ -37,7 +37,9 @@ into another checklist.
 | Representation measurements | [paper](examples/paper_measure.rs), [solver](examples/solver_measure.rs) |
 | Bounded action fuzzing | [`examples/domain_actions_fuzz.rs`](examples/domain_actions_fuzz.rs) |
 | Search and generation | [solver](src/solver), [generator](src/generator) |
-| Behavior tests | [CLI](tests/cli.rs), [paper](tests/paper.rs), [engine](tests/engine.rs), [solver](tests/solver.rs), [generator](tests/generator.rs) |
+| Local persistence | [`src/storage`](src/storage) |
+| Community content | [`src/packs`](src/packs) |
+| Behavior tests | [CLI](tests/cli.rs), [paper](tests/paper.rs), [engine](tests/engine.rs), [solver](tests/solver.rs), [generator](tests/generator.rs), [storage](tests/storage.rs), [storage recovery](tests/storage_recovery.rs), [packs](tests/packs.rs) |
 
 ## Product contract
 
@@ -125,8 +127,10 @@ What was built:
 - [`Cargo.lock`](Cargo.lock) is committed because Orifude ships an application,
   not a reusable library. Locked builds make local work and CI resolve the same
   dependency graph.
-- The package currently has no runtime dependency. The command line is small
-  enough that a hand-written parser is easier to audit than a parser framework.
+- The foundation began without a runtime dependency. The command line remains
+  small enough that a hand-written parser is easier to audit than a parser
+  framework. Later storage work added only its bounded persistence and content
+  dependencies.
 - [`src/cli.rs`](src/cli.rs) handles the default message, help, version, and
   invalid usage. It inspects at most two arguments and never reflects unknown
   argument bytes into terminal output.
@@ -424,6 +428,227 @@ puzzles, line-heavy folded layouts, and rule sets that exhaust bounded search
 still belong in handcrafted content. A failed seed is reported and ends. It
 does not keep shaking the branch until a convenient puzzle falls out.
 
+## Repository-wide review on 2026-09-01
+
+The clean `shrek` commit
+[`06da3c3`](https://github.com/nuggocto/orifude/commit/06da3c3bb77427238578deed928c4798d17c9a8f)
+received a full source, test, configuration, documentation, security-boundary,
+and local behavior review. It found one boundedness defect in
+[`GeneratorConfig`](src/generator/mod.rs), which the follow-up change repaired.
+
+The old configuration accepted rule vectors of any length. `Generator::new`
+then cloned both vectors before `Puzzle::new` enforced the 44-fold and 23-brush
+limits. The old configuration constructor also copied its pack ID before the
+64-byte identity check. Rejection was correct, but it arrived after memory use
+had already grown with invalid input.
+
+```mermaid
+flowchart LR
+    ID["pack ID"] --> Identity["PuzzleIdentity::new<br/>64-byte limit"]
+    Rules["rule vectors"] --> Counts["with_rules<br/>44-fold and 23-brush limits"]
+    Identity --> Config["GeneratorConfig"]
+    Counts --> Exact["exact-length boxed slices"]
+    Exact --> Config
+    Config --> Generator["Generator::new<br/>bounded copies only"]
+```
+
+An isolated reproduction confirmed the vector path twice. A one-rule policy
+peaked near 2.5 MiB resident memory, while five million rejected fold rules
+peaked near 21.7 MiB. The command line could not reach this constructor, so the
+defect was not an exposed vulnerability. It was still the wrong boundary to
+carry into local content parsing.
+
+On 2026-09-02, configuration construction became fallible. It retains a pack ID
+only after `PuzzleIdentity` validates it, and `with_rules` rejects either
+oversized list before retaining either one. Accepted rules become `Box<[Fold]>`
+and `Box<[BrushRule]>`. Generation reads and copies these collections but never
+appends to them, so exact-length slices express the real ownership and discard
+irrelevant spare vector capacity. Keeping growable vectors offered no useful
+operation in return. The public regression in
+[`tests/generator.rs`](tests/generator.rs) checks the 65-byte ID, 45th fold, and
+24th brush rule and their exact typed errors. It failed against the old
+infallible boundary and passes with the bounded one.
+
+The original five-million-rule reproduction now rejects while constructing the
+configuration. Its peak resident memory fell from about 21.7 MiB to 11.9 MiB
+because the caller's input remains but the generator no longer clones it. A
+normal one-rule policy still constructs and generates its preserved daily
+golden. The generator suite passed ten consecutive debug runs. `mise run check`,
+release tests for every Cargo target, and warning-denied Rust documentation all
+passed after the repair. Release-binary default, help, version,
+hostile-argument, paper-exercise, and fuzz-boundary checks also remained
+unchanged.
+
+The rest of the reviewed implementation had no confirmed defect. `mise run
+check`, release tests for every local Cargo target, warning-denied Rust
+documentation, and `git diff --check` passed on Rust 1.98.0 and x86_64 Arch
+Linux. The release
+binary produced the recorded default, help, version, and usage behavior. A
+control-sequence argument was rejected without reflection. The paper exercise
+completed its two-fold, prediction, ink, exact-comparison, undo, and quit path.
+The domain fuzz entrypoint accepted 256 bytes and rejected 257 before domain
+work.
+
+The solver also matched an independent exhaustive reference for all 499 targets
+reachable in a small four-direction fold-and-dot puzzle. The
+[baseline hosted check](https://github.com/nuggocto/orifude/actions/runs/33548263881)
+passed for the same commit. Rust 1.98.0 remains the current stable release in
+the [official Rust release record](https://blog.rust-lang.org/releases/1.98.0/).
+That reviewed commit had no runtime dependency, unsafe code, network path,
+database, archive handling, pack parser, or TUI lifecycle. Native macOS and
+Windows execution remained untested at that review point.
+
+## Persistence and local packs
+
+Build-plan source: [persistence and local packs](PROJECT.md#phase-5-persistence-and-local-packs).
+
+Orifude now has one durable source for progress and one bounded path from local
+authored files to playable community content. Neither path interprets paper
+rules on its own: saved replays and parsed puzzles return through the domain
+engine before they are trusted.
+
+```mermaid
+flowchart LR
+    Replay["Successful Replay"] --> Tx["SQLite transaction<br/>attempt + replay + progress"]
+    Tx --> Prune["Keep 20<br/>preserve best"]
+    Prune --> Save["FULL commit"]
+    Source["Directory or ZIP"] --> Bounds["Path, type, count,<br/>size, text, SPDX"]
+    Bounds --> Stage["Private staging"]
+    Stage --> Pending["Pending row"]
+    Pending --> Rename["Atomic rename"]
+    Rename --> Registry["Playable registry"]
+    Registry --> Verify["Selected pack<br/>SHA-256 verification"]
+    Pending --> Recover["Bounded startup reconciliation"]
+    Registry --> Recover
+    Recover --> Registry
+    Recover --> Absent["No registry and<br/>no managed copy"]
+```
+
+The implementation lives in [`src/storage`](src/storage) and
+[`src/packs`](src/packs). The important choices are:
+
+- [`AppPaths`](src/storage/paths.rs) uses the operating system project
+  directories. Linux follows the XDG data, config, and cache variables with
+  their standard home-directory fallbacks. macOS uses Application Support for
+  data and config and Library/Caches for cache data. Windows uses roaming
+  AppData for data and config and local AppData for cache data. Tests inject
+  three isolated roots and never write into the working tree.
+- [`rusqlite`](Cargo.toml) links the reviewed bundled SQLite so every native
+  artifact gets the same database feature set. Semver-compatible dependency
+  updates are accepted only through a reviewed `Cargo.lock` change followed by
+  the complete license, source, advisory, lint, test, and release-build check.
+  The allowlist records Apache-2.0, MIT, MPL-2.0, Unicode-3.0, and Zlib after
+  reviewing the locked graph; it has no skip tree.
+- [`Storage::open`](src/storage/mod.rs) owns one connection and one advisory
+  lock. It rejects a symlinked database path, then lets the writable connection
+  recover a hot rollback journal before it reads the schema version. Newer
+  schemas still stop before writable pragmas or migrations can touch them. The
+  connection applies the initial schema in an immediate transaction, caps
+  SQLite strings, blobs, SQL, expression depth, variables, attachments,
+  triggers, and worker threads, and checks the schema markers, foreign keys,
+  and database image without silently replacing corrupt data.
+- The schema separates metadata, rendering-independent settings, progress,
+  completed attempts, bounded replay documents, generator-versioned daily
+  history, installed-pack metadata, and the single pending installation.
+  The pending row retains the original installation timestamp for restart
+  recovery. Progress has no pack-registry foreign key, so removing content does
+  not erase the history that explains an earlier completion.
+- A successful replay is executed first, then its attempt, replay, best marker,
+  and progress summary commit together. The connection uses 4096-byte pages,
+  32,768 maximum pages, `DELETE` journaling, `FULL` synchronization, no retained
+  journal, disabled cache spilling, and memory-backed SQLite temporary storage.
+  The main file is capped at 128 MiB. Nonessential replay and daily-history
+  writes preserve 16 MiB of free page capacity after one pruning batch. A
+  completion may use that reserve for progress and its best replay. When a
+  worse replay will not fit outside the reserve, its progress commits and only
+  that nonessential replay is discarded. Per-puzzle history keeps 20 replays
+  including the best.
+- A rollback journal can hold one original page record per database page. The
+  132 MiB transient-sidecar budget covers 32,768 records of 4096 data bytes and
+  eight framing bytes plus SQLite's maximum sector-sized header. Disabling
+  cache spilling keeps a transaction to that one header. WAL and shared memory
+  files are forbidden by the selected journal mode, and actual main, journal,
+  WAL, and shared-memory lengths remain available through `Storage::footprint`.
+- Pack metadata and puzzles are strict versioned TOML. A target is an ASCII
+  `.`/`#` grid that must exactly match the declared dimensions. Display text is
+  UTF-8 with scalar limits and no control characters. IDs, filenames, rules,
+  budgets, tutorial cues, authors, SPDX licenses, file declarations, and all
+  resource bounds are validated before a `Puzzle` is constructed.
+- ZIP is the only archive format. Only stored and deflated regular files are
+  accepted. A bounded end-record preflight rejects excessive, split, and ZIP64
+  entry tables before the ZIP library allocates its catalog. Directory sources
+  stream entries rather than collecting an untrusted directory. Both sources
+  reject traversal, absolute paths, case-folded duplicates, Windows device
+  names, trailing dots or spaces, symbolic links, Unix and Windows hard links,
+  devices, sockets, undeclared directories and files, excessive depth,
+  excessive count, and compressed, extracted, or per-file size excess.
+- Installation writes the already validated byte set into one owner-private
+  staging directory under the data root, synchronizes files and directories,
+  commits the pending identity, fingerprint, and timestamp, renames within that
+  filesystem, then registers the pack and clears the journal in one transaction.
+  Startup rejects a symlinked managed root and performs bounded reconciliation
+  before terminal code. It removes a registry row whose directory is missing
+  and removes unregistered managed entries without following links. This closes
+  the Windows power-loss state where SQLite survives but the rename does not.
+  A selected pack is reparsed and checked against its recorded SHA-256
+  fingerprint; startup does not eagerly parse installed puzzle files.
+
+The integration suites in [`tests/storage.rs`](tests/storage.rs) and
+[`tests/packs.rs`](tests/packs.rs) exercise restart persistence, better-solution
+replacement, 20-replay pruning, migration rollback, schema refusal, corruption,
+read-only paths, lock contention, completion-transaction rollback, every
+durable installation state, failed-cleanup retry, conflicts, fingerprint drift,
+removal with retained progress, directory links, archive escape attempts,
+portable names, resource excess, control text, SPDX parsing, replay identity
+and success, the 32-error reporting ceiling, a spilled hot rollback journal,
+protected reserve writes, managed-root links, missing registry directories,
+unknown managed entries, recovery timestamps, and independent puzzle errors.
+The four parser entrypoints are
+[`examples/puzzle_parser_fuzz.rs`](examples/puzzle_parser_fuzz.rs),
+[`examples/pack_metadata_fuzz.rs`](examples/pack_metadata_fuzz.rs),
+[`examples/replay_parser_fuzz.rs`](examples/replay_parser_fuzz.rs), and
+[`examples/archive_parser_fuzz.rs`](examples/archive_parser_fuzz.rs).
+
+The implementation review found and corrected real boundary defects rather
+than adding speculative complexity. A better score used to insert its new best
+replay before clearing the old unique best marker; the order is now reversed in
+the same transaction. The review also removed unbounded directory collections,
+added the ZIP entry-table preflight, made idempotent installation verify the
+existing managed bytes, required decoded replays to be successful and match the
+requested identity, protected daily history with the free-page reserve, made
+pending-row removal exact, and stopped newer schemas before writable setup.
+Focused regressions cover each correction in the two integration suites.
+
+A later report found several boundary cases that the first review missed.
+Validation now caps diagnostic allocation while it collects issues and keeps
+independent display, identity, target, par, and rules errors in one report.
+Storage now recovers a rollback journal that has spilled pages before checking
+the schema, lets protected completion state use reserved pages, keeps recovery
+timestamps, rejects a symlinked managed root, and converges a missing registered
+directory to the safe no-pack state. Unknown entries under the private managed
+root are removed as bounded orphan cleanup instead of blocking every startup.
+
+The security review treated pack bytes, archive metadata, paths, persisted
+SQLite values, and error text as hostile. All accepted sizes have a numeric
+bound before retained allocation or installation, pack content cannot select a
+managed path, SQL is parameterized, stored display text is revalidated, and
+errors do not reflect untrusted bytes. Packs contain no executable content and
+the dependency graph adds no network client. Concurrent changes by the same
+user to an explicitly selected source directory are not an isolation boundary;
+the install still fingerprints and stages only the validated bytes it read.
+
+On the recorded x86_64 Arch Linux host and its Btrfs SSD, the final five
+independent release runs of 500 completion writes with `FULL` synchronization
+measured 20.228 to 22.120 milliseconds at p50, 21.544 to 28.613 milliseconds at
+p95, 22.602 to 29.459 milliseconds at p99, and 26.559 to 62.811 milliseconds
+maximum. Every p95 is below the 50-millisecond local-SSD target. The locked
+ordinary check, all 100 tests in both debug and release across local targets,
+warning-denied documentation, and release build passed. Random maximum-size
+input passed through all four bounded parser harnesses without a crash. The
+Windows Rust target check reached the bundled SQLite C build but could not
+finish because this Linux host lacks a Windows CRT; native Windows and macOS
+execution remain later native QA, not claims made by this work.
+
 ## How the notebook was checked
 
 On 2026-09-01, this notebook was checked against `PROJECT.md`, the current
@@ -450,9 +675,39 @@ in-place paper reset; the release median for resetting and replaying the fixed
 20-action path was 18.73 to 18.99 microseconds across five processes. Reset
 still checks the rebuilt state before returning.
 
+On 2026-09-02, a whole-repository review reread the committed core and the
+uncommitted pack and storage work together. Its initial clean verdict was wrong.
+A follow-up compared three independent reports with the contract and reproduced
+each surviving claim before changing code. Eight claims were confirmed: reserve
+handling, spilled-journal recovery, managed-root links, Windows rename recovery,
+recovery timestamps, unknown managed entries, diagnostic allocation, and lost
+independent puzzle errors. Four claims were rejected because the contract or
+reachable behavior contradicted them: newline rejection in notes, the independent
+256-file pack limit, cache invalidation after any removal, and the deliberately
+single pruning batch. The focused regressions failed against the old behavior
+and pass after the corrections.
+
+`mise run check`, all 100 tests in release mode, warning-denied documentation,
+the release build, and ten repeated runs of the generator, pack, and storage
+suites passed after the corrections. Release QA also exercised hostile CLI
+input, the paper walkthrough, and maximum accepted input through each bounded
+parser harness. One independent 500-write storage run measured 21.075
+milliseconds at p50, 23.658 milliseconds at p95, 24.598 milliseconds at p99,
+and 30.949 milliseconds maximum. That run is useful confirmation on this Linux
+host, not a cross-platform benchmark; native Windows and macOS behavior was not
+exercised by this review.
+
+The first repeatability run exposed a test bug rather than a storage bug. The
+hot-journal test forked the multithreaded storage-test process. During the short
+fork-to-exec window, the child could retain another test's open lock descriptor
+and make an unrelated immediate reopen report `Locked`. The recovery check now
+lives alone in [`tests/storage_recovery.rs`](tests/storage_recovery.rs). The
+storage and recovery binaries then passed 100 consecutive runs, followed by the
+ten complete focused-suite runs recorded above.
+
 ## What comes next
 
 The current work and its acceptance gate stay in
-[`PROJECT.md`](PROJECT.md#current-work). The next implementation adds local
-progress and pack storage. It can keep generated seeds and exact solution
-replays without asking search or storage to reinterpret paper rules.
+[`PROJECT.md`](PROJECT.md#current-work). The next implementation establishes one
+owned terminal lifecycle, bounded input delivery, and capability-aware drawing
+on top of the now durable offline core.

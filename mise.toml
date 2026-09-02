@@ -52,6 +52,26 @@ run = "cargo run --quiet --locked --release --example solver_measure"
 description = "Run the bounded domain-action fuzz harness"
 run = "cargo run --quiet --locked --release --example domain_actions_fuzz"
 
+[tasks.puzzle-parser-fuzz]
+description = "Run the bounded puzzle-parser fuzz harness"
+run = "cargo run --quiet --locked --release --example puzzle_parser_fuzz"
+
+[tasks.pack-metadata-fuzz]
+description = "Run the bounded pack-metadata fuzz harness"
+run = "cargo run --quiet --locked --release --example pack_metadata_fuzz"
+
+[tasks.replay-parser-fuzz]
+description = "Run the bounded replay-parser fuzz harness"
+run = "cargo run --quiet --locked --release --example replay_parser_fuzz"
+
+[tasks.archive-parser-fuzz]
+description = "Run the bounded ZIP-parser fuzz harness"
+run = "cargo run --quiet --locked --release --example archive_parser_fuzz"
+
+[tasks.storage-measure]
+description = "Measure durable completion writes in a release build"
+run = "cargo run --quiet --locked --release --example storage_measure"
+
 [tasks.audit]
 description = "Check dependency advisories, licenses, and sources"
 run = "cargo deny --locked check"

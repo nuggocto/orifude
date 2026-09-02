@@ -14,6 +14,10 @@ ignore = []
 [licenses]
 allow = [
     "Apache-2.0",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
 ]
 confidence-threshold = 0.93
 

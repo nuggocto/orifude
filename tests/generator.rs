@@ -1,4 +1,8 @@
 use orifude::domain::paper::{BrushRule, Fold, FoldDirection, PaperAction};
+use orifude::domain::puzzle::{
+    IdentityErrorReason, IdentityPart, MAX_ALLOWED_FOLDS, MAX_BRUSH_RULES, MAX_ID_BYTES,
+    PuzzleError,
+};
 use orifude::domain::score::Par;
 use orifude::generator::{
     CalendarDate, CandidateRejection, GenerationError, GenerationOutcome, GenerationSeed,
@@ -12,10 +16,12 @@ use orifude::solver::{
 fn working_generator(attempts: u16) -> Generator {
     Generator::new(
         GeneratorConfig::new("generated-tests", 4, 4)
+            .expect("the generator identity should be valid")
             .with_rules(
                 vec![Fold::new(FoldDirection::Right, 1)],
                 vec![BrushRule::Dot],
             )
+            .expect("the generator rules should fit their storage bounds")
             .with_budgets(1, 1)
             .with_attempt_limit(attempts),
     )
@@ -118,10 +124,12 @@ fn preserved_daily_output_has_a_cross_platform_golden() {
 fn generation_attempts_end_at_the_configured_bound() {
     let generator = Generator::new(
         GeneratorConfig::new("generated-tests", 4, 4)
+            .expect("the generator identity should be valid")
             .with_rules(
                 vec![Fold::new(FoldDirection::Left, 1)],
                 vec![BrushRule::Dot],
             )
+            .expect("the generator rules should fit their storage bounds")
             .with_budgets(1, 1)
             .with_attempt_limit(3),
     )
@@ -146,10 +154,12 @@ fn generation_attempts_end_at_the_configured_bound() {
 fn solver_exhaustion_rejects_one_candidate_without_ending_generation() {
     let generator = Generator::new(
         GeneratorConfig::new("generated-tests", 4, 4)
+            .expect("the generator identity should be valid")
             .with_rules(
                 vec![Fold::new(FoldDirection::Right, 1)],
                 vec![BrushRule::Dot],
             )
+            .expect("the generator rules should fit their storage bounds")
             .with_budgets(1, 1)
             .with_attempt_limit(32)
             .with_solver_limits(SolverLimits::new(
@@ -208,17 +218,55 @@ fn generation_reports_cancellation_and_invalid_compatibility() {
 }
 
 #[test]
+fn generator_configuration_rejects_values_above_its_storage_bounds() {
+    let oversized_id = "a".repeat(MAX_ID_BYTES + 1);
+    assert_eq!(
+        GeneratorConfig::new(&oversized_id, 4, 4),
+        Err(GenerationError::Puzzle(PuzzleError::InvalidIdentity {
+            part: IdentityPart::Pack,
+            reason: IdentityErrorReason::TooLong,
+        }))
+    );
+
+    let base = GeneratorConfig::new("generated-tests", 4, 4)
+        .expect("the generator identity should be valid");
+    assert_eq!(
+        base.clone().with_rules(
+            vec![Fold::new(FoldDirection::Right, 1); MAX_ALLOWED_FOLDS + 1],
+            vec![BrushRule::Dot],
+        ),
+        Err(GenerationError::Puzzle(PuzzleError::TooManyAllowedFolds {
+            count: MAX_ALLOWED_FOLDS + 1,
+            limit: MAX_ALLOWED_FOLDS,
+        }))
+    );
+    assert_eq!(
+        base.with_rules(
+            vec![Fold::new(FoldDirection::Right, 1)],
+            vec![BrushRule::Dot; MAX_BRUSH_RULES + 1],
+        ),
+        Err(GenerationError::Puzzle(PuzzleError::TooManyBrushRules {
+            count: MAX_BRUSH_RULES + 1,
+            limit: MAX_BRUSH_RULES,
+        }))
+    );
+}
+
+#[test]
 fn generator_rejects_unbounded_or_incomplete_policies() {
-    let base = GeneratorConfig::new("generated-tests", 4, 4);
+    let base = GeneratorConfig::new("generated-tests", 4, 4)
+        .expect("the generator identity should be valid");
     assert_eq!(
         Generator::new(base.clone()),
         Err(GenerationError::NeedsFold)
     );
 
-    let rules = base.with_rules(
-        vec![Fold::new(FoldDirection::Right, 1)],
-        vec![BrushRule::Dot],
-    );
+    let rules = base
+        .with_rules(
+            vec![Fold::new(FoldDirection::Right, 1)],
+            vec![BrushRule::Dot],
+        )
+        .expect("the generator rules should fit their storage bounds");
     assert_eq!(
         Generator::new(rules.clone().with_budgets(1, 1).with_attempt_limit(0)),
         Err(GenerationError::AttemptLimit {
@@ -241,10 +289,12 @@ fn generator_rejects_unbounded_or_incomplete_policies() {
     ));
 
     let oversized = GeneratorConfig::new("generated-tests", 4, 4)
+        .expect("the generator identity should be valid")
         .with_rules(
             vec![Fold::new(FoldDirection::Right, 1)],
             vec![BrushRule::Dot],
         )
+        .expect("the generator rules should fit their storage bounds")
         .with_budgets(u8::MAX, u8::MAX);
     assert!(matches!(
         Generator::new(oversized),

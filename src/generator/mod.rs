@@ -5,7 +5,9 @@ use std::fmt;
 
 use crate::domain::attempt::Attempt;
 use crate::domain::paper::{BrushRule, Fold, InkPattern, MAX_ACTIONS, PaperAction};
-use crate::domain::puzzle::{Puzzle, PuzzleError, PuzzleIdentity, PuzzleSpec};
+use crate::domain::puzzle::{
+    MAX_ALLOWED_FOLDS, MAX_BRUSH_RULES, Puzzle, PuzzleError, PuzzleIdentity, PuzzleSpec,
+};
 use crate::domain::replay::{Replay, ReplayMetadata};
 use crate::domain::score::Par;
 use crate::solver::{
@@ -168,11 +170,11 @@ impl fmt::Display for GenerationSeed {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratorConfig {
-    pack_id: Box<str>,
+    template_identity: PuzzleIdentity,
     width: u8,
     height: u8,
-    allowed_folds: Vec<Fold>,
-    allowed_brushes: Vec<BrushRule>,
+    allowed_folds: Box<[Fold]>,
+    allowed_brushes: Box<[BrushRule]>,
     fold_budget: u8,
     stroke_budget: u8,
     minimum_source_actions: u8,
@@ -182,28 +184,55 @@ pub struct GeneratorConfig {
 }
 
 impl GeneratorConfig {
-    #[must_use]
-    pub fn new(pack_id: &str, width: u8, height: u8) -> Self {
-        Self {
-            pack_id: pack_id.into(),
+    /// Starts a generation policy with a validated pack identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed puzzle error before retaining an invalid pack ID.
+    pub fn new(pack_id: &str, width: u8, height: u8) -> Result<Self, GenerationError> {
+        let template_identity =
+            PuzzleIdentity::new(pack_id, "generated-template").map_err(GenerationError::Puzzle)?;
+        Ok(Self {
+            template_identity,
             width,
             height,
-            allowed_folds: Vec::new(),
-            allowed_brushes: Vec::new(),
+            allowed_folds: Box::default(),
+            allowed_brushes: Box::default(),
             fold_budget: 0,
             stroke_budget: 0,
             minimum_source_actions: 2,
             maximum_source_actions: 2,
             maximum_attempts: MAX_GENERATION_ATTEMPTS,
             solver_limits: SolverLimits::default(),
-        }
+        })
     }
 
-    #[must_use]
-    pub fn with_rules(mut self, allowed_folds: Vec<Fold>, allowed_brushes: Vec<BrushRule>) -> Self {
-        self.allowed_folds = allowed_folds;
-        self.allowed_brushes = allowed_brushes;
-        self
+    /// Adds rule collections only when both fit the puzzle storage bounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed puzzle error without retaining either collection when
+    /// its length exceeds the corresponding bound.
+    pub fn with_rules(
+        mut self,
+        allowed_folds: Vec<Fold>,
+        allowed_brushes: Vec<BrushRule>,
+    ) -> Result<Self, GenerationError> {
+        if allowed_folds.len() > MAX_ALLOWED_FOLDS {
+            return Err(GenerationError::Puzzle(PuzzleError::TooManyAllowedFolds {
+                count: allowed_folds.len(),
+                limit: MAX_ALLOWED_FOLDS,
+            }));
+        }
+        if allowed_brushes.len() > MAX_BRUSH_RULES {
+            return Err(GenerationError::Puzzle(PuzzleError::TooManyBrushRules {
+                count: allowed_brushes.len(),
+                limit: MAX_BRUSH_RULES,
+            }));
+        }
+        self.allowed_folds = allowed_folds.into_boxed_slice();
+        self.allowed_brushes = allowed_brushes.into_boxed_slice();
+        Ok(self)
     }
 
     #[must_use]
@@ -254,13 +283,15 @@ impl Generator {
             .validate()
             .map_err(GenerationError::SolverLimits)?;
 
-        let identity = PuzzleIdentity::new(&config.pack_id, "generated-template")
-            .map_err(GenerationError::Puzzle)?;
         let template = Puzzle::new(
-            PuzzleSpec::new(identity, config.width, config.height)
-                .with_allowed_folds(config.allowed_folds.clone())
-                .with_allowed_brushes(config.allowed_brushes.clone())
-                .with_budgets(config.fold_budget, config.stroke_budget),
+            PuzzleSpec::new(
+                config.template_identity.clone(),
+                config.width,
+                config.height,
+            )
+            .with_allowed_folds(config.allowed_folds.to_vec())
+            .with_allowed_brushes(config.allowed_brushes.to_vec())
+            .with_budgets(config.fold_budget, config.stroke_budget),
         )
         .map_err(GenerationError::Puzzle)?;
         let catalog = action_catalog(&template)
@@ -527,11 +558,11 @@ impl Generator {
             "paper-v{}-{:016x}-{attempt_index}",
             seed.compatibility_version, seed.value
         );
-        let identity = PuzzleIdentity::new(&self.config.pack_id, &puzzle_id)?;
+        let identity = PuzzleIdentity::new(self.config.template_identity.pack_id(), &puzzle_id)?;
         let mut spec = PuzzleSpec::new(identity, self.config.width, self.config.height)
             .with_target_cells(target.cell_ids().collect())
-            .with_allowed_folds(self.config.allowed_folds.clone())
-            .with_allowed_brushes(self.config.allowed_brushes.clone())
+            .with_allowed_folds(self.config.allowed_folds.to_vec())
+            .with_allowed_brushes(self.config.allowed_brushes.to_vec())
             .with_budgets(self.config.fold_budget, self.config.stroke_budget);
         if let Some(par) = par {
             spec = spec.with_par(par);

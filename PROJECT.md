@@ -14,10 +14,10 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 5, persistence and local packs**
-- Current checklist item: **Choose and document platform-specific data,
-  config, and cache paths.**
-- Last updated: **2026-09-01**
+- Current phase: **Phase 6, terminal foundation**
+- Current checklist item: **Add and pin the selected Ratatui and Crossterm
+  versions.**
+- Last updated: **2026-09-02**
 
 Checkbox rules:
 
@@ -469,9 +469,9 @@ Property testing, fuzzing, archive support, and release tooling may add
 development dependencies after their value and bounds are documented. Do not
 add an async runtime or network client for v1.
 
-`deny.toml` starts with only the license used by this dependency-free package.
-Each new dependency license requires review and an explicit allowlist entry.
-Do not add a skip or exception merely to make the audit pass.
+`deny.toml` began with only the project license. Each dependency license
+requires review and an explicit allowlist entry. Do not add a skip or exception
+merely to make the audit pass.
 
 ### State ownership
 
@@ -526,6 +526,16 @@ The default database lives in the operating system's user data directory under
 an `orifude` directory. Tests inject an isolated path. The application must not
 write into the current working directory unless an explicit export command
 names a destination.
+
+The native path mapping follows the operating system conventions exposed by
+`directories` 6.0. Linux uses `$XDG_DATA_HOME/orifude`,
+`$XDG_CONFIG_HOME/orifude`, and `$XDG_CACHE_HOME/orifude`, with the standard
+`~/.local/share`, `~/.config`, and `~/.cache` fallbacks. macOS uses
+`~/Library/Application Support/orifude` for data and configuration and
+`~/Library/Caches/orifude` for cache data. Windows uses
+`%APPDATA%\orifude\data`, `%APPDATA%\orifude\config`, and
+`%LOCALAPPDATA%\orifude\cache`. The database, ownership lock, managed packs,
+and fixed staging directory live under the data path.
 
 The database stores:
 
@@ -614,7 +624,7 @@ Pack installation follows this order:
 6. Parse and validate metadata and every puzzle.
 7. Calculate a content fingerprint and reject conflicting pack IDs.
 8. Commit one non-playable pending-install record containing the generated final
-   name, pack ID, and fingerprint.
+   name, pack ID, fingerprint, and installation timestamp.
 9. Atomically rename the accepted staging directory to its final managed name.
 10. In one SQLite transaction, register the installed pack and remove its
     pending-install record.
@@ -629,6 +639,10 @@ transaction. A pending record with only staging content rolls back. Staging
 content without a pending record is also removed. A cleanup failure leaves the
 same state for one bounded retry at the next startup. Recovery never uses an
 unbounded retry loop and never removes a source directory supplied by the user.
+If a completed registry transaction survives but its managed directory does
+not, startup removes the unplayable registry row and preserves its progress.
+Unregistered entries under the private managed-pack root are orphaned content
+and are removed without following links.
 
 ## Explicit v1 bounds
 
@@ -683,20 +697,26 @@ fails without exposing partial progress.
 
 SQLite capacity is the configured maximum page count minus allocated non-free
 pages, using `page_count` and `freelist_count`. A nonessential transaction must
-leave at least 16 MiB of that capacity available. Before committing a replay or
+leave at least 16 MiB of that capacity available. Before retaining a replay or
 history write that would cross the reserve, one bounded pruning batch removes
 superseded non-best replays and other nonessential history in the same
-transaction. If pruning cannot restore the reserve, Orifude rolls the
-transaction back and reports the storage limit. Settings, completion state,
-best solutions, and migrations may use the reserve, but a protected write that
-would exceed the hard maximum also leaves the prior state unchanged and
-reports the limit. Protected data is not a promise of unbounded growth.
+transaction. A standalone nonessential write rolls back and reports the
+storage limit when pruning cannot restore the reserve. A completion still
+commits its protected progress and best solution; it discards only the new
+non-best replay when necessary. Settings, completion state, best solutions,
+and migrations may use the reserve, but a protected write that would exceed
+the hard maximum also leaves the prior state unchanged and reports the limit.
+Protected data is not a promise of unbounded growth.
 
 Physical storage accounting records the main file and any journal, WAL,
 shared-memory, or temporary sidecar by actual file length. The 128 MiB limit is
 for the main file, not a claim about transient SQLite space. Before persistence
 work closes, the project chooses a journal mode, checkpoint policy, retained
 journal limit, and a separate hard budget for worst-case transaction sidecars.
+The selected `DELETE` journal mode disables cache spilling, retains no journal
+after commit, and has a 132 MiB sidecar budget. With spilling disabled, one
+transaction has one header of at most 64 KiB and at most one 4,104-byte journal
+record for each of the 32,768 database pages.
 
 The installed-pack content ceiling includes final and staging content.
 Installation checks the candidate's validated extracted size before committing
@@ -1583,14 +1603,23 @@ and five release measurement processes passed on x86_64 Arch Linux with Rust
 1.98.0. Six solver integration tests cover deterministic score order, exact
 replay, horizontal and vertical line catalogs, independent brute-force
 agreement, all result classes, every limit, and cancellation during expansion.
-Seven generator integration tests cover Gregorian dates, fixed seed text,
+Eight generator integration tests cover Gregorian dates, fixed seed text,
 reproducible acceptance, trivial and duplicate rejection, solver-exhaustion
 recovery, production validation, exact final replay, attempt exhaustion with
-its seed, cancellation, invalid configuration, and a complete version 1 daily
-golden. The implementation uses fixed-width integer random operations,
-canonical action order, and no platform or clock input.
+its seed, cancellation, invalid configuration, configuration storage bounds,
+and a complete version 1 daily golden. The implementation uses fixed-width
+integer random operations, canonical action order, and no platform or clock
+input.
 Native terminal execution on macOS and Windows remains part of the later smoke
 matrix because this work adds no terminal surface.
+
+Bounded-configuration follow-up (2026-09-02): configuration now validates the
+pack identity and the 44-fold and 23-brush collection limits before retaining
+them. Accepted collections use exact-length boxed slices. The public regression
+checks each limit-plus-one error. `mise run check`, release tests for every
+Cargo target, warning-denied Rust documentation, ten repeated generator-suite
+runs, the original oversized-input reproduction, and release-binary behavior
+all passed on the recorded Linux and Rust environment.
 
 Exit gate:
 
@@ -1602,46 +1631,64 @@ Exit gate:
 Goal: save progress durably and accept community puzzle content without risking
 the player's filesystem or terminal.
 
-- [ ] Choose and document platform-specific data, config, and cache paths.
-- [ ] Add the SQLite dependency with a deliberate linkage and update policy.
-- [ ] Define the initial schema for metadata, settings, progress, attempts,
+- [x] Choose and document platform-specific data, config, and cache paths.
+- [x] Add the SQLite dependency with a deliberate linkage and update policy.
+- [x] Define the initial schema for metadata, settings, progress, attempts,
   replays, daily history, pack registry, and the one-operation install journal.
-- [ ] Implement ordered, restart-safe migrations.
-- [ ] Implement single-process database ownership or an explicit lock.
-- [ ] Persist one completed attempt and its progress in one transaction.
-- [ ] Persist settings without coupling them to terminal rendering types.
-- [ ] Fix the SQLite page size and main-file `max_page_count`, then choose and
+- [x] Implement ordered, restart-safe migrations.
+- [x] Implement single-process database ownership or an explicit lock.
+- [x] Persist one completed attempt and its progress in one transaction.
+- [x] Persist settings without coupling them to terminal rendering types.
+- [x] Fix the SQLite page size and main-file `max_page_count`, then choose and
   test the journal mode, checkpoint policy, and hard transient-sidecar budget.
-- [ ] Enforce recent-replay and database growth policy.
-- [ ] Preserve best solutions during pruning.
-- [ ] Report full disk, read-only path, lock conflict, corrupt database, and
+- [x] Enforce recent-replay and database growth policy.
+- [x] Preserve best solutions during pruning.
+- [x] Report full disk, read-only path, lock conflict, corrupt database, and
   unsupported schema without silent reset.
-- [ ] Add migration and restart integration tests using isolated databases.
-- [ ] Define the versioned TOML puzzle and pack schemas.
-- [ ] Validate syntax, semantics, Unicode, control characters, IDs, dimensions,
+- [x] Add migration and restart integration tests using isolated databases.
+- [x] Define the versioned TOML puzzle and pack schemas.
+- [x] Validate syntax, semantics, Unicode, control characters, IDs, dimensions,
   budgets, and declared licenses.
-- [ ] Enforce portable ASCII pack and puzzle IDs, path-name rules, and every
+- [x] Enforce portable ASCII pack and puzzle IDs, path-name rules, and every
   declared pack storage bound before final installation.
-- [ ] Implement bounded directory installation.
-- [ ] Choose one archive format only after confirming safe bounded extraction.
-- [ ] Reject traversal, absolute paths, links, devices, excessive depth,
+- [x] Implement bounded directory installation.
+- [x] Choose one archive format only after confirming safe bounded extraction.
+- [x] Reject traversal, absolute paths, links, devices, excessive depth,
   excessive count, and size-limit violations.
-- [ ] Install through same-filesystem private staging, a committed pending
+- [x] Install through same-filesystem private staging, a committed pending
   record, and an atomic final rename.
-- [ ] Reconcile interrupted pack installation before loading playable packs.
-- [ ] Test interruption after the pending-record commit, final rename, registry
+- [x] Reconcile interrupted pack installation before loading playable packs.
+- [x] Test interruption after the pending-record commit, final rename, registry
   transaction, and failed cleanup.
-- [ ] Fingerprint installed content and detect conflicting pack IDs.
-- [ ] Load only registry metadata at startup and verify one selected community
+- [x] Fingerprint installed content and detect conflicting pack IDs.
+- [x] Load only registry metadata at startup and verify one selected community
   pack against its fingerprint before play.
-- [ ] Remove a pack without deleting progress records needed to explain saved
+- [x] Remove a pack without deleting progress records needed to explain saved
   history.
-- [ ] Add parser, replay, metadata, and archive fuzz targets.
-- [ ] Run a focused security review of every content and storage boundary.
+- [x] Add parser, replay, metadata, and archive fuzz targets.
+- [x] Run a focused security review of every content and storage boundary.
+
+Verification record (2026-09-02): the locked ordinary check, strict Clippy,
+all 100 tests in both debug and release across every local Cargo target,
+warning-denied Rust documentation, and the release build passed on Rust 1.98.0
+and x86_64 Arch Linux. Four maximum-size random parser inputs completed without
+a crash. Five
+release processes each committed 500 durable completion writes on the recorded
+Btrfs SSD; p95 ranged from 21.544 to 28.613 milliseconds, below the
+50-millisecond local-SSD target. The storage and pack suites cover transaction
+rollback, restart, pruning, schema and corruption refusal, lock and permission
+errors, every durable install state, cleanup retry, selected-pack fingerprint
+drift, malicious archive shapes, and declared limits. A Windows target check
+reached the bundled SQLite C build but could not complete without a Windows CRT;
+native Windows and macOS execution remain in the later platform smoke matrix.
+The final boundary review also covers a spilled hot rollback journal,
+completion writes inside the reserved pages, managed-root symlinks, missing
+registered directories, unknown managed entries, recovery timestamps, bounded
+diagnostic collection, and independent puzzle validation errors.
 
 Exit gate:
 
-- [ ] Progress survives interruption and restart, and malicious pack fixtures
+- [x] Progress survives interruption and restart, and malicious pack fixtures
   cannot escape the managed directory, exhaust declared limits, or emit raw
   terminal controls.
 

@@ -52,6 +52,15 @@ intentionally not included.
 - Added solver and generator integration tests plus a release measurement for
   frontier memory, visited lookup cost, path restoration, and representative
   solved and unsolved puzzles.
+- Added durable local SQLite settings, daily history, attempts, progress,
+  bounded replays, best solutions, installed-pack metadata, and restart-safe
+  migrations behind one process lock.
+- Added versioned TOML pack and puzzle parsing, portable path validation,
+  SHA-256 content fingerprints, bounded directory and ZIP installation,
+  same-filesystem staging, interruption recovery, selected-pack verification,
+  and progress-preserving removal.
+- Added storage and malicious-pack integration tests, four bounded parser
+  harnesses, and a release-mode durable-write measurement.
 - Added concise play instructions to the README.
 
 ### Changed
@@ -72,8 +81,18 @@ intentionally not included.
   unread tail to be interpreted as later commands.
 - Kept deterministic generation trying its remaining bounded candidates after
   one candidate exhausts the solver.
+- Rejected generator pack IDs and rule lists at configuration construction,
+  before the generator retains or copies them.
 - Removed a redundant invariant scan before in-place paper reset while keeping
   the rebuilt state checked before reset returns.
+- Preserved protected completion state inside the SQLite reserve while dropping
+  only nonessential replay history when space is tight.
+- Recovered spilled rollback journals before schema checks and kept the original
+  installation timestamp when a pending pack completes after restart.
+- Collected independent puzzle errors in one bounded report without allocating
+  diagnostics beyond the 32-issue limit.
+- Reconciled missing registered pack directories and unknown managed entries so
+  interrupted or platform-created filesystem state cannot block every startup.
 
 ### Security
 
@@ -83,3 +102,10 @@ intentionally not included.
   into terminal output.
 - Added locked advisory, license, and dependency-source checks to the ordinary
   repository check.
+- Rejected pack traversal, absolute and reserved paths, links, special files,
+  unsupported compression, terminal controls, invalid SPDX expressions, and
+  every declared file, count, depth, and size excess before installation.
+- Rejected a symlinked managed-pack root before orphan cleanup can touch content
+  outside Orifude's private data directory.
+- Kept SQLite main-file, reserve, replay-history, transient-journal, pack-count,
+  and managed-content growth within explicit hard bounds.
