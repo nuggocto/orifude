@@ -157,17 +157,28 @@ fn malformed_installed_pack_is_reported_without_terminal_corruption() {
     fs::write(managed.join("puzzles/berry.toml"), "not valid TOML = [")
         .expect("managed pack is corrupted for the boundary test");
 
-    let output = run_in_native_pty(
+    let steps = [
+        PtyStep {
+            input: b"jjj\r",
+            wait_for: b"Terminal pack",
+        },
+        PtyStep {
+            input: b"\r",
+            wait_for: b"fingerprint",
+        },
+    ];
+    let output = run_in_native_pty_scripted(
         Path::new(env!("CARGO_BIN_EXE_orifude")),
         state.path(),
-        b"jjj\r\r\rqy",
+        &steps,
+        b"\rqy",
     );
     assert!(
         output.status_success,
         "malformed-pack journey exits cleanly"
     );
     assert!(
-        find(&output.bytes, b"stayed").is_some(),
+        find(&output.bytes, b"fingerprint").is_some(),
         "pack validation failure is visible inside the restored TUI"
     );
     assert!(find(&output.bytes, LEAVE_ALTERNATE_SCREEN).is_some());

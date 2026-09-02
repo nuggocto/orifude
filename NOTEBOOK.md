@@ -1082,12 +1082,13 @@ reporting. The bounded native task runs all seven PTY cases.
 macOS Intel and Apple Silicon, and Windows x86_64 for direct branch pushes,
 manual runs, and release tags.
 
-The first hosted Windows journey exposed a test-portability detail rather than
+The first hosted Windows journey exposed test-portability details rather than
 an application failure: ConPTY may split styled screen updates inside a
-multiword label. The three affected assertions now wait for a unique visible
-word and still pair that observation with the journey's durable-state and
-terminal-restoration checks. This keeps the test about player-visible behavior
-without depending on one PTY backend's byte chunking.
+multiword label or coalesce a transient frame when several inputs arrive in one
+write. Assertions use unique visible words, and the malformed-pack journey
+waits for the pack menu before opening it and for the fingerprint error before
+dismissing it. Durable-state and terminal-restoration checks still cover the
+complete journeys without depending on one PTY backend's byte chunking.
 
 Local x86_64 Linux verification ran the complete locked check: formatting,
 dependency policy, strict all-target Clippy, tests, doctests, and an optimized
