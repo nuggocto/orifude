@@ -788,8 +788,13 @@ and shutdown while full. Lifecycle tests inject each acquisition and
 restoration failure, including a retry that touches only the capability that
 still needs cleanup. [`tests/terminal_pty.rs`](tests/terminal_pty.rs) drives the
 shipped binary through `script` on Linux and macOS and ConPTY on Windows, then
-checks that the alternate screen, cursor, and line wrapping were restored. Its
-opt-in `isolated-test-paths` build feature accepts one absolute temporary root
+checks normal exit, alternate-screen cleanup, cursor visibility, and isolated
+state. Unix PTYs also expose the line-wrap restoration sequence. ConPTY
+intercepts that console mode change and projects a presentation stream, so its
+absence from the captured Windows bytes is not evidence that cleanup failed.
+The injected lifecycle tests verify the line-wrap restoration call on every
+platform. The smoke's opt-in `isolated-test-paths` build feature accepts one
+absolute temporary root
 and is enabled only by the repository test tasks. The smoke proves that its
 database was created below that root, so native tests cannot migrate or
 reconcile a developer's live data. The Linux launcher passes the binary through
@@ -831,8 +836,7 @@ reported 0.0 percent CPU and 6,256 KiB resident memory. These are local
 end-to-end samples, not cross-platform distributions. The unstripped,
 dynamically linked release binary was 4,403,224 bytes; packaged and stripped
 artifact size remains release work. The native macOS and Windows smoke jobs
-still need to run on a pull request before the cross-platform exit claim is
-checked.
+still need hosted evidence before the cross-platform exit claim is checked.
 
 The launch redesign was checked on the dirty tree based on `6001a6c` with the
 release binary on x86_64 Arch Linux. Unicode captures at 160 by 60, 80 by 24,
@@ -878,6 +882,19 @@ and arrival caption. The installed Windows Rust target again reached bundled
 SQLite before stopping at the host's missing MSVC `lib.exe`; native Windows and
 macOS execution still belongs to the hosted smoke matrix in
 [`ci.yml`](.github/workflows/ci.yml).
+
+The first manual native matrix on commit `c258213` passed the repository check
+and the Linux and macOS terminal smoke jobs. The Windows child also built and
+exited normally, left the alternate screen, showed the cursor, and kept its
+database isolated, but the test rejected the run because ConPTY did not echo
+the line-wrap mode sequence. Crossterm had sent that sequence through Windows'
+virtual-terminal console path; ConPTY consumes console mode changes and emits a
+projected terminal presentation rather than a byte-for-byte copy. The smoke now
+uses the raw line-wrap assertion only on Unix and keeps its behavioral lifecycle
+coverage on all platforms. The same correction removes a Windows-only unused
+parameter warning in the private-file helper. The failed hosted evidence is
+[run 33647259312](https://github.com/nuggocto/orifude/actions/runs/33647259312);
+a fresh matrix on the correcting commit remains required before the gate moves.
 
 ## What comes next
 

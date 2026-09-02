@@ -11,6 +11,7 @@ const PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
 const ENTER_ALTERNATE_SCREEN: &[u8] = b"\x1b[?1049h";
 const LEAVE_ALTERNATE_SCREEN: &[u8] = b"\x1b[?1049l";
 const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
+#[cfg(unix)]
 const ENABLE_LINE_WRAP: &[u8] = b"\x1b[?7h";
 
 #[test]
@@ -42,6 +43,7 @@ fn assert_terminal_restored(binary: &Path, state: &Path) {
         find(&output.bytes, SHOW_CURSOR).is_some(),
         "cursor is shown"
     );
+    #[cfg(unix)]
     assert!(
         find(&output.bytes, ENABLE_LINE_WRAP).is_some(),
         "line wrapping is restored"
