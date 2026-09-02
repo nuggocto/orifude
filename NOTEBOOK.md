@@ -1082,6 +1082,13 @@ reporting. The bounded native task runs all seven PTY cases.
 macOS Intel and Apple Silicon, and Windows x86_64 for direct branch pushes,
 manual runs, and release tags.
 
+The first hosted Windows journey exposed a test-portability detail rather than
+an application failure: ConPTY may split styled screen updates inside a
+multiword label. The three affected assertions now wait for a unique visible
+word and still pair that observation with the journey's durable-state and
+terminal-restoration checks. This keeps the test about player-visible behavior
+without depending on one PTY backend's byte chunking.
+
 Local x86_64 Linux verification ran the complete locked check: formatting,
 dependency policy, strict all-target Clippy, tests, doctests, and an optimized
 build passed. The suite included 68 library tests, 103 other tests and example
