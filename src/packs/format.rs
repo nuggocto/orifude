@@ -3,8 +3,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::domain::paper::{BrushRule, Fold, FoldCount, FoldDirection, StrokeAxis, StrokeCount};
+use crate::domain::paper::{
+    BrushRule, Fold, FoldCount, FoldDirection, LineStroke, MAX_ACTIONS, PaperAction, StrokeAxis,
+    StrokeCount,
+};
 use crate::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
+use crate::domain::replay::{Replay, ReplayMetadata};
 use crate::domain::score::Par;
 
 use super::{
@@ -76,6 +80,7 @@ pub struct PuzzleContent {
     tutorial_cues: Box<[Box<str>]>,
     author: Option<Box<str>>,
     license: Option<Box<str>>,
+    solution: Option<Replay>,
 }
 
 impl PuzzleContent {
@@ -107,6 +112,13 @@ impl PuzzleContent {
     #[must_use]
     pub fn license(&self) -> Option<&str> {
         self.license.as_deref()
+    }
+
+    /// Returns the optional author-supplied solution after it has been
+    /// replayed through the production engine.
+    #[must_use]
+    pub const fn solution(&self) -> Option<&Replay> {
+        self.solution.as_ref()
     }
 }
 
@@ -142,6 +154,8 @@ pub(crate) struct PuzzleDocument {
     pub(crate) tutorial_cues: Vec<String>,
     pub(crate) author: Option<String>,
     pub(crate) license: Option<String>,
+    #[serde(default)]
+    pub(crate) solution: Option<Vec<ActionDocument>>,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -161,9 +175,9 @@ pub(crate) enum DirectionDocument {
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub(crate) enum BrushDocument {
-    Dot,
+    Dot {},
     Line { axis: AxisDocument, length: u8 },
 }
 
@@ -179,6 +193,25 @@ pub(crate) enum AxisDocument {
 pub(crate) struct ParDocument {
     pub(crate) folds: u8,
     pub(crate) strokes: u8,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
+pub(crate) enum ActionDocument {
+    Fold {
+        direction: DirectionDocument,
+        crease: u8,
+    },
+    Dot {
+        row: u8,
+        column: u8,
+    },
+    Line {
+        start_row: u8,
+        start_column: u8,
+        end_row: u8,
+        end_column: u8,
+    },
 }
 
 pub(super) fn parse_metadata(bytes: &[u8]) -> Result<PackMetadata, PackError> {
@@ -294,6 +327,9 @@ pub(crate) fn puzzle_from_document(
     collect_puzzle_display_issues(expected_id, &document, &mut issues);
     let (identity, target, par) = validate_puzzle_parts(pack_id, &document, &mut issues);
     let puzzle = build_puzzle(&document, identity, target, par, &mut issues);
+    let solution = puzzle
+        .as_ref()
+        .and_then(|puzzle| validate_solution(puzzle, document.solution.as_deref(), &mut issues));
 
     if !issues.is_empty() {
         return Err(PackError::Invalid {
@@ -313,7 +349,79 @@ pub(crate) fn puzzle_from_document(
             .collect(),
         author: document.author.map(String::into_boxed_str),
         license: document.license.map(String::into_boxed_str),
+        solution,
     })
+}
+
+fn validate_solution(
+    puzzle: &Puzzle,
+    document: Option<&[ActionDocument]>,
+    issues: &mut Vec<PackIssue>,
+) -> Option<Replay> {
+    let actions = document?;
+    if actions.len() > usize::from(MAX_ACTIONS) {
+        record_issue(
+            issues,
+            "puzzle.solution",
+            "solution action count is outside the limit",
+        );
+        return None;
+    }
+
+    let dimensions = puzzle.dimensions();
+    let mut converted = Vec::with_capacity(actions.len());
+    for action in actions {
+        let converted_action = match *action {
+            ActionDocument::Fold { direction, crease } => {
+                Some(PaperAction::Fold(Fold::new(direction.into(), crease)))
+            }
+            ActionDocument::Dot { row, column } => dimensions
+                .coordinate(row, column)
+                .ok()
+                .map(PaperAction::Dot),
+            ActionDocument::Line {
+                start_row,
+                start_column,
+                end_row,
+                end_column,
+            } => dimensions
+                .coordinate(start_row, start_column)
+                .ok()
+                .zip(dimensions.coordinate(end_row, end_column).ok())
+                .map(|(start, end)| PaperAction::Line(LineStroke::new(start, end))),
+        };
+        let Some(converted_action) = converted_action else {
+            record_issue(
+                issues,
+                "puzzle.solution",
+                "solution coordinate is outside the paper",
+            );
+            return None;
+        };
+        converted.push(converted_action);
+    }
+
+    let replay = Replay::new(ReplayMetadata::current(puzzle), converted)
+        .expect("the checked solution count must fit the replay bound");
+    match replay.execute(puzzle) {
+        Ok(attempt) if attempt.result().is_success() => Some(replay),
+        Ok(_) => {
+            record_issue(
+                issues,
+                "puzzle.solution",
+                "solution does not match the target exactly",
+            );
+            None
+        }
+        Err(_) => {
+            record_issue(
+                issues,
+                "puzzle.solution",
+                "solution contains an illegal action",
+            );
+            None
+        }
+    }
 }
 
 fn collect_puzzle_display_issues(
@@ -569,7 +677,7 @@ impl From<DirectionDocument> for FoldDirection {
 impl From<BrushDocument> for BrushRule {
     fn from(brush: BrushDocument) -> Self {
         match brush {
-            BrushDocument::Dot => Self::Dot,
+            BrushDocument::Dot {} => Self::Dot,
             BrushDocument::Line { axis, length } => Self::Line {
                 axis: match axis {
                     AxisDocument::Horizontal => StrokeAxis::Horizontal,

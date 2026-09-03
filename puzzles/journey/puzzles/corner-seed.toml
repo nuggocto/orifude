@@ -1,0 +1,29 @@
+format_version = 1
+id = "corner-seed"
+title = "Corner seed"
+description = "Carry one dot to the far corner."
+width = 4
+height = 4
+target = [
+  "...#",
+  "....",
+  "....",
+  "....",
+]
+folds = [
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 0
+stroke_budget = 1
+par = { folds = 0, strokes = 1 }
+tutorial_cues = [
+  "Move the cursor to row 1, column 4.",
+  "Open the paper when the corner holds ink.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "dot", row = 0, column = 3 },
+]

@@ -1,0 +1,29 @@
+format_version = 1
+id = "vertical-thread"
+title = "Vertical thread"
+description = "Turn the brush and draw down the paper."
+width = 4
+height = 4
+target = [
+  "..#.",
+  "..#.",
+  "..#.",
+  "....",
+]
+folds = [
+]
+brushes = [
+  { kind = "line", axis = "vertical", length = 3 },
+]
+fold_budget = 0
+stroke_budget = 1
+par = { folds = 0, strokes = 1 }
+tutorial_cues = [
+  "Choose the vertical line and start at row 1, column 3.",
+  "Open the paper after the stroke.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "line", start_row = 0, start_column = 2, end_row = 2, end_column = 2 },
+]

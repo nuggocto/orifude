@@ -1,0 +1,24 @@
+format_version = 1
+id = "first-seed"
+title = "First seed"
+description = "Place one dot without folding the paper."
+width = 4
+height = 4
+target = [
+  "....",
+  ".#..",
+  "....",
+  "....",
+]
+folds = []
+brushes = [{ kind = "dot" }]
+fold_budget = 0
+stroke_budget = 1
+par = { folds = 0, strokes = 1 }
+tutorial_cues = [
+  "Move to row 2, column 2, then choose the dot and place the mark.",
+  "Open the paper to compare it with the target.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [{ kind = "dot", row = 1, column = 1 }]

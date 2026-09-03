@@ -1,0 +1,29 @@
+format_version = 1
+id = "horizontal-thread"
+title = "Horizontal thread"
+description = "Draw one straight line across three cells."
+width = 4
+height = 4
+target = [
+  "....",
+  "###.",
+  "....",
+  "....",
+]
+folds = [
+]
+brushes = [
+  { kind = "line", axis = "horizontal", length = 3 },
+]
+fold_budget = 0
+stroke_budget = 1
+par = { folds = 0, strokes = 1 }
+tutorial_cues = [
+  "Choose the horizontal line and start at row 2, column 1.",
+  "Open the paper after the three-cell stroke.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "line", start_row = 1, start_column = 0, end_row = 1, end_column = 2 },
+]

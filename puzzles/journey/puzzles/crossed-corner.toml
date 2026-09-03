@@ -1,0 +1,37 @@
+format_version = 1
+id = "crossed-corner"
+title = "Crossed corner"
+description = "Two creases meet around one deep stack."
+width = 4
+height = 4
+target = [
+  "....",
+  "#..#",
+  "#..#",
+  "....",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Choose a horizontal fold toward the lower half.",
+  "Choose a vertical fold toward the right half.",
+  "Mark the occupied corner of the folded quarter.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "dot", row = 2, column = 3 },
+]

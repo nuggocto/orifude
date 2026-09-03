@@ -1,0 +1,38 @@
+format_version = 1
+id = "line-and-drop"
+title = "Line and drop"
+description = "A folded line leaves room for one separate dot."
+width = 4
+height = 4
+target = [
+  ".##.",
+  ".##.",
+  "....",
+  "#..#",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+  { kind = "line", axis = "vertical", length = 2 },
+]
+fold_budget = 1
+stroke_budget = 2
+par = { folds = 1, strokes = 2 }
+tutorial_cues = [
+  "Fold the left half rightward.",
+  "Draw the vertical line through two stacks.",
+  "Place one dot on the remaining folded corner.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "line", start_row = 0, start_column = 2, end_row = 1, end_column = 2 },
+  { kind = "dot", row = 3, column = 3 },
+]

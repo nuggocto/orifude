@@ -87,6 +87,7 @@ pub(crate) struct App {
     local_date: CalendarDate,
     endless_seed: u64,
     pending_generation: Option<(u64, PlaySource)>,
+    group_completion: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -156,6 +157,7 @@ impl App {
             local_date,
             endless_seed,
             pending_generation: None,
+            group_completion: None,
         }
     }
 
@@ -231,7 +233,23 @@ impl App {
     }
 
     pub(crate) fn journey_unlocked(&self, index: usize) -> bool {
-        index == 0 || self.journey_complete(index - 1)
+        self.journey_done.get(index).is_some()
+            && (self.journey_complete(index) || index == 0 || self.journey_complete(index - 1))
+    }
+
+    pub(crate) fn completed_group_count(&self) -> usize {
+        content::journey_groups()
+            .iter()
+            .take_while(|group| {
+                (group.first_paper..group.first_paper + group.paper_count)
+                    .all(|index| self.journey_complete(index))
+            })
+            .count()
+    }
+
+    pub(crate) fn group_completion(&self) -> Option<&'static content::JourneyGroup> {
+        self.group_completion
+            .and_then(|index| content::journey_groups().get(index))
     }
 
     pub(crate) fn walkthrough(&self) -> (content::BuiltInPaper, Attempt, usize, usize) {
@@ -310,6 +328,9 @@ impl App {
                     now,
                     self.settings.reduced_motion || self.settings.instant_reveal,
                 );
+                if self.group_completion.is_some() && session.result().is_none() {
+                    self.group_completion = None;
+                }
                 self.handle_session_event(event)
             }
             Screen::Capabilities => match key.code {
@@ -409,7 +430,16 @@ impl App {
             if paper.puzzle().identity().pack_id() == progress.pack_id.as_ref()
                 && paper.puzzle().identity().puzzle_id() == progress.puzzle_id.as_ref()
             {
+                let was_complete = self.journey_done[index];
                 self.journey_done[index] = true;
+                if !was_complete
+                    && let Some((group_index, group)) = content::journey_group(index)
+                    && index + 1 == group.first_paper + group.paper_count
+                    && (group.first_paper..group.first_paper + group.paper_count)
+                        .all(|paper_index| self.journey_done[paper_index])
+                {
+                    self.group_completion = Some(group_index);
+                }
             }
         }
         if self.keepsake_offset == 0 {
@@ -517,6 +547,7 @@ impl App {
         let title = decoded.puzzle().identity().puzzle_id().to_owned();
         match PlaySession::from_replay(decoded.puzzle(), decoded.replay(), title) {
             Ok(session) => {
+                self.group_completion = None;
                 self.session = Some(session);
                 self.screen = Screen::Play;
                 self.selection = 0;
@@ -597,6 +628,7 @@ impl App {
             }
             SessionEvent::Back => {
                 self.session = None;
+                self.group_completion = None;
                 self.screen = Screen::Branch;
                 self.selection = 0;
                 AppAction::Render
@@ -605,6 +637,7 @@ impl App {
                 let Some(session) = self.session.as_ref() else {
                     return AppAction::None;
                 };
+                self.group_completion = None;
                 AppAction::LoadReplay {
                     pack_id: session.puzzle().identity().pack_id().into(),
                     puzzle_id: session.puzzle().identity().puzzle_id().into(),
@@ -779,7 +812,7 @@ impl App {
             paper.puzzle(),
             paper.title(),
             paper.description(),
-            paper.cues().iter().map(|cue| (*cue).into()).collect(),
+            paper.cues().to_vec(),
             PlaySource::Journey(self.selection),
         ));
         self.screen = Screen::Play;
@@ -810,7 +843,7 @@ impl App {
             paper.puzzle(),
             paper.title(),
             paper.description(),
-            paper.cues().iter().map(|cue| (*cue).into()).collect(),
+            paper.cues().to_vec(),
             PlaySource::Lesson,
         ));
         self.screen = Screen::Play;
@@ -1012,6 +1045,8 @@ mod tests {
             lesson_complete: true,
             ..Settings::default()
         };
+        let mut journey_done = vec![false; content::journey().len()];
+        journey_done[0] = true;
         let app = App::with_state(
             settings,
             ProgressPage {
@@ -1019,13 +1054,120 @@ mod tests {
                 has_more: false,
             },
             Vec::new(),
-            vec![true, false, false],
+            journey_done,
             CalendarDate::new(2026, 9, 2).unwrap(),
             1,
             now,
         );
         assert!(app.journey_unlocked(1));
         assert!(!app.journey_unlocked(2));
+    }
+
+    #[test]
+    fn completed_journey_papers_remain_open_after_catalog_growth() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            ..Settings::default()
+        };
+        let mut journey_done = vec![false; content::journey().len()];
+        journey_done[5] = true;
+        journey_done[10] = true;
+        let app = App::with_state(
+            settings,
+            ProgressPage {
+                entries: Vec::new(),
+                has_more: false,
+            },
+            Vec::new(),
+            journey_done,
+            CalendarDate::new(2026, 9, 2).unwrap(),
+            1,
+            now,
+        );
+
+        assert!(app.journey_unlocked(5));
+        assert!(app.journey_unlocked(10));
+        assert!(!app.journey_unlocked(4));
+    }
+
+    #[test]
+    fn finishing_a_group_announces_its_gift_only_once() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        };
+        let mut journey_done = vec![false; content::journey().len()];
+        journey_done[..4].fill(true);
+        let mut app = App::with_state(
+            settings,
+            ProgressPage {
+                entries: Vec::new(),
+                has_more: false,
+            },
+            Vec::new(),
+            journey_done,
+            CalendarDate::new(2026, 9, 3).unwrap(),
+            1,
+            now,
+        );
+        let last = &app.journey()[4];
+        let progress = PuzzleProgress {
+            pack_id: last.puzzle().identity().pack_id().into(),
+            puzzle_id: last.puzzle().identity().puzzle_id().into(),
+            attempt_count: 1,
+            best_folds: 0,
+            best_strokes: 3,
+            best_replay_id: 1,
+            updated_at_unix_seconds: 1,
+        };
+
+        app.completion_saved(progress.clone());
+        assert_eq!(app.completed_group_count(), 1);
+        assert_eq!(
+            app.group_completion().map(|group| group.title),
+            Some("Ink on paper")
+        );
+
+        app.group_completion = None;
+        app.completion_saved(progress);
+        assert!(app.group_completion().is_none());
+    }
+
+    #[test]
+    fn replay_request_consumes_the_group_completion_card() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            ..Settings::default()
+        };
+        let mut app = App::new(settings, now);
+        app.screen = Screen::Journey;
+        assert_eq!(app.activate_journey(), AppAction::Render);
+        app.group_completion = Some(0);
+
+        assert!(matches!(
+            app.handle_session_event(SessionEvent::Replay),
+            AppAction::LoadReplay { .. }
+        ));
+        assert!(app.group_completion().is_none());
+    }
+
+    #[test]
+    fn reduced_motion_starts_without_an_opening_animation() {
+        let now = Instant::now();
+        let app = App::new(
+            Settings {
+                reduced_motion: true,
+                ..Settings::default()
+            },
+            now,
+        );
+
+        assert!(!app.animation_active(now));
+        assert_eq!(app.mark_frame(now), MARK_FRAME_COUNT - 1);
     }
 
     #[test]

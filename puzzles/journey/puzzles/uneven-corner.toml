@@ -1,0 +1,37 @@
+format_version = 1
+id = "uneven-corner"
+title = "Uneven corner"
+description = "Two short folds gather a small corner."
+width = 4
+height = 4
+target = [
+  "##..",
+  "##..",
+  "....",
+  "....",
+]
+folds = [
+  { direction = "right", crease = 1 },
+  { direction = "left", crease = 3 },
+  { direction = "down", crease = 1 },
+  { direction = "up", crease = 3 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Move one outer column inward.",
+  "Move one outer row toward it.",
+  "Mark the four-cell corner stack.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 1 },
+  { kind = "fold", direction = "down", crease = 1 },
+  { kind = "dot", row = 1, column = 1 },
+]

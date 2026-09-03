@@ -1,0 +1,44 @@
+format_version = 1
+id = "full-canopy"
+title = "Full canopy"
+description = "The last paper combines deep stacks with two kinds of ink."
+width = 8
+height = 8
+target = [
+  ".#....#.",
+  ".#....#.",
+  ".#....#.",
+  "...##...",
+  "...##...",
+  ".#....#.",
+  ".#....#.",
+  ".#....#.",
+]
+folds = [
+  { direction = "right", crease = 4 },
+  { direction = "down", crease = 4 },
+  { direction = "left", crease = 4 },
+  { direction = "up", crease = 4 },
+]
+brushes = [
+  { kind = "dot" },
+  { kind = "line", axis = "vertical", length = 3 },
+]
+fold_budget = 2
+stroke_budget = 2
+par = { folds = 2, strokes = 2 }
+tutorial_cues = [
+  "Choose the first fold from the target symmetry.",
+  "Gather the other axis into the same quarter.",
+  "Draw the vertical stroke through three deep stacks.",
+  "Place the last dot where the target remains open.",
+  "Open the completed canopy.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "left", crease = 4 },
+  { kind = "fold", direction = "up", crease = 4 },
+  { kind = "line", start_row = 0, start_column = 1, end_row = 2, end_column = 1 },
+  { kind = "dot", row = 3, column = 3 },
+]

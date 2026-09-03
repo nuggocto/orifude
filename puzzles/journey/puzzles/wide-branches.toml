@@ -1,0 +1,44 @@
+format_version = 1
+id = "wide-branches"
+title = "Wide branches"
+description = "A larger sheet gathers beneath two different marks."
+width = 8
+height = 8
+target = [
+  "#......#",
+  "........",
+  "........",
+  ".######.",
+  ".######.",
+  "........",
+  "........",
+  "#......#",
+]
+folds = [
+  { direction = "right", crease = 4 },
+  { direction = "down", crease = 4 },
+  { direction = "left", crease = 4 },
+  { direction = "up", crease = 4 },
+]
+brushes = [
+  { kind = "dot" },
+  { kind = "line", axis = "horizontal", length = 3 },
+]
+fold_budget = 2
+stroke_budget = 2
+par = { folds = 2, strokes = 2 }
+tutorial_cues = [
+  "Gather the sheet into one quarter.",
+  "Complete the second centered fold.",
+  "Draw the three-stack line shown by the target.",
+  "Place the separate dot.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 4 },
+  { kind = "fold", direction = "down", crease = 4 },
+  { kind = "line", start_row = 4, start_column = 4, end_row = 4, end_column = 6 },
+  { kind = "dot", row = 7, column = 7 },
+]

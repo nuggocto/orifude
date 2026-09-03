@@ -1,0 +1,37 @@
+format_version = 1
+id = "upper-left"
+title = "Upper left"
+description = "Gather the sheet toward its upper-left quarter."
+width = 4
+height = 4
+target = [
+  "....",
+  ".##.",
+  ".##.",
+  "....",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Fold up at crease 2.",
+  "Fold left at crease 2.",
+  "Mark row 2, column 2.",
+  "Open the four-layer mark.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "up", crease = 2 },
+  { kind = "fold", direction = "left", crease = 2 },
+  { kind = "dot", row = 1, column = 1 },
+]

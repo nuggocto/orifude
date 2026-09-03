@@ -1,0 +1,7 @@
+format_version = 1
+id = "paper-garden"
+title = "Paper garden"
+description = "Three small papers showing the community pack format."
+authors = ["Orifude contributors"]
+license = "Apache-2.0"
+puzzles = ["first-seed", "folded-leaves", "garden-path"]

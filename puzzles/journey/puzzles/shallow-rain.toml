@@ -1,0 +1,35 @@
+format_version = 1
+id = "shallow-rain"
+title = "Shallow rain"
+description = "One row folds down across a short crease."
+width = 4
+height = 4
+target = [
+  "..#.",
+  "..#.",
+  "....",
+  "....",
+]
+folds = [
+  { direction = "right", crease = 1 },
+  { direction = "left", crease = 3 },
+  { direction = "down", crease = 1 },
+  { direction = "up", crease = 3 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 1
+stroke_budget = 1
+par = { folds = 1, strokes = 1 }
+tutorial_cues = [
+  "Fold down at crease 1.",
+  "Mark row 2, column 3.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "down", crease = 1 },
+  { kind = "dot", row = 1, column = 2 },
+]

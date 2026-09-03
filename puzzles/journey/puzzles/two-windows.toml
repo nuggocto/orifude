@@ -1,0 +1,37 @@
+format_version = 1
+id = "two-windows"
+title = "Two windows"
+description = "One fold carries two brush marks across the sheet."
+width = 4
+height = 4
+target = [
+  ".##.",
+  "....",
+  "....",
+  "#..#",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 1
+stroke_budget = 2
+par = { folds = 1, strokes = 2 }
+tutorial_cues = [
+  "Choose the fold that gathers the left half onto the right.",
+  "Mark the upper folded row.",
+  "Mark the lower folded row.",
+  "Open the four-mark paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "dot", row = 0, column = 2 },
+  { kind = "dot", row = 3, column = 3 },
+]

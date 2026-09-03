@@ -1,0 +1,35 @@
+format_version = 1
+id = "far-crease"
+title = "Far crease"
+description = "Move the last column back toward the sheet."
+width = 4
+height = 4
+target = [
+  "....",
+  "....",
+  "..##",
+  "....",
+]
+folds = [
+  { direction = "right", crease = 1 },
+  { direction = "left", crease = 3 },
+  { direction = "down", crease = 1 },
+  { direction = "up", crease = 3 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 1
+stroke_budget = 1
+par = { folds = 1, strokes = 1 }
+tutorial_cues = [
+  "Fold left at crease 3.",
+  "Mark row 3, column 3.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "left", crease = 3 },
+  { kind = "dot", row = 2, column = 2 },
+]

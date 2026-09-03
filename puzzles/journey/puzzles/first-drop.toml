@@ -1,0 +1,29 @@
+format_version = 1
+id = "first-drop"
+title = "First drop"
+description = "Place one quiet dot on the waiting sheet."
+width = 4
+height = 4
+target = [
+  "....",
+  ".#..",
+  "....",
+  "....",
+]
+folds = [
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 0
+stroke_budget = 1
+par = { folds = 0, strokes = 1 }
+tutorial_cues = [
+  "Move to row 2, column 2 and choose the dot.",
+  "Open the paper and compare the single mark.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "dot", row = 1, column = 1 },
+]

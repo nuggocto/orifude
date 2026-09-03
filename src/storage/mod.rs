@@ -43,6 +43,12 @@ const MAX_INSTALLED_PACKS_DB: u64 = 32;
 const MAX_DATABASE_VALUE_BYTES: i32 = 1024 * 1024;
 pub const PROGRESS_PAGE_SIZE: usize = 128;
 const PROGRESS_PAGE_QUERY_DB: i64 = 129;
+const RESERVED_PACK_IDS: [&str; 4] = [
+    "orifude-lesson",
+    "orifude-journey",
+    "orifude-daily",
+    "orifude-endless",
+];
 
 /// Parses a bounded replay document and validates it through the domain engine.
 ///
@@ -809,6 +815,18 @@ impl Storage {
         Ok(decoded)
     }
 
+    /// Reports whether the saved best replay belongs to this exact gameplay
+    /// definition.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the database or bounded replay document is invalid.
+    pub fn completion_matches(&self, puzzle: &Puzzle) -> Result<bool, StorageError> {
+        let identity = puzzle.identity();
+        self.best_replay(identity.pack_id(), identity.puzzle_id())
+            .map(|saved| saved.is_some_and(|saved| saved.puzzle() == puzzle))
+    }
+
     /// Records an offline daily selection and completion state.
     ///
     /// # Errors
@@ -1048,11 +1066,14 @@ impl Storage {
         TRANSIENT_SIDECAR_LIMIT
     }
 
-    fn install_validated(
+    pub(crate) fn install_validated(
         &mut self,
         pack: &ValidatedPack,
         installed_at_unix_seconds: i64,
     ) -> Result<InstallOutcome, StorageError> {
+        if RESERVED_PACK_IDS.contains(&pack.metadata().id()) {
+            return Err(StorageError::PackConflict);
+        }
         if let Some((existing, managed_name)) = self.registered_pack_row(pack.metadata().id())? {
             if existing.fingerprint == pack.fingerprint() {
                 self.read_managed_pack(&existing, &managed_name)?;
@@ -1200,6 +1221,14 @@ impl Storage {
         {
             return Err(StorageError::Corrupt);
         }
+        if RESERVED_PACK_IDS.contains(&pack_id.as_str()) {
+            if staging.exists() {
+                fs::remove_dir_all(&staging).map_err(|_| StorageError::PackCleanup)?;
+            }
+            self.connection
+                .execute("DELETE FROM pending_install WHERE singleton = 1", [])?;
+            return Ok(());
+        }
         let final_path = self.paths.managed_packs().join(&final_name);
         if final_path.is_dir() {
             let pack = validate_directory(&final_path)?;
@@ -1223,7 +1252,7 @@ impl Storage {
     fn reconcile_registered_pack_paths(&mut self) -> Result<(), StorageError> {
         let registered = {
             let mut statement = self.connection.prepare(
-                "SELECT pack_id, managed_name FROM pack_registry ORDER BY pack_id LIMIT 33",
+                "SELECT pack_id, managed_name FROM pack_registry ORDER BY pack_id LIMIT 37",
             )?;
             statement
                 .query_map([], |row| {
@@ -1231,15 +1260,20 @@ impl Storage {
                 })?
                 .collect::<Result<Vec<_>, _>>()?
         };
-        if registered.len() > MAX_INSTALLED_PACKS {
-            return Err(StorageError::Corrupt);
-        }
-
         let mut missing = Vec::new();
+        let mut active_count = 0_usize;
         for (pack_id, managed_name) in registered {
-            if PuzzleIdentity::new(&pack_id, "probe").is_err()
-                || !is_fingerprint_name(&managed_name)
-            {
+            if PuzzleIdentity::new(&pack_id, "probe").is_err() {
+                return Err(StorageError::Corrupt);
+            }
+            if RESERVED_PACK_IDS.contains(&pack_id.as_str()) {
+                missing.push(pack_id);
+                continue;
+            }
+            active_count = active_count
+                .checked_add(1)
+                .ok_or(StorageError::ResourceLimit)?;
+            if active_count > MAX_INSTALLED_PACKS || !is_fingerprint_name(&managed_name) {
                 return Err(StorageError::Corrupt);
             }
             let path = self.paths.managed_packs().join(managed_name);
@@ -1880,6 +1914,7 @@ fn validate_registered_pack(pack: &RegisteredPack, managed_name: &str) -> Result
             && !value.chars().any(char::is_control)
     };
     if PuzzleIdentity::new(&pack.id, "probe").is_err()
+        || RESERVED_PACK_IDS.contains(&pack.id.as_ref())
         || !display_is_valid(&pack.title, 80)
         || pack
             .description

@@ -1,0 +1,31 @@
+format_version = 1
+id = "open-window"
+title = "Open window"
+description = "Leave the middle clear between two marks."
+width = 4
+height = 4
+target = [
+  ".#..",
+  "....",
+  "....",
+  "..#.",
+]
+folds = [
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 0
+stroke_budget = 2
+par = { folds = 0, strokes = 2 }
+tutorial_cues = [
+  "Mark row 1, column 2.",
+  "Mark row 4, column 3.",
+  "Open the paper without adding any extra ink.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "dot", row = 0, column = 1 },
+  { kind = "dot", row = 3, column = 2 },
+]

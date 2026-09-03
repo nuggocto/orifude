@@ -12,6 +12,30 @@ pub struct AppPaths {
 }
 
 impl AppPaths {
+    /// Resolves runtime paths, including the feature-gated test root used by
+    /// shipped-binary integration tests.
+    ///
+    /// # Errors
+    ///
+    /// Returns when an injected test root is relative or the platform cannot
+    /// resolve a user home directory.
+    pub(crate) fn runtime() -> Result<Self, PathError> {
+        #[cfg(feature = "isolated-test-paths")]
+        if let Some(root) = std::env::var_os("ORIFUDE_TEST_ROOT") {
+            let root = PathBuf::from(root);
+            if !root.is_absolute() {
+                return Err(PathError);
+            }
+            return Ok(Self::injected(
+                root.join("data"),
+                root.join("config"),
+                root.join("cache"),
+            ));
+        }
+
+        Self::platform()
+    }
+
     /// Resolves the operating system's per-user application directories.
     ///
     /// # Errors

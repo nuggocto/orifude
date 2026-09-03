@@ -152,6 +152,50 @@ fn schemas_reject_unknown_fields_bad_grids_and_unbounded_error_lists() {
 }
 
 #[test]
+fn optional_solution_is_replayed_and_invalid_witnesses_are_rejected() {
+    let valid = format!(
+        "{}solution = [{{ kind = \"dot\", row = 0, column = 0 }}]\n",
+        puzzle()
+    );
+    let content = validate_puzzle_bytes("quiet-grove", "berry", valid.as_bytes()).unwrap();
+    let replay = content.solution().expect("validated solution");
+    assert!(
+        replay
+            .execute(content.puzzle())
+            .is_ok_and(|attempt| attempt.result().is_success())
+    );
+
+    for invalid in [
+        "solution = [{ kind = \"dot\", row = 4, column = 0 }]\n",
+        "solution = [{ kind = \"dot\", row = 1, column = 1 }]\n",
+    ] {
+        let document = format!("{}{invalid}", puzzle());
+        let error = validate_puzzle_bytes("quiet-grove", "berry", document.as_bytes()).unwrap_err();
+        assert!(
+            error
+                .issues()
+                .iter()
+                .any(|issue| issue.location() == "puzzle.solution")
+        );
+    }
+}
+
+#[test]
+fn nested_brush_and_solution_tables_reject_unknown_fields() {
+    let unknown_solution = format!(
+        "{}solution = [{{ kind = \"dot\", row = 0, column = 0, secret = true }}]\n",
+        puzzle()
+    );
+    assert!(validate_puzzle_bytes("quiet-grove", "berry", unknown_solution.as_bytes()).is_err());
+
+    let unknown_brush = puzzle().replace(
+        "brushes = [{ kind = \"dot\" }]",
+        "brushes = [{ kind = \"dot\", secret = true }]",
+    );
+    assert!(validate_puzzle_bytes("quiet-grove", "berry", unknown_brush.as_bytes()).is_err());
+}
+
+#[test]
 fn puzzle_validation_keeps_independent_issues_in_one_report() {
     let invalid = puzzle()
         .replace("id = \"berry\"", "id = \"bad_id\"")

@@ -1,0 +1,43 @@
+format_version = 1
+id = "rising-twice"
+title = "Rising twice"
+description = "Two upward folds gather the opposite bands."
+width = 6
+height = 6
+target = [
+  "......",
+  "...#..",
+  "...#..",
+  "......",
+  "......",
+  "...#..",
+]
+folds = [
+  { direction = "right", crease = 2 },
+  { direction = "right", crease = 4 },
+  { direction = "left", crease = 4 },
+  { direction = "left", crease = 2 },
+  { direction = "down", crease = 2 },
+  { direction = "down", crease = 4 },
+  { direction = "up", crease = 4 },
+  { direction = "up", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Fold up at crease 4.",
+  "Fold up at crease 2.",
+  "Mark row 2, column 4.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "up", crease = 4 },
+  { kind = "fold", direction = "up", crease = 2 },
+  { kind = "dot", row = 1, column = 3 },
+]

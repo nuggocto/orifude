@@ -1,0 +1,43 @@
+format_version = 1
+id = "second-crease"
+title = "Second crease"
+description = "A later crease becomes legal after the first fold."
+width = 6
+height = 6
+target = [
+  "......",
+  "......",
+  "#..##.",
+  "......",
+  "......",
+  "......",
+]
+folds = [
+  { direction = "right", crease = 2 },
+  { direction = "right", crease = 4 },
+  { direction = "left", crease = 4 },
+  { direction = "left", crease = 2 },
+  { direction = "down", crease = 2 },
+  { direction = "down", crease = 4 },
+  { direction = "up", crease = 4 },
+  { direction = "up", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Fold right at crease 2.",
+  "Fold right again at crease 4.",
+  "Mark row 3, column 5.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "fold", direction = "right", crease = 4 },
+  { kind = "dot", row = 2, column = 4 },
+]

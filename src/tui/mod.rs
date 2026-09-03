@@ -82,21 +82,14 @@ impl Error for TuiError {
 /// to restore the caller's terminal state.
 pub fn play() -> Result<(), TuiError> {
     TerminalSession::check_interactive().map_err(TuiError::Terminal)?;
-    let paths = runtime_paths().map_err(TuiError::Paths)?;
+    let paths = AppPaths::runtime().map_err(TuiError::Paths)?;
     let mut storage = Storage::open(paths).map_err(TuiError::Storage)?;
     let settings = storage.settings().map_err(TuiError::Storage)?;
     let progress = storage.progress_page(0).map_err(TuiError::Storage)?;
     let packs = storage.registered_packs().map_err(TuiError::Storage)?;
     let journey_done = crate::content::journey()
         .iter()
-        .map(|paper| {
-            storage
-                .progress(
-                    paper.puzzle().identity().pack_id(),
-                    paper.puzzle().identity().puzzle_id(),
-                )
-                .map(|progress| progress.is_some())
-        })
+        .map(|paper| storage.completion_matches(paper.puzzle()))
         .collect::<Result<Vec<_>, _>>()
         .map_err(TuiError::Storage)?;
     let clock = Clock::runtime().map_err(TuiError::Clock)?;
@@ -144,23 +137,6 @@ pub fn play() -> Result<(), TuiError> {
         .and(work_result)
         .and(shutdown_result)
         .and(restore_result)
-}
-
-fn runtime_paths() -> Result<AppPaths, PathError> {
-    #[cfg(feature = "isolated-test-paths")]
-    if let Some(root) = std::env::var_os("ORIFUDE_TEST_ROOT") {
-        let root = std::path::PathBuf::from(root);
-        if !root.is_absolute() {
-            return Err(PathError);
-        }
-        return Ok(AppPaths::injected(
-            root.join("data"),
-            root.join("config"),
-            root.join("cache"),
-        ));
-    }
-
-    AppPaths::platform()
 }
 
 struct Shell<'a> {

@@ -1,0 +1,39 @@
+format_version = 1
+id = "quiet-canopy"
+title = "Quiet canopy"
+description = "Centered folds turn one dot into a broad pattern."
+width = 6
+height = 6
+target = [
+  "......",
+  ".#..#.",
+  "......",
+  "......",
+  ".#..#.",
+  "......",
+]
+folds = [
+  { direction = "right", crease = 3 },
+  { direction = "down", crease = 3 },
+  { direction = "left", crease = 3 },
+  { direction = "up", crease = 3 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Choose the fold that gathers the paper to the right.",
+  "Choose the downward fold to gather the lower-right quarter.",
+  "Mark the stack that matches the target.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 3 },
+  { kind = "fold", direction = "down", crease = 3 },
+  { kind = "dot", row = 4, column = 4 },
+]

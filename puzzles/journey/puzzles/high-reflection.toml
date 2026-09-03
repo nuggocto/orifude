@@ -1,0 +1,35 @@
+format_version = 1
+id = "high-reflection"
+title = "High reflection"
+description = "Bring the lower half upward."
+width = 4
+height = 4
+target = [
+  "....",
+  "..#.",
+  "..#.",
+  "....",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 1
+stroke_budget = 1
+par = { folds = 1, strokes = 1 }
+tutorial_cues = [
+  "Fold up at crease 2.",
+  "Mark row 2, column 3.",
+  "Open the paper after the mark passes through both layers.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "up", crease = 2 },
+  { kind = "dot", row = 1, column = 2 },
+]

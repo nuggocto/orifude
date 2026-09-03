@@ -1,0 +1,37 @@
+format_version = 1
+id = "four-leaves"
+title = "Four leaves"
+description = "Two folds gather four cells beneath one brush."
+width = 4
+height = 4
+target = [
+  "....",
+  ".##.",
+  ".##.",
+  "....",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 1
+par = { folds = 2, strokes = 1 }
+tutorial_cues = [
+  "Fold down at crease 2.",
+  "Fold right at crease 2.",
+  "Mark the four-layer stack at row 3, column 3.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "dot", row = 2, column = 2 },
+]

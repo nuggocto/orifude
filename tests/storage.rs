@@ -757,6 +757,118 @@ fn installation_load_conflict_removal_and_progress_are_consistent() {
 }
 
 #[test]
+fn community_packs_cannot_claim_built_in_pack_identities() {
+    let root = TestDirectory::new("reserved-pack-ids");
+    let mut storage = Storage::open(root.paths()).unwrap();
+    for pack_id in [
+        "orifude-lesson",
+        "orifude-journey",
+        "orifude-daily",
+        "orifude-endless",
+    ] {
+        let source = root.path().join(pack_id);
+        fs::create_dir(&source).unwrap();
+        write_pack(&source, pack_id);
+        assert!(matches!(
+            storage.install_pack(&source, 1),
+            Err(StorageError::PackConflict)
+        ));
+    }
+    assert!(storage.registered_packs().unwrap().is_empty());
+}
+
+#[test]
+fn startup_discards_legacy_reserved_pack_state() {
+    let registered_root = TestDirectory::new("legacy-reserved-registry");
+    let registered_source = registered_root.path().join("source");
+    fs::create_dir(&registered_source).unwrap();
+    write_pack(&registered_source, "quiet-grove");
+    let registered_paths = registered_root.paths();
+    let mut storage = Storage::open(registered_paths.clone()).unwrap();
+    let installed_name = match storage.install_pack(&registered_source, 1).unwrap() {
+        InstallOutcome::Installed(pack) => orifude::packs::fingerprint_hex(pack.fingerprint),
+        InstallOutcome::AlreadyPresent(_) => panic!("the first installation must be new"),
+    };
+    drop(storage);
+    let connection = Connection::open(registered_paths.database()).unwrap();
+    connection
+        .execute(
+            "UPDATE pack_registry SET pack_id = 'orifude-journey'
+             WHERE pack_id = 'quiet-grove'",
+            [],
+        )
+        .unwrap();
+    drop(connection);
+
+    let storage = Storage::open(registered_paths.clone()).unwrap();
+    assert!(storage.registered_packs().unwrap().is_empty());
+    assert!(
+        !registered_paths
+            .managed_packs()
+            .join(installed_name)
+            .exists()
+    );
+    drop(storage);
+
+    let pending_root = TestDirectory::new("legacy-reserved-pending");
+    let pending_source = pending_root.path().join("source");
+    fs::create_dir(&pending_source).unwrap();
+    write_pack(&pending_source, "orifude-journey");
+    let validated = validate_directory(&pending_source).unwrap();
+    let final_name = validated.fingerprint_hex();
+    let pending_paths = pending_root.paths();
+    drop(Storage::open(pending_paths.clone()).unwrap());
+    copy_directory(
+        &pending_source,
+        &pending_paths.managed_packs().join(&final_name),
+    );
+    insert_pending(
+        &pending_paths,
+        "orifude-journey",
+        validated.fingerprint(),
+        &final_name,
+        2,
+    );
+
+    let storage = Storage::open(pending_paths.clone()).unwrap();
+    assert_eq!(pending_count(&pending_paths), 0);
+    assert!(storage.registered_packs().unwrap().is_empty());
+    assert!(!pending_paths.managed_packs().join(final_name).exists());
+}
+
+#[test]
+fn built_in_completion_requires_the_saved_gameplay_revision() {
+    let journey =
+        validate_directory(&Path::new(env!("CARGO_MANIFEST_DIR")).join("puzzles/journey")).unwrap();
+    let official = journey
+        .puzzles()
+        .iter()
+        .find(|paper| paper.puzzle().identity().puzzle_id() == "first-drop")
+        .expect("first journey paper");
+
+    let mismatched_root = TestDirectory::new("mismatched-built-in-progress");
+    let (different, replay) = solved_replay_for("orifude-journey", "first-drop");
+    let mut storage = Storage::open(mismatched_root.paths()).unwrap();
+    storage
+        .record_completion(&different, &replay, 1, 0, false)
+        .unwrap();
+    assert!(!storage.completion_matches(official.puzzle()).unwrap());
+
+    let matching_root = TestDirectory::new("matching-built-in-progress");
+    let mut storage = Storage::open(matching_root.paths()).unwrap();
+    storage
+        .record_completion(
+            official.puzzle(),
+            official.solution().expect("official solution"),
+            1,
+            0,
+            false,
+        )
+        .unwrap();
+    assert!(storage.completion_matches(official.puzzle()).unwrap());
+}
+
+#[test]
 fn replay_reads_reject_unsuccessful_or_mismatched_documents() {
     let root = TestDirectory::new("replay-validation");
     let paths = root.paths();

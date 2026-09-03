@@ -10,7 +10,9 @@ use crate::domain::paper::{Coordinate, FoldDirection, InkPattern, PaperAction};
 use crate::storage::{ColorMode, GlyphMode, KeyBindings};
 
 use super::app::{App, Screen, action_label, key_label};
-use super::components::{BranchChoices, DialogLayer, Paper, StatusBar, TerminalMark};
+use super::components::{
+    BranchChoices, BranchGrowth, CompletionCourier, DialogLayer, Paper, StatusBar, TerminalMark,
+};
 use super::layout::{LayoutMode, MINIMUM_HEIGHT, MINIMUM_WIDTH, ShellLayout};
 use super::session::{Draft, PlaySession, PlaySource, brush_label, fold_label};
 use super::style::StyleProfile;
@@ -38,15 +40,27 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
     match app.screen() {
         Screen::Capabilities => render_capabilities(frame, content, profile),
         Screen::Branch => {
-            TerminalMark::render(frame, shell.mark, app.mark_frame(now), profile);
+            let mark_frame = app.mark_frame(now);
+            if mark_frame < super::app::MARK_FRAME_COUNT - 1 {
+                TerminalMark::render(frame, shell.mark, mark_frame, profile);
+            } else {
+                BranchGrowth::render(frame, shell.mark, app.completed_group_count(), profile);
+            }
             let completed = (0..app.journey().len())
                 .filter(|index| app.journey_complete(*index))
                 .count();
             let saved = if app.recent().is_empty() { "no" } else { "yes" };
-            let title = format!(
+            let detailed_title = format!(
                 "Home | Journey {completed}/{} | Saved {saved}",
                 app.journey().len()
             );
+            let title = if detailed_title.chars().count().saturating_add(2)
+                <= usize::from(shell.branch.width)
+            {
+                detailed_title
+            } else {
+                format!("Home | Journey {completed}/{}", app.journey().len())
+            };
             BranchChoices::render(frame, shell.branch, app.selection(), &title, profile);
         }
         Screen::Journey => render_journey(frame, content, app, profile),
@@ -59,6 +73,7 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
                     app.settings().bindings,
                     profile,
                     now,
+                    app.group_completion(),
                 );
             }
         }
@@ -136,11 +151,40 @@ fn render_journey(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StylePr
             } else {
                 "locked"
             };
-            format!("{}  [{state}]", paper.title())
+            let (group_number, paper_number) = crate::content::journey_group(index)
+                .map_or((0, 0), |(group_index, group)| {
+                    (group_index + 1, index - group.first_paper + 1)
+                });
+            format!(
+                "{group_number}.{paper_number}  {}  [{state}]",
+                paper.title()
+            )
         })
         .collect::<Vec<_>>();
     choices.push("Back to the branch".to_owned());
-    render_owned_focus(frame, area, "Journey", &choices, app.selection(), profile);
+    let Some((group_index, group)) = crate::content::journey_group(app.selection()) else {
+        render_owned_focus(frame, area, "Journey", &choices, app.selection(), profile);
+        return;
+    };
+    let regions = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Min(1)])
+        .split(area);
+    frame.render_widget(
+        Paragraph::new(group.mechanic)
+            .style(StyleProfile::muted())
+            .wrap(Wrap { trim: true }),
+        regions[0],
+    );
+    let title = format!("Journey {}: {}", group_index + 1, group.title);
+    render_owned_focus(
+        frame,
+        regions[1],
+        &title,
+        &choices,
+        app.selection(),
+        profile,
+    );
 }
 
 fn render_packs(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleProfile) {
@@ -394,6 +438,7 @@ fn render_session(
     bindings: KeyBindings,
     profile: StyleProfile,
     now: Instant,
+    group_completion: Option<&crate::content::JourneyGroup>,
 ) {
     let status_height = if area.width >= 80 {
         7
@@ -445,6 +490,12 @@ fn render_session(
         .as_ref()
         .map(|reveal| (reveal.opened_folds, reveal.total_folds, reveal.complete));
     render_session_status(frame, regions[1], session, bindings, profile, reveal_state);
+    if reveal.as_ref().is_some_and(|reveal| reveal.complete)
+        && session.saved()
+        && let Some(group) = group_completion
+    {
+        CompletionCourier::render(frame, regions[0], group, profile);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1007,7 +1058,7 @@ fn render_stack(
         lines.push(Line::from(""));
         lines.push(Line::styled(fold_label(fold), profile.paper()));
     }
-    let title = if area.width < 20 {
+    let title = if area.width < 22 {
         "Low to high"
     } else {
         "Stack, bottom to top"
@@ -1087,7 +1138,7 @@ fn result_status_lines(
     if !result.is_success() {
         lines.push(Line::styled(
             format!(
-                "Enter returns to the unchanged attempt; {} starts over.",
+                "Arrows inspect rows; Enter returns to the attempt; {} starts over.",
                 bindings.reset
             ),
             profile.error(),
@@ -1332,7 +1383,8 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     use super::*;
-    use crate::storage::{GlyphMode, Settings};
+    use crate::generator::CalendarDate;
+    use crate::storage::{GlyphMode, ProgressPage, Settings};
     use crate::tui::style::ColorCapability;
 
     #[test]
@@ -1466,7 +1518,7 @@ mod tests {
             .expect("branch renders");
         let branch = rendered_text(&terminal);
         assert!(branch.is_ascii());
-        assert!(branch.contains("Home | Journey 0/3 | Saved no"));
+        assert!(branch.contains("Home | Journey 0/40 | Saved no"));
 
         app.handle_key(
             crossterm::event::KeyEvent::new(
@@ -1486,6 +1538,73 @@ mod tests {
             .draw(|frame| render(frame, &app, profile, now))
             .expect("paper renders");
         assert!(rendered_text(&terminal).is_ascii());
+    }
+
+    #[test]
+    fn completed_branch_is_readable_in_every_visual_profile_without_a_resident_squirrel() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        };
+        let app = App::with_state(
+            settings,
+            ProgressPage {
+                entries: Vec::new(),
+                has_more: false,
+            },
+            Vec::new(),
+            vec![true; crate::content::journey().len()],
+            CalendarDate::new(2026, 9, 3).unwrap(),
+            1,
+            now,
+        );
+        for (capability, glyphs) in [
+            (ColorCapability::TrueColor, GlyphMode::Unicode),
+            (ColorCapability::Ansi256, GlyphMode::Unicode),
+            (ColorCapability::Ansi16, GlyphMode::Ascii),
+            (ColorCapability::Monochrome, GlyphMode::Unicode),
+            (ColorCapability::Monochrome, GlyphMode::Ascii),
+        ] {
+            let backend = TestBackend::new(100, 30);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let profile = StyleProfile::new(capability, glyphs);
+            terminal
+                .draw(|frame| render(frame, &app, profile, now))
+                .expect("completed branch renders");
+            let text = rendered_text(&terminal);
+            assert!(text.contains("the full canopy. [8/8]"));
+            assert!(text.contains("Home | Journey 40/40"));
+            assert!(!text.contains("/)_/)"));
+            if glyphs == GlyphMode::Ascii {
+                assert!(text.is_ascii());
+            }
+        }
+    }
+
+    #[test]
+    fn preferred_minimum_keeps_branch_progress_and_stack_heading_complete() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        };
+        let mut app = App::new(settings, now);
+        let branch = menu_text(&app, now, 80, 24)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(branch.contains("The branch is waiting for its first leaf."));
+        assert!(branch.contains("[0/8]"));
+        assert!(branch.contains("Home | Journey 0/40"));
+
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+        let paper = menu_text(&app, now, 80, 24);
+        assert!(paper.contains("Low to high"));
+        assert!(!paper.contains("Stack, bottom to to"));
     }
 
     #[test]
@@ -1561,6 +1680,7 @@ mod tests {
                     KeyBindings::default(),
                     profile,
                     now,
+                    None,
                 );
             })
             .expect("compact paper renders");
@@ -1587,12 +1707,105 @@ mod tests {
                     KeyBindings::default(),
                     profile,
                     now,
+                    None,
                 );
             })
             .expect("compact target renders");
         let target = rendered_text(&terminal);
         assert!(target.contains("TARGET [reference] rows 7-12/12"));
         assert!(!target.contains("FOLDED PAPER"));
+    }
+
+    #[test]
+    fn failed_large_result_scrolls_to_every_comparison_row() {
+        let paper = crate::content::journey().remove(39);
+        let mut session = PlaySession::new(
+            paper.puzzle(),
+            paper.title(),
+            paper.description(),
+            Vec::new(),
+            PlaySource::Journey(39),
+        );
+        let now = Instant::now();
+        session.handle_key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            KeyBindings::default(),
+            now,
+            true,
+        );
+        assert!(session.result().is_some_and(|result| !result.is_success()));
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 56, 13),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    now,
+                    None,
+                );
+            })
+            .expect("failed result renders");
+        assert!(rendered_text(&terminal).contains("OPENED COMPARISON rows 1-5/8"));
+
+        for _ in 0..7 {
+            session.handle_key(
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Down,
+                    crossterm::event::KeyModifiers::NONE,
+                ),
+                KeyBindings::default(),
+                now,
+                true,
+            );
+        }
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 56, 13),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    now,
+                    None,
+                );
+            })
+            .expect("scrolled failed result renders");
+        let result = rendered_text(&terminal);
+        assert!(result.contains("OPENED COMPARISON rows 4-8/8"));
+        assert!(result.contains("Arrows inspect rows"));
+    }
+
+    #[test]
+    fn journey_mechanic_wraps_at_the_supported_minimum() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            ..Settings::default()
+        };
+        let mut app = App::new(settings, now);
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+        for _ in 0..20 {
+            press(&mut app, crossterm::event::KeyCode::Down, now);
+        }
+
+        let text = menu_text(&app, now, 60, 20)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            text.contains("Make later creases possible by choosing the earlier fold first."),
+            "{text}"
+        );
+        assert!(text.contains("Journey 5: Fold order"), "{text}");
     }
 
     #[test]
@@ -1679,6 +1892,7 @@ mod tests {
                     KeyBindings::default(),
                     profile,
                     now,
+                    None,
                 );
             })
             .expect("minimum result renders");

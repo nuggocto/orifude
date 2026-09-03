@@ -342,6 +342,10 @@ impl PlaySession {
     ) -> SessionEvent {
         match code {
             KeyCode::Esc => SessionEvent::Back,
+            KeyCode::Left | KeyCode::Char('h') => self.adjust_or_move(-1, 0),
+            KeyCode::Right | KeyCode::Char('l') => self.adjust_or_move(1, 0),
+            KeyCode::Up | KeyCode::Char('k') => self.adjust_or_move(0, -1),
+            KeyCode::Down | KeyCode::Char('j') => self.adjust_or_move(0, 1),
             KeyCode::Enter if result.is_success() && self.saved => SessionEvent::Back,
             KeyCode::Enter if result.is_success() && !self.saved => SessionEvent::Save,
             KeyCode::Enter if !result.is_success() => {
@@ -705,14 +709,37 @@ mod tests {
     }
 
     #[test]
-    fn result_reveal_opens_validated_folds_one_at_a_time() {
-        let paper = content::journey().remove(2);
+    fn reduced_motion_skips_the_folded_result_reveal() {
+        let paper = content::lesson();
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
             paper.description(),
             Vec::new(),
-            PlaySource::Journey(2),
+            PlaySource::Lesson,
+        );
+        for &action in paper.solution() {
+            session.attempt.apply(action).expect("recorded action");
+        }
+        let now = Instant::now();
+
+        assert_eq!(
+            session.handle_key(key(KeyCode::Enter), KeyBindings::default(), now, true),
+            SessionEvent::Save
+        );
+        assert!(!session.animation_active(now));
+        assert!(session.reveal_frame(now).complete);
+    }
+
+    #[test]
+    fn result_reveal_opens_validated_folds_one_at_a_time() {
+        let paper = content::journey().remove(10);
+        let mut session = PlaySession::new(
+            paper.puzzle(),
+            paper.title(),
+            paper.description(),
+            Vec::new(),
+            PlaySource::Journey(10),
         );
         for &action in paper.solution() {
             session.attempt.apply(action).expect("recorded action");

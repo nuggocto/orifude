@@ -1,0 +1,48 @@
+format_version = 1
+id = "orifude-journey"
+title = "The Orifude Journey"
+description = "Forty papers that teach folding and brushwork one step at a time."
+authors = ["Orifude contributors"]
+license = "Apache-2.0"
+puzzles = [
+  "first-drop",
+  "corner-seed",
+  "two-drops",
+  "open-window",
+  "small-sprig",
+  "folded-pair",
+  "low-reflection",
+  "high-reflection",
+  "left-reflection",
+  "two-windows",
+  "four-leaves",
+  "upper-left",
+  "crossed-corner",
+  "stacked-rain",
+  "quarter-turn",
+  "short-crease",
+  "far-crease",
+  "shallow-rain",
+  "lifted-edge",
+  "uneven-corner",
+  "second-crease",
+  "returning-edge",
+  "falling-twice",
+  "rising-twice",
+  "folded-crossroads",
+  "horizontal-thread",
+  "vertical-thread",
+  "folded-stripe",
+  "folded-bar",
+  "cross-weave",
+  "line-and-drop",
+  "bar-and-drop",
+  "quarter-line",
+  "uneven-ink",
+  "woven-corner",
+  "quiet-canopy",
+  "offset-canopy",
+  "three-bands",
+  "wide-branches",
+  "full-canopy",
+]

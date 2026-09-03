@@ -1,78 +1,90 @@
 # Orifude
 
-Orifude is a quiet puzzle game for the terminal. You fold a small sheet of
-paper, place ink through its layers, and open it again to see whether the marks
-match the pattern.
+Orifude is a quiet, offline puzzle game for the terminal. Fold a small sheet,
+place ink through its layers, then open it and match the target exactly. The
+name is coined from the ideas of folding and brushwork.
 
-It is written in Rust and played entirely with the keyboard. The game works
-without a network connection and keeps progress on the player's computer.
+The game is written in Rust, uses only the keyboard, and keeps progress on the
+player's computer. It has an interactive first lesson, a handcrafted journey,
+a deterministic daily paper, an endless local generator, keepsakes, and local
+community packs.
 
-Orifude is open source under the Apache 2.0 license and is still being built.
-The current binary establishes the command-line contract but does not contain
-the playable game yet.
+```text
+Target             Folded paper           Stack, bottom to top
+. # # .            0 0 @ 0                0: cell 6
+                                            1: cell 5
 
-## How to play
+One fold lets one dot pass through both layers.
+```
 
-Each puzzle begins with a target pattern and a fresh sheet of paper.
+A deterministic [first-paper terminal recording](docs/recordings/journey.cast)
+is checked in for documentation. It can be replayed with any asciicast v2
+player.
 
-1. Study the target, then fold the paper across the allowed creases.
-2. Place a dot or line of ink on the folded paper. The ink passes through every
-   layer beneath the brush.
-3. Open the paper and compare the result with the target. Every required mark
-   must be present, and there must be no extra ink.
-4. Undo a step or restart the paper whenever you want to try another approach.
+## Play
 
-The final TUI is not available yet. Contributors can run `mise run paper` to
-try the current plain-text folding exercise. The complete game rules live in
-[`PROJECT.md`](PROJECT.md#canonical-game-rules).
+Install mise and the pinned Rust toolchain, then start the game:
+
+```console
+mise run run
+```
+
+The first launch explains the goal and leads through one real paper. During a
+puzzle:
+
+- Arrow keys or `h`, `j`, `k`, `l` move the cursor.
+- `Tab` previews and cycles through legal folds and brushes.
+- `Enter` confirms the selected action. With no action selected, it opens and
+  checks the paper.
+- `Space` previews the ink on the unfolded sheet.
+- `u` undoes, `r` resets, `?` opens help, and `q` leaves.
+
+Bindings, color use, glyph mode, and motion can be changed inside terminal
+settings. The minimum interactive terminal is 60 columns by 20 rows. Smaller
+windows keep the current state and ask to be resized.
+
+## Local puzzle packs
+
+Orifude accepts bounded pack directories and ZIP archives containing inert
+TOML and optional text notes. It never downloads pack content.
+
+```console
+mise run run verify puzzles/example-pack
+mise run run solve puzzles/example-pack
+mise run run pack install puzzles/example-pack
+mise run run pack list
+mise run run pack remove paper-garden
+```
+
+The complete format, validation workflow, licensing notes, and contribution
+checklist are in [Writing puzzle packs](docs/puzzle-authoring.md). The
+[`paper-garden`](puzzles/example-pack/pack.toml) directory is a working example.
 
 ## Development
 
 Install [rustup](https://rustup.rs/) and
 [mise](https://mise.jdx.dev/getting-started.html) 2026.8.14 or newer. The exact
-Rust toolchain is declared in `rust-toolchain.toml`; mise reads that declaration
-instead of keeping another Rust version. `mise.lock` records the reviewed URL
-and checksum for the cargo-deny download. Rustup installs the exact declared
-Rust toolchain and components.
-
-`Cargo.lock` is committed for reproducible application builds. Tasks that
-resolve or compile Rust dependencies use it in locked mode.
-
-Install the tools and run every ordinary check:
+Rust toolchain is declared in `rust-toolchain.toml`. `Cargo.lock` and
+`mise.lock` keep application builds and development tools reproducible.
 
 ```console
 mise install rust github:EmbarkStudios/cargo-deny --locked
 mise run check
+mise run test-native
 ```
 
-The same task runs in CI. It checks formatting, Clippy lints, unit and
-integration tests, documentation examples, the release build, dependency
-advisories, licenses, and dependency sources. These focused tasks are also
-available:
+`mise run check` verifies formatting, Clippy lints, tests, documentation,
+dependency policy, and the release build. `mise run test-native` exercises the
+shipped binary in a native pseudoterminal, including the first lesson, a saved
+journey paper, restart, replay, preview, undo, reset, resize recovery, daily
+generation, malformed-pack handling, and terminal restoration.
 
-```console
-mise run run
-mise run fmt
-mise run fmt-check
-mise run lint
-mise run test
-mise run doctest
-mise run build
-mise run audit
-mise run paper
-mise run paper-measure
-mise run domain-fuzz
-```
+Focused tasks include `mise run run`, `mise run test`, `mise run lint`,
+`mise run build`, the bounded parser and domain harnesses, and the solver,
+paper, and storage measurements listed in `mise.toml`.
 
-`mise run paper` opens a model-driven ASCII walkthrough followed by a bounded
-exercise for predicting one-fold and two-fold layer order. When it asks for the
-top cell ID, enter only that number and press Enter.
-`mise run paper-measure` compares the dense paper state with the rejected
-coordinate-to-stack map in a release build.
-`mise run domain-fuzz` accepts up to 256 bytes on standard input and exercises a
-bounded sequence of folds, brush strokes, undo, reset, and replay.
-
-The planned native targets and minimum operating-system versions are recorded
-as package metadata in `Cargo.toml`. The complete product contract and work
-queue live in `PROJECT.md`. Work toward the first puzzle-game release is
-recorded in [`CHANGELOG.md`](CHANGELOG.md).
+The product contract and work queue live in [`PROJECT.md`](PROJECT.md).
+Implementation decisions and verification evidence live in
+[`NOTEBOOK.md`](NOTEBOOK.md). Orifude is open source under the
+[Apache 2.0 license](LICENSE) and has not published its first puzzle-game
+release yet.

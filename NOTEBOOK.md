@@ -1112,6 +1112,192 @@ and all five native player jobs again in
 Together those hosted runs cover Linux x86_64 and ARM64, macOS Intel and Apple
 Silicon, and Windows x86_64 without retries.
 
+## Journey content and branch identity
+
+The built-in journey now comes from the same versioned TOML boundary as a
+community pack. [`journey.rs`](src/content/journey.rs) embeds one manifest and
+forty puzzle files, validates them once through [`packs`](src/packs/mod.rs),
+then keeps the bounded catalog in a `OnceLock`. Eight groups contain five
+papers each. They begin with cursor and dot placement, then add centered folds,
+deep stacks, uneven creases, fold order, line brushes, mixed brushwork, and
+larger combined papers. Titles, descriptions, and cues live beside each puzzle
+instead of in a second Rust catalog.
+
+```mermaid
+flowchart LR
+    Files["40 TOML papers<br/>8 groups of 5"] --> Validator["Production pack validator"]
+    Validator --> Witness["Recorded replay executes exactly"]
+    Validator --> Catalog["OnceLock built-in catalog"]
+    Catalog --> Journey["Journey selection and play"]
+    Journey --> Save["Durable completion"]
+    Save --> Group["Five-paper group complete"]
+    Group --> Courier["Squirrel delivers one gift"]
+    Courier --> Branch["Home branch grows<br/>0 through 8 states"]
+```
+
+Puzzle files may carry an optional `solution` array. Validation bounds it to
+the replay action limit, validates every coordinate, executes it through the
+production engine, and accepts it only when the target matches exactly.
+External packs remain compatible when the field is absent. The catalog test in
+[`content.rs`](tests/content.rs) also asks the independent bounded solver to
+find and replay a solution for every official paper. This separates authored
+solution evidence from solver evidence.
+
+The persistent home area shows the growing branch, never a resident mascot.
+Each completed group adds a named leaf, berry, folded object, bird, or branch
+shape, and its caption carries the same state without relying on color. The
+squirrel remains in the opening delivery, the hands-on lesson delivery, and a
+one-time group-completion card. Unicode and ASCII branch drawings share the
+same eight states. Reduced motion skips both the opening wash and folded-result
+reveal while retaining the final frame and completion message.
+
+[`author.rs`](src/author.rs) connects the documented local author commands to
+the existing validator, solver, and atomic pack storage. Command output is
+bounded to one MiB. Pack diagnostics use only validator-owned, control-free
+locations and messages; supplied paths are never echoed. Solver output is
+valid TOML with zero-based action coordinates, so its `solution` arrays can be
+copied into puzzle files. The shipped-binary checks cover validation, solving,
+malformed input, and install, list, and removal across separate processes.
+
+The installable [`paper-garden`](puzzles/example-pack/pack.toml) example and
+[`puzzle-authoring.md`](docs/puzzle-authoring.md) describe every file, action,
+coordinate convention, bound, license field, and contribution check. The
+README links a deterministic asciicast-v2
+[`journey.cast`](docs/recordings/journey.cast) whose fixed terminal size,
+timestamp, output frames, and first-paper path make it reusable by project and
+site documentation without network access.
+
+The adversarial follow-up review found six concrete corrections. Zero branch
+progress first claimed the first gift because a saturating subtraction selected
+group zero. Community content could also install under a built-in pack ID and
+write progress against the journey identity. The minimum-height completion
+card clipped its return instruction, one five-action paper combined its final
+mark and open step in one cue, and the first solver report used readable action
+labels instead of copyable TOML. Nested brush and solution tables also accepted
+undeclared fields even though the format is strict. The state lookup,
+reserved-ID installation guard, compact completion card, cue, solver
+serialization, and nested-table parsing now have focused regressions in
+[`app.rs`](src/tui/app.rs),
+[`components.rs`](src/tui/components.rs), [`storage.rs`](tests/storage.rs),
+[`content.rs`](tests/content.rs), [`packs.rs`](tests/packs.rs), and
+[`cli.rs`](tests/cli.rs).
+
+The complete locked repository check passed on x86_64 Linux with Rust 1.98.0.
+It included strict all-target Clippy, dependency and license policy, all unit,
+integration, example, and native PTY tests, the doctest, and an optimized
+build. The forty-paper solver check completed in about 4.4 seconds in the test
+profile. All seven native terminal journeys passed, including terminal
+restoration. A separate optimized-binary QA run validated the example pack,
+installed it, listed it from a new process, removed it, and confirmed an empty
+registry. Every line of the checked-in cast parsed as JSON.
+
+Two conclusions still need people rather than code: the difficulty curve must
+be observed with fresh players, and the owner must confirm that the derived
+terminal drawings use the supplied identity appropriately. Automated checks
+can prove validation, solutions, bounds, text safety, and fallback behavior,
+but they cannot substitute for either judgment.
+
+## Whole-repository review and corrections
+
+The 2026-09-03 review covered every authored Rust module, test, example,
+configuration file, project document, embedded journey paper, example-pack
+file, and the complete working-tree diff based on commit `de234f4`. Generated
+lockfiles were checked through locked Cargo resolution and
+[`cargo-deny`](deny.toml), rather than treated as handwritten source. The
+separate frontend repository remained outside the requested scope.
+
+Three independent review reports were traced through the implementation and
+reproduced where they described runtime behavior. None was a false alarm. The
+hard-coded five-paper display number was a latent inconsistency rather than a
+current player failure because every present group has five papers; it was
+still corrected to derive the number from `first_paper`. Some proposed
+severities were debatable, but the underlying defects were real.
+
+Terminal output now has two defensive boundaries. [`PackIssue`](src/packs/mod.rs)
+replaces control characters when a structured diagnostic is created, so even
+a rejected ZIP entry name is safe to print. The process-level
+[`SafeErrorReport`](src/main.rs) also replaces controls from every error source,
+stops at 16 KiB, limits source traversal, and flushes one final line. This
+covers SQLite and operating-system messages that do not pass through pack
+validation. [`cli.rs`](tests/cli.rs) exercises both original attack paths
+through the compiled binary: an escape-bearing ZIP filename and a SQLite
+`RAISE` message.
+
+```mermaid
+flowchart LR
+    Pack["Pack or ZIP text"] --> Issue["PackIssue<br/>controls replaced"]
+    SQLite["SQLite or OS error"] --> Chain["Typed error chain"]
+    Issue --> Report["Bounded output"]
+    Chain --> Safe["SafeErrorReport<br/>16 KiB, 8 causes"]
+    Safe --> Report
+    Report --> Terminal["stderr<br/>one control-free line"]
+```
+
+Runtime storage selection now belongs to [`AppPaths`](src/storage/paths.rs),
+so both the TUI and author commands honor the same feature-gated test root.
+The CLI lifecycle deliberately points XDG and Windows compatibility variables
+elsewhere and confirms that its database is created only below the injected
+root. This keeps native tests away from a player's real database and managed
+packs on every supported operating system.
+
+Built-in identities are protected during recovery as well as installation.
+[`Storage`](src/storage/mod.rs) discards legacy reserved registry rows and
+pending installs before the managed-pack orphan sweep, while keeping their
+saved progress. A journey paper is considered complete only when the best
+saved replay decodes successfully and its full gameplay definition equals the
+embedded paper. This prevents an older community definition with the same IDs
+from unlocking official content. Existing completions that do match remain
+open even when new papers have been inserted earlier in the catalog.
+
+```mermaid
+flowchart TD
+    Open["Storage::open"] --> Pending["Reconcile pending install"]
+    Pending --> Reserved{"Built-in pack ID?"}
+    Reserved -->|yes| Drop["Discard install metadata"]
+    Reserved -->|no| Recover["Recover validated pack"]
+    Drop --> Sweep["Remove orphaned managed files"]
+    Recover --> Sweep
+    Sweep --> Replay["Decode saved best replay"]
+    Replay --> Match{"Exact gameplay match?"}
+    Match -->|yes| Complete["Paper remains complete and open"]
+    Match -->|no| Locked["Do not apply progress to this paper"]
+```
+
+The player state and minimum layouts received the remaining corrections in
+[`app.rs`](src/tui/app.rs), [`session.rs`](src/tui/session.rs),
+[`components.rs`](src/tui/components.rs), and [`view.rs`](src/tui/view.rs).
+Loading a replay consumes a pending group-delivery card. Arrow keys reuse the
+already bounded cursor to scroll every row of a large opened comparison,
+avoiding a second offset that could drift from cursor state. Group mechanics
+are wrapped body copy instead of oversized border titles, branch captions wrap
+at the preferred minimum, and compact stack and home headings no longer lose
+characters. The stack and home clipping was found during the second
+shipped-binary pass rather than in the supplied reports.
+
+Tutorial cues in the example pack now advance with completed action count, and
+`quiet-canopy` describes one fold per cue. The
+[`author guide`](docs/puzzle-authoring.md) matches all three example files and
+uses the repository's mise interface, as does the README. The checked-in
+[`journey.cast`](docs/recordings/journey.cast) was recaptured at 80 by 24 from
+the optimized binary. Its result frame is the real opened-comparison and Paper
+controls view; the unreachable standalone panels are gone.
+
+Focused regressions cover control-free diagnostics, isolated CLI storage,
+reserved recovery, exact replay revision matching, completion-card
+consumption, old completion access, wrapped mechanics and branch progress,
+and scrolling all eight comparison rows at 60 by 20. The complete locked check
+passed with strict all-target Clippy, dependency policy, 203 unit, integration,
+and example tests, the doctest, and the optimized build. The same 203 tests
+passed in the optimized profile. Warning-denied private documentation, all
+seven native PTY journeys, the three-paper validator and solver commands, and
+the five 80-by-24 cast frames also passed locally. The hosted outcome will be
+added after the exact revision is available.
+
+Residual judgment remains explicit. Difficulty observation and artwork
+approval still require the two human decisions identified in
+[`PROJECT.md`](PROJECT.md#current-work); code and automation cannot honestly
+close them.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in

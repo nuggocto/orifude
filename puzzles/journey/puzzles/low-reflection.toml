@@ -1,0 +1,35 @@
+format_version = 1
+id = "low-reflection"
+title = "Low reflection"
+description = "Fold the upper half down before marking it."
+width = 4
+height = 4
+target = [
+  "....",
+  ".#..",
+  ".#..",
+  "....",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 1
+stroke_budget = 1
+par = { folds = 1, strokes = 1 }
+tutorial_cues = [
+  "Fold down at crease 2.",
+  "Mark row 3, column 2.",
+  "Open the paper to see the vertical pair.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "dot", row = 2, column = 1 },
+]

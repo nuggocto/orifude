@@ -15,8 +15,7 @@ contract, and only phase tracker for Orifude v1.
 ## Current work
 
 - Current phase: **Phase 8, content and identity**
-- Current checklist item: **Define the journey groups and the mechanic taught
-  by each group.**
+- Current checklist item: **Review difficulty progression with fresh players.**
 - Last updated: **2026-09-03**
 
 Checkbox rules:
@@ -1834,24 +1833,36 @@ Exit gate:
 Goal: give the complete engine enough reviewed puzzles, copy, and visual rhythm
 to feel like Orifude rather than a rules demo.
 
-- [ ] Define the journey groups and the mechanic taught by each group.
-- [ ] Create at least 40 handcrafted journey puzzles.
-- [ ] Verify every puzzle against the production validator.
-- [ ] Record at least one bounded solver solution for every official puzzle.
+- [x] Define the journey groups and the mechanic taught by each group.
+- [x] Create at least 40 handcrafted journey puzzles.
+- [x] Verify every puzzle against the production validator.
+- [x] Record at least one bounded solver solution for every official puzzle.
 - [ ] Review difficulty progression with fresh players.
-- [ ] Remove puzzles whose solution depends on unexplained interface behavior.
-- [ ] Write short titles and descriptions without generic filler.
-- [ ] Write tutorial cues that explain one action at a time.
-- [ ] Create the initial home-branch progression states.
-- [ ] Use the squirrel only for delivery and completion moments.
-- [ ] Add at least one official example community pack.
-- [ ] Document puzzle authoring, validation, licensing, and contribution.
-- [ ] Produce ASCII, ANSI, and Unicode-safe visual variants.
-- [ ] Verify that all states remain readable without color.
-- [ ] Verify that reduced motion removes every nonessential animation.
-- [ ] Review every external string for terminal control and layout safety.
-- [ ] Record a deterministic terminal journey for the README and frontend.
+- [x] Remove puzzles whose solution depends on unexplained interface behavior.
+- [x] Write short titles and descriptions without generic filler.
+- [x] Write tutorial cues that explain one action at a time.
+- [x] Create the initial home-branch progression states.
+- [x] Use the squirrel only for delivery and completion moments.
+- [x] Add at least one official example community pack.
+- [x] Document puzzle authoring, validation, licensing, and contribution.
+- [x] Produce ASCII, ANSI, and Unicode-safe visual variants.
+- [x] Verify that all states remain readable without color.
+- [x] Verify that reduced motion removes every nonessential animation.
+- [x] Review every external string for terminal control and layout safety.
+- [x] Record a deterministic terminal journey for the README and frontend.
 - [ ] Confirm artwork use and derived assets with the project owner.
+
+The engineering review rechecked three independent reports against the source
+and reproduced every runtime claim. Corrections now cover feature-gated storage
+isolation for every command, bounded terminal-safe diagnostics, reserved pack
+recovery, replay revision matching, access to older completions, replay card
+state, large comparison scrolling, minimum-size copy, cue progression, the
+author examples, and a terminal recording captured from the optimized binary.
+Focused regression tests exercise each original failure path. The complete
+locked check and the same 203 tests in the optimized profile passed on x86_64
+Linux, along with warning-denied documentation, all seven native PTY journeys,
+the documented validator and solver commands, and structural checks of every
+recorded terminal frame.
 
 Exit gate:
 

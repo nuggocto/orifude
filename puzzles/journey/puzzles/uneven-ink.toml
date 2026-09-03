@@ -1,0 +1,38 @@
+format_version = 1
+id = "uneven-ink"
+title = "Uneven ink"
+description = "A short fold changes which stacks a line can cross."
+width = 6
+height = 6
+target = [
+  "......",
+  "......",
+  "#####.",
+  "......",
+  ".....#",
+  "......",
+]
+folds = [
+  { direction = "right", crease = 2 },
+  { direction = "left", crease = 4 },
+]
+brushes = [
+  { kind = "dot" },
+  { kind = "line", axis = "horizontal", length = 3 },
+]
+fold_budget = 1
+stroke_budget = 2
+par = { folds = 1, strokes = 2 }
+tutorial_cues = [
+  "Use the short rightward fold.",
+  "Draw across three occupied positions.",
+  "Add one dot on the far edge.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "line", start_row = 2, start_column = 2, end_row = 2, end_column = 4 },
+  { kind = "dot", row = 4, column = 5 },
+]

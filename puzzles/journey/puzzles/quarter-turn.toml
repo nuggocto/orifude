@@ -1,0 +1,39 @@
+format_version = 1
+id = "quarter-turn"
+title = "Quarter turn"
+description = "Read the target before choosing which two sides move."
+width = 4
+height = 4
+target = [
+  ".##.",
+  "#..#",
+  "#..#",
+  ".##.",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 2
+par = { folds = 2, strokes = 2 }
+tutorial_cues = [
+  "Use the target symmetry to choose the first fold.",
+  "Gather the other axis into the same quarter.",
+  "Place the first mark through four layers.",
+  "Place the second mark through the neighboring stack.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "fold", direction = "up", crease = 2 },
+  { kind = "dot", row = 0, column = 2 },
+  { kind = "dot", row = 1, column = 3 },
+]

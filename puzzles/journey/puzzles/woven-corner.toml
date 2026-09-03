@@ -1,0 +1,42 @@
+format_version = 1
+id = "woven-corner"
+title = "Woven corner"
+description = "Two folds, one line, and one dot fill an uneven corner."
+width = 6
+height = 6
+target = [
+  ".##...",
+  ".##...",
+  ".##...",
+  ".##...",
+  "......",
+  ".....#",
+]
+folds = [
+  { direction = "right", crease = 2 },
+  { direction = "down", crease = 2 },
+  { direction = "left", crease = 4 },
+  { direction = "up", crease = 4 },
+]
+brushes = [
+  { kind = "dot" },
+  { kind = "line", axis = "vertical", length = 2 },
+]
+fold_budget = 2
+stroke_budget = 2
+par = { folds = 2, strokes = 2 }
+tutorial_cues = [
+  "Move the left band inward.",
+  "Move the upper band downward.",
+  "Draw the short vertical stroke.",
+  "Place the final dot in another stack.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "line", start_row = 2, start_column = 2, end_row = 3, end_column = 2 },
+  { kind = "dot", row = 5, column = 5 },
+]

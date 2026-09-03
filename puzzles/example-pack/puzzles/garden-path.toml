@@ -1,0 +1,26 @@
+format_version = 1
+id = "garden-path"
+title = "Garden path"
+description = "Draw one short line across the open paper."
+width = 4
+height = 4
+target = [
+  "....",
+  ".###",
+  "....",
+  "....",
+]
+folds = []
+brushes = [{ kind = "line", axis = "horizontal", length = 3 }]
+fold_budget = 0
+stroke_budget = 1
+par = { folds = 0, strokes = 1 }
+tutorial_cues = [
+  "Move to the left end, then choose the horizontal line brush and draw the stroke.",
+  "Open the paper after the three-cell stroke.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "line", start_row = 1, start_column = 1, end_row = 1, end_column = 3 },
+]

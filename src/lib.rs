@@ -12,6 +12,7 @@
 //! assert_eq!(CommandOutcome::Play, CommandOutcome::Play);
 //! ```
 
+mod author;
 mod cli;
 mod content;
 pub mod domain;
@@ -22,6 +23,7 @@ pub mod solver;
 pub mod storage;
 mod tui;
 
+pub use author::{AuthorError, execute_author};
 pub use cli::{CommandOutcome, ExitStatus, run};
 pub use error::{OutputError, OutputStream};
 pub use tui::{EventError, TuiError, play};

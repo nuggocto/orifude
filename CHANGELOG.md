@@ -62,6 +62,16 @@ intentionally not included.
 - Added storage and malicious-pack integration tests, four bounded parser
   harnesses, and a release-mode durable-write measurement.
 - Added concise play instructions to the README.
+- Added a forty-paper handcrafted journey in eight teaching groups, with
+  validator-checked solution witnesses and independently bounded solver paths.
+- Added progressive home-branch states and a squirrel completion delivery when
+  each five-paper group is finished.
+- Added an installable three-paper example pack and a complete author guide for
+  the local TOML format, validation, licensing, and contribution workflow.
+- Added local `verify`, `solve`, and pack management commands with bounded,
+  terminal-safe output and behavior tests through the shipped binary.
+- Added a deterministic first-paper terminal recording for project and release
+  documentation.
 
 ### Changed
 
@@ -74,9 +84,25 @@ intentionally not included.
 - Moved the plain-text paper exercise onto the validated production domain API.
 - Reused paper allocations during reset so bounded search can restore parent
   paths without rebuilding the canonical cell vector each time.
+- Moved the built-in journey onto the same validated pack format used by
+  community papers, keeping one parser and one gameplay boundary.
+- Replaced the stale foundation README with current play, pack, and verification
+  instructions.
 
 ### Fixed
 
+- Kept author-command tests inside their injected storage root on every
+  supported operating system.
+- Sanitized and bounded rejected pack paths and nested operational errors
+  before they reach a terminal.
+- Reconciled legacy community packs that claimed built-in identities and bound
+  journey completion to the saved puzzle's exact gameplay definition.
+- Kept older completed papers replayable after catalog growth, removed a stale
+  group-completion card before replay, and made large result rows inspectable.
+- Kept group lessons, branch progress, and compact headings readable at the
+  supported terminal sizes.
+- Aligned tutorial cues, author documentation, example-pack metadata, and the
+  checked-in terminal recording with the shipped behavior.
 - Made oversized paper-exercise input stop the session instead of allowing the
   unread tail to be interpreted as later commands.
 - Kept deterministic generation trying its remaining bounded candidates after
@@ -93,6 +119,8 @@ intentionally not included.
   diagnostics beyond the 32-issue limit.
 - Reconciled missing registered pack directories and unknown managed entries so
   interrupted or platform-created filesystem state cannot block every startup.
+- Kept zero-progress branch copy from claiming the first group gift.
+- Rejected undeclared fields inside nested brush and recorded-solution tables.
 
 ### Security
 

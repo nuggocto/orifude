@@ -1,0 +1,32 @@
+format_version = 1
+id = "cross-weave"
+title = "Cross weave"
+description = "Two straight strokes share one center cell."
+width = 4
+height = 4
+target = [
+  ".#..",
+  "###.",
+  ".#..",
+  "....",
+]
+folds = [
+]
+brushes = [
+  { kind = "line", axis = "horizontal", length = 3 },
+  { kind = "line", axis = "vertical", length = 3 },
+]
+fold_budget = 0
+stroke_budget = 2
+par = { folds = 0, strokes = 2 }
+tutorial_cues = [
+  "Draw the horizontal stroke through the center.",
+  "Draw the vertical stroke through the same center.",
+  "Open the crossed paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "line", start_row = 1, start_column = 0, end_row = 1, end_column = 2 },
+  { kind = "line", start_row = 0, start_column = 1, end_row = 2, end_column = 1 },
+]

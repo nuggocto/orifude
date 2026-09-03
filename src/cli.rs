@@ -1,19 +1,27 @@
 use std::ffi::OsString;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
+use crate::domain::puzzle::PuzzleIdentity;
 use crate::{OutputError, OutputStream};
 
 const HELP: &str = concat!(
     "Orifude is a quiet, offline puzzle game for the terminal.\n\n",
-    "Usage: orifude [OPTIONS]\n\n",
+    "Usage: orifude [OPTIONS]\n",
+    "       orifude verify PATH\n",
+    "       orifude solve PATH\n",
+    "       orifude pack install PATH\n",
+    "       orifude pack list\n",
+    "       orifude pack remove PACK_ID\n\n",
     "Options:\n",
     "  -h, --help     Print help\n",
     "  -V, --version  Print version\n",
+    "\nAuthor and pack commands work only with local files.\n",
 );
 const USAGE_ERROR: &str = concat!(
     "error: unsupported command-line arguments\n\n",
-    "Usage: orifude [OPTIONS]\n",
+    "Usage: orifude [OPTIONS] | verify PATH | solve PATH | pack COMMAND\n",
     "For more information, try '--help'.\n",
 );
 
@@ -42,33 +50,63 @@ enum Command {
     Play,
     Help,
     Version,
+    Verify(PathBuf),
+    Solve(PathBuf),
+    PackInstall(PathBuf),
+    PackList,
+    PackRemove(Box<str>),
     Invalid,
 }
 
 fn parse(mut arguments: impl Iterator<Item = OsString>) -> Command {
-    let Some(argument) = arguments.next() else {
+    let Some(first) = arguments.next() else {
         return Command::Play;
     };
-
+    let second = arguments.next();
+    let third = arguments.next();
     if arguments.next().is_some() {
         return Command::Invalid;
     }
 
-    if argument == "-h" || argument == "--help" {
-        Command::Help
-    } else if argument == "-V" || argument == "--version" {
-        Command::Version
-    } else {
-        Command::Invalid
+    match (first, second, third) {
+        (argument, None, None) if argument == "-h" || argument == "--help" => Command::Help,
+        (argument, None, None) if argument == "-V" || argument == "--version" => Command::Version,
+        (command, Some(path), None) if command == "verify" => Command::Verify(PathBuf::from(path)),
+        (command, Some(path), None) if command == "solve" => Command::Solve(PathBuf::from(path)),
+        (pack, Some(command), Some(path)) if pack == "pack" && command == "install" => {
+            Command::PackInstall(PathBuf::from(path))
+        }
+        (pack, Some(command), None) if pack == "pack" && command == "list" => Command::PackList,
+        (pack, Some(command), Some(pack_id)) if pack == "pack" && command == "remove" => {
+            let Ok(pack_id) = pack_id.into_string() else {
+                return Command::Invalid;
+            };
+            if PuzzleIdentity::new(&pack_id, "probe").is_err() {
+                Command::Invalid
+            } else {
+                Command::PackRemove(pack_id.into_boxed_str())
+            }
+        }
+        _ => Command::Invalid,
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 /// The command-line parser either hands control to the TUI or finishes with a
 /// process status after writing a bounded non-interactive response.
 pub enum CommandOutcome {
     /// Open the interactive terminal application after releasing stream locks.
     Play,
+    /// Validate one local pack directory or ZIP archive.
+    Verify(PathBuf),
+    /// Solve every puzzle in one validated local pack.
+    Solve(PathBuf),
+    /// Validate and install one local pack.
+    PackInstall(PathBuf),
+    /// List locally installed packs.
+    PackList,
+    /// Remove one installed pack while preserving its progress.
+    PackRemove(Box<str>),
     /// Finish without opening the terminal application.
     Exit(ExitStatus),
 }
@@ -97,6 +135,11 @@ pub fn run(
             flush(stdout, OutputStream::Stdout)?;
             Ok(CommandOutcome::Exit(ExitStatus::Success))
         }
+        Command::Verify(path) => Ok(CommandOutcome::Verify(path)),
+        Command::Solve(path) => Ok(CommandOutcome::Solve(path)),
+        Command::PackInstall(path) => Ok(CommandOutcome::PackInstall(path)),
+        Command::PackList => Ok(CommandOutcome::PackList),
+        Command::PackRemove(pack_id) => Ok(CommandOutcome::PackRemove(pack_id)),
         Command::Invalid => write(stderr, OutputStream::Stderr, USAGE_ERROR, ExitStatus::Usage),
     }
 }

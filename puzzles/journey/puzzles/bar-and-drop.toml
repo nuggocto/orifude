@@ -1,0 +1,38 @@
+format_version = 1
+id = "bar-and-drop"
+title = "Bar and drop"
+description = "A horizontal stroke and one dot share a folded half."
+width = 4
+height = 4
+target = [
+  "...#",
+  "##..",
+  "##..",
+  "...#",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+  { kind = "line", axis = "horizontal", length = 2 },
+]
+fold_budget = 1
+stroke_budget = 2
+par = { folds = 1, strokes = 2 }
+tutorial_cues = [
+  "Fold the upper half downward.",
+  "Draw a two-cell bar on the folded paper.",
+  "Add one dot away from the bar.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "line", start_row = 2, start_column = 0, end_row = 2, end_column = 1 },
+  { kind = "dot", row = 3, column = 3 },
+]

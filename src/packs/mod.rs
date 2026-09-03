@@ -36,8 +36,8 @@ pub struct PackIssue {
 impl PackIssue {
     fn new(location: impl Into<Box<str>>, problem: impl Into<Box<str>>) -> Self {
         Self {
-            location: location.into(),
-            problem: problem.into(),
+            location: safe_diagnostic_text(location.into()),
+            problem: safe_diagnostic_text(problem.into()),
         }
     }
 
@@ -50,6 +50,22 @@ impl PackIssue {
     pub fn problem(&self) -> &str {
         &self.problem
     }
+}
+
+fn safe_diagnostic_text(text: Box<str>) -> Box<str> {
+    if !text.chars().any(char::is_control) {
+        return text;
+    }
+    text.chars()
+        .map(|character| {
+            if character.is_control() {
+                '?'
+            } else {
+                character
+            }
+        })
+        .collect::<String>()
+        .into_boxed_str()
 }
 
 #[derive(Debug)]

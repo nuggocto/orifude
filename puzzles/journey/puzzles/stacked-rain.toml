@@ -1,0 +1,39 @@
+format_version = 1
+id = "stacked-rain"
+title = "Stacked rain"
+description = "A second dot falls through another four-layer stack."
+width = 4
+height = 4
+target = [
+  "#..#",
+  ".##.",
+  ".##.",
+  "#..#",
+]
+folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 2
+stroke_budget = 2
+par = { folds = 2, strokes = 2 }
+tutorial_cues = [
+  "Gather the lower half upward.",
+  "Gather the right half leftward.",
+  "Mark one folded stack near the top.",
+  "Mark a second folded stack below it.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "up", crease = 2 },
+  { kind = "fold", direction = "left", crease = 2 },
+  { kind = "dot", row = 0, column = 0 },
+  { kind = "dot", row = 1, column = 1 },
+]

@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
 use crate::storage::GlyphMode;
+use crate::{content, content::JourneyGroup};
 
 use super::app::{MARK_FRAME_COUNT, Overlay};
 use super::layout::centered;
@@ -167,6 +168,180 @@ impl BranchChoices {
                 note,
             );
         }
+    }
+}
+
+pub(crate) struct BranchGrowth;
+
+impl BranchGrowth {
+    pub(crate) fn render(
+        frame: &mut Frame<'_>,
+        area: Rect,
+        completed_groups: usize,
+        profile: StyleProfile,
+    ) {
+        let completed_groups = completed_groups.min(content::journey_groups().len());
+        if area.height < 8 || area.width < 34 {
+            frame.render_widget(
+                Paragraph::new(branch_caption(completed_groups))
+                    .style(profile.paper())
+                    .alignment(Alignment::Center),
+                area,
+            );
+            return;
+        }
+
+        let card = centered(area, 42, 12);
+        let art = branch_art(completed_groups, profile.glyph_mode())
+            .into_iter()
+            .map(|line| Line::styled(line, profile.paper()))
+            .chain(std::iter::once(Line::styled(
+                branch_caption(completed_groups),
+                profile.title(),
+            )))
+            .collect::<Vec<_>>();
+        frame.render_widget(
+            Paragraph::new(art)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true }),
+            card,
+        );
+    }
+}
+
+fn branch_caption(completed_groups: usize) -> String {
+    completed_groups
+        .checked_sub(1)
+        .and_then(|index| content::journey_groups().get(index))
+        .map_or_else(
+            || "The branch is waiting for its first leaf. [0/8]".to_owned(),
+            |group| {
+                format!(
+                    "The branch holds {}. [{completed_groups}/8]",
+                    group.gift.label()
+                )
+            },
+        )
+}
+
+fn branch_art(completed: usize, glyph_mode: GlyphMode) -> Vec<String> {
+    let visible = |at: usize, symbol: &'static str| if completed >= at { symbol } else { " " };
+    match glyph_mode {
+        GlyphMode::Unicode => vec![
+            format!(
+                "                  {}     {}",
+                visible(8, "◇"),
+                visible(8, "◇")
+            ),
+            format!(
+                "             {}  ╭──────{}",
+                visible(7, "●"),
+                visible(2, "◆")
+            ),
+            format!(
+                "          {} ╭───╯   {}",
+                visible(3, "●"),
+                visible(7, "●")
+            ),
+            format!(
+                "       {}────╯      ╭────{}",
+                visible(1, "◆"),
+                visible(2, "◆")
+            ),
+            format!(
+                "  ─────╯       {}──╯  {}",
+                visible(6, "◆"),
+                visible(5, "v")
+            ),
+            format!("       {}        {}", visible(4, "△"), visible(3, "●")),
+            "        \u{2572}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2571}".to_owned(),
+            "             \u{2572}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2571}".to_owned(),
+        ],
+        GlyphMode::Ascii => vec![
+            format!(
+                "                  {}     {}",
+                visible(8, "<>"),
+                visible(8, "<>")
+            ),
+            format!(
+                "             {}  .-------{}",
+                visible(7, "o"),
+                visible(2, "<>")
+            ),
+            format!(
+                "          {} .---'   {}",
+                visible(3, "o"),
+                visible(7, "o")
+            ),
+            format!(
+                "       {}----'      .----{}",
+                visible(1, "<>"),
+                visible(2, "<>")
+            ),
+            format!(
+                "  -----'       {}--'  {}",
+                visible(6, "<>"),
+                visible(5, "v")
+            ),
+            format!("       {}        {}", visible(4, "/\\"), visible(3, "o")),
+            "        `-------------'".to_owned(),
+            "             `-----'".to_owned(),
+        ],
+    }
+}
+
+pub(crate) struct CompletionCourier;
+
+impl CompletionCourier {
+    pub(crate) fn render(
+        frame: &mut Frame<'_>,
+        area: Rect,
+        group: &JourneyGroup,
+        profile: StyleProfile,
+    ) {
+        if area.height < 9 || area.width < 40 {
+            let card = centered(area, 56, 7);
+            frame.render_widget(Clear, card);
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::styled(
+                        format!("/)_/)  {} is complete.", group.title),
+                        profile.title(),
+                    ),
+                    Line::from(format!("I carried {} home.", group.gift.label())),
+                    Line::from(""),
+                    Line::from("Enter returns to the changed branch."),
+                ])
+                .block(Paper::block("A paper joins the branch", profile))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true }),
+                card,
+            );
+            return;
+        }
+        let card = centered(area, 56, 9);
+        frame.render_widget(Clear, card);
+        let squirrel = ["  /)_/)", " ( o.o)", " /|_ _|", "(_/ \\__)"];
+        let gift = group.gift.label();
+        let body = vec![
+            Line::from(""),
+            Line::styled(squirrel[0], profile.paper()),
+            Line::styled(squirrel[1], profile.paper()),
+            Line::styled(squirrel[2], profile.paper()),
+            Line::styled(squirrel[3], profile.paper()),
+            Line::styled(
+                format!("{} is complete. I carried {gift} home.", group.title),
+                profile.title(),
+            ),
+            Line::from("Enter returns to the changed branch."),
+        ];
+        frame.render_widget(
+            Paragraph::new(body)
+                .block(Paper::block("A paper joins the branch", profile))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true }),
+            card,
+        );
     }
 }
 
@@ -555,7 +730,7 @@ mod tests {
                     frame,
                     Rect::new(0, 0, 30, 12),
                     0,
-                    "Home | Journey 0/3 | Saved no",
+                    "Home | Journey 0/40 | Saved no",
                     profile,
                 );
                 TerminalMark::render(
@@ -610,6 +785,71 @@ mod tests {
             (ASCII_MARK.as_slice(), ASCII_MARK_WIDTH),
         ] {
             assert!(rows.iter().all(|row| row.chars().count() <= width));
+        }
+    }
+
+    #[test]
+    fn branch_growth_has_safe_ascii_and_named_progress() {
+        assert!(
+            branch_art(8, GlyphMode::Ascii)
+                .iter()
+                .all(|line| line.is_ascii())
+        );
+        assert_eq!(
+            branch_caption(0),
+            "The branch is waiting for its first leaf. [0/8]"
+        );
+        assert!(branch_caption(8).contains("the full canopy"));
+
+        let backend = TestBackend::new(44, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        terminal
+            .draw(|frame| BranchGrowth::render(frame, Rect::new(0, 0, 44, 12), 0, profile))
+            .expect("branch renders");
+        let text = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .fold(String::new(), |mut text, cell| {
+                text.push_str(cell.symbol());
+                text
+            })
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(text.contains("The branch is waiting for its first leaf. [0/8]"));
+    }
+
+    #[test]
+    fn completion_courier_names_the_group_gift_and_return_action() {
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
+        for height in [8, 20] {
+            let backend = TestBackend::new(60, height);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            terminal
+                .draw(|frame| {
+                    CompletionCourier::render(
+                        frame,
+                        Rect::new(0, 0, 60, height),
+                        &content::journey_groups()[0],
+                        profile,
+                    );
+                })
+                .expect("completion card renders");
+            let text = terminal.backend().buffer().content().iter().fold(
+                String::new(),
+                |mut text, cell| {
+                    text.push_str(cell.symbol());
+                    text
+                },
+            );
+
+            assert!(text.contains("Ink on paper is complete"));
+            assert!(text.contains("a first leaf"));
+            assert!(text.contains("Enter returns"));
+            assert!(text.is_ascii());
         }
     }
 

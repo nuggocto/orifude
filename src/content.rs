@@ -1,3 +1,5 @@
+mod journey;
+
 use crate::domain::paper::{
     BrushRule, CellId, Column, Coordinate, Fold, FoldCount, FoldDirection, PaperAction, Row,
     StrokeCount,
@@ -6,13 +8,14 @@ use crate::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 use crate::domain::replay::{Replay, ReplayMetadata};
 use crate::domain::score::Par;
 use crate::generator::{GenerationError, Generator, GeneratorConfig};
+use crate::packs::PuzzleContent;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct BuiltInPaper {
     puzzle: Puzzle,
-    title: &'static str,
-    description: &'static str,
-    cues: &'static [&'static str],
+    title: Box<str>,
+    description: Box<str>,
+    cues: Box<[Box<str>]>,
     solution: Box<[PaperAction]>,
 }
 
@@ -21,21 +24,83 @@ impl BuiltInPaper {
         &self.puzzle
     }
 
-    pub(crate) const fn title(&self) -> &'static str {
-        self.title
+    pub(crate) fn title(&self) -> &str {
+        &self.title
     }
 
-    pub(crate) const fn description(&self) -> &'static str {
-        self.description
+    pub(crate) fn description(&self) -> &str {
+        &self.description
     }
 
-    pub(crate) const fn cues(&self) -> &'static [&'static str] {
-        self.cues
+    pub(crate) fn cues(&self) -> &[Box<str>] {
+        &self.cues
     }
 
     pub(crate) fn solution(&self) -> &[PaperAction] {
         &self.solution
     }
+}
+
+impl BuiltInPaper {
+    fn from_content(content: &PuzzleContent) -> Self {
+        let solution = content
+            .solution()
+            .expect("official journey papers must carry a validated solution");
+        Self {
+            puzzle: content.puzzle().clone(),
+            title: content.title().into(),
+            description: content.description().unwrap_or_default().into(),
+            cues: content.tutorial_cues().to_vec().into_boxed_slice(),
+            solution: solution.actions().into(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum BranchGift {
+    Leaf,
+    PairedLeaves,
+    Berries,
+    PaperBoat,
+    Bird,
+    LongBranch,
+    BerrySprig,
+    Canopy,
+}
+
+impl BranchGift {
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::Leaf => "a first leaf",
+            Self::PairedLeaves => "a pair of leaves",
+            Self::Berries => "a berry cluster",
+            Self::PaperBoat => "a folded boat",
+            Self::Bird => "a small bird",
+            Self::LongBranch => "a longer branch",
+            Self::BerrySprig => "a berry sprig",
+            Self::Canopy => "the full canopy",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct JourneyGroup {
+    pub(crate) title: &'static str,
+    pub(crate) mechanic: &'static str,
+    pub(crate) first_paper: usize,
+    pub(crate) paper_count: usize,
+    pub(crate) gift: BranchGift,
+}
+
+pub(crate) fn journey_groups() -> &'static [JourneyGroup] {
+    journey::groups()
+}
+
+pub(crate) fn journey_group(paper_index: usize) -> Option<(usize, &'static JourneyGroup)> {
+    journey_groups().iter().enumerate().find(|(_, group)| {
+        paper_index >= group.first_paper
+            && paper_index < group.first_paper.saturating_add(group.paper_count)
+    })
 }
 
 pub(crate) fn lesson() -> BuiltInPaper {
@@ -61,54 +126,7 @@ pub(crate) fn lesson() -> BuiltInPaper {
 }
 
 pub(crate) fn journey() -> Vec<BuiltInPaper> {
-    vec![
-        folded_paper(
-            BuiltInText {
-                pack_id: "orifude-journey",
-                puzzle_id: "first-drop",
-                title: "First drop",
-                description: "Place one quiet dot on the waiting sheet.",
-                cues: &["Move to the marked cell, choose the brush, and confirm."],
-            },
-            Vec::new(),
-            vec![PaperAction::Dot(coordinate(1, 1))],
-            (0, 1),
-        ),
-        folded_paper(
-            BuiltInText {
-                pack_id: "orifude-journey",
-                puzzle_id: "folded-pair",
-                title: "Folded pair",
-                description: "One fold lets a single dot reach two cells.",
-                cues: &["Fold right at crease 2 before applying the dot."],
-            },
-            vec![Fold::new(FoldDirection::Right, 2)],
-            vec![
-                PaperAction::Fold(Fold::new(FoldDirection::Right, 2)),
-                PaperAction::Dot(coordinate(1, 2)),
-            ],
-            (1, 1),
-        ),
-        folded_paper(
-            BuiltInText {
-                pack_id: "orifude-journey",
-                puzzle_id: "four-leaves",
-                title: "Four leaves",
-                description: "Two folds gather four cells beneath one brush.",
-                cues: &["Fold down, fold right, then mark the four-layer stack."],
-            },
-            vec![
-                Fold::new(FoldDirection::Down, 2),
-                Fold::new(FoldDirection::Right, 2),
-            ],
-            vec![
-                PaperAction::Fold(Fold::new(FoldDirection::Down, 2)),
-                PaperAction::Fold(Fold::new(FoldDirection::Right, 2)),
-                PaperAction::Dot(coordinate(2, 2)),
-            ],
-            (2, 1),
-        ),
-    ]
+    journey::papers().to_vec()
 }
 
 pub(crate) fn generator(pack_id: &str) -> Result<Generator, GenerationError> {
@@ -182,9 +200,13 @@ fn folded_paper(
     );
     BuiltInPaper {
         puzzle,
-        title: content.title,
-        description: content.description,
-        cues: content.cues,
+        title: content.title.into(),
+        description: content.description.into(),
+        cues: content
+            .cues
+            .iter()
+            .map(|cue| Box::<str>::from(*cue))
+            .collect(),
         solution: solution.into_boxed_slice(),
     }
 }
@@ -217,6 +239,23 @@ mod tests {
             let attempt = replay.execute(paper.puzzle()).expect("replay executes");
             assert!(attempt.result().is_success());
         }
+    }
+
+    #[test]
+    fn journey_groups_cover_the_catalog_exactly() {
+        let papers = journey();
+        let groups = journey_groups();
+
+        assert_eq!(papers.len(), 40);
+        assert_eq!(groups.len(), 8);
+        for (index, group) in groups.iter().enumerate() {
+            assert_eq!(group.first_paper, index * 5);
+            assert_eq!(group.paper_count, 5);
+        }
+        assert_eq!(
+            groups.last().unwrap().first_paper + groups.last().unwrap().paper_count,
+            papers.len()
+        );
     }
 
     #[test]

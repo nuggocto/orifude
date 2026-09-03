@@ -1,0 +1,31 @@
+format_version = 1
+id = "two-drops"
+title = "Two drops"
+description = "Two separate marks begin a small rhythm."
+width = 4
+height = 4
+target = [
+  "....",
+  "#...",
+  "...#",
+  "....",
+]
+folds = [
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 0
+stroke_budget = 2
+par = { folds = 0, strokes = 2 }
+tutorial_cues = [
+  "Place the first dot at row 2, column 1.",
+  "Place the second dot at row 3, column 4.",
+  "Open the paper after both marks are present.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "dot", row = 1, column = 0 },
+  { kind = "dot", row = 2, column = 3 },
+]

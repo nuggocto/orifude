@@ -1,0 +1,47 @@
+format_version = 1
+id = "folded-crossroads"
+title = "Folded crossroads"
+description = "The order of four folds gathers nine cells."
+width = 6
+height = 6
+target = [
+  "#..##.",
+  "......",
+  "......",
+  "#..##.",
+  "#..##.",
+  "......",
+]
+folds = [
+  { direction = "right", crease = 2 },
+  { direction = "right", crease = 4 },
+  { direction = "left", crease = 4 },
+  { direction = "left", crease = 2 },
+  { direction = "down", crease = 2 },
+  { direction = "down", crease = 4 },
+  { direction = "up", crease = 4 },
+  { direction = "up", crease = 2 },
+]
+brushes = [
+  { kind = "dot" },
+]
+fold_budget = 4
+stroke_budget = 1
+par = { folds = 4, strokes = 1 }
+tutorial_cues = [
+  "Begin with the short fold from the left.",
+  "Complete the second vertical fold.",
+  "Move the upper band downward.",
+  "Complete the second horizontal fold.",
+  "Mark the deep stack.",
+  "Open the paper.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "fold", direction = "right", crease = 4 },
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "fold", direction = "down", crease = 4 },
+  { kind = "dot", row = 4, column = 4 },
+]
