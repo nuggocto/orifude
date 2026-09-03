@@ -1862,7 +1862,11 @@ Focused regression tests exercise each original failure path. The complete
 locked check and the same 203 tests in the optimized profile passed on x86_64
 Linux, along with warning-denied documentation, all seven native PTY journeys,
 the documented validator and solver commands, and structural checks of every
-recorded terminal frame.
+recorded terminal frame. Commit `f554992` passed the complete locked check and
+all five native player jobs in
+[push run 33707719803](https://github.com/nuggocto/orifude/actions/runs/33707719803),
+covering Linux x86_64 and ARM64, macOS Intel and Apple Silicon, and Windows
+x86_64.
 
 Exit gate:
 

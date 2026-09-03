@@ -1290,8 +1290,12 @@ passed with strict all-target Clippy, dependency policy, 203 unit, integration,
 and example tests, the doctest, and the optimized build. The same 203 tests
 passed in the optimized profile. Warning-denied private documentation, all
 seven native PTY journeys, the three-paper validator and solver commands, and
-the five 80-by-24 cast frames also passed locally. The hosted outcome will be
-added after the exact revision is available.
+the five 80-by-24 cast frames also passed locally. Commit
+[`f554992`](https://github.com/nuggocto/orifude/commit/f554992d31a19648118fb5fd6e5070ec7e077eb6)
+then passed the complete locked check and all five native player jobs in
+[push run 33707719803](https://github.com/nuggocto/orifude/actions/runs/33707719803),
+covering Linux x86_64 and ARM64, macOS Intel and Apple Silicon, and Windows
+x86_64 without retries.
 
 Residual judgment remains explicit. Difficulty observation and artwork
 approval still require the two human decisions identified in
