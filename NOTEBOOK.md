@@ -1563,6 +1563,66 @@ x86_64, Linux ARM64, macOS Intel, macOS Apple Silicon, and Windows x86_64
 without retries. The work queue can now move from content judgment to focused
 release hardening.
 
+## Committed baseline review on 2026-09-04
+
+The complete handwritten tree at
+[`bb011d0`](https://github.com/nuggocto/orifude/commit/bb011d0b82605521a69907c5556c11a2fcc4bcac)
+and its locked dependency graph received a correctness, safety, security, test,
+and user-behavior review. The architecture is cohesive, resource limits are
+carried through the trust boundaries, failure paths are generally recoverable,
+and the tests concentrate on behavior and invariants. No high- or
+medium-severity defect was confirmed.
+
+The review found one low-severity format-strictness defect in the
+[`replay decoder`](src/storage/replay.rs). Its outer document, gameplay, fold,
+and score records reject unknown fields, but the tagged brush and action
+records silently ignore them. A runtime probe against the public
+[`decode_replay_bytes`](src/storage/mod.rs) boundary confirmed that a valid
+document decodes, an unknown outer field fails, and unknown brush and action
+fields both decode. This is inconsistent with the strict equivalent records in
+the [`pack parser`](src/packs/format.rs) and can discard unexpected or future
+nested semantics. It does not provide a code-execution or path escape route:
+the decoder still reconstructs every accepted value through the domain types,
+executes the replay, and requires a successful result. Add Serde's
+`deny_unknown_fields` rule to both replay enums and keep regression cases for
+unknown fields in each tagged record.
+
+The locked repository check passed 224 debug tests and the doctest, strict
+all-target Clippy, dependency policy, and the optimized build. All 224
+non-documentation tests passed again in the optimized profile. The native PTY
+suite and hot-journal recovery test each passed three additional runs;
+warning-denied private documentation passed; `cargo audit --deny warnings`
+found no advisory in 136 dependencies; and targeted credential patterns were
+absent from both the tracked tree and patch history. Maximum-size inputs passed
+one smoke execution through each of the domain, pack metadata, puzzle, replay,
+and archive fuzz harnesses. An isolated optimized-binary run verified version
+output, all shipped and example papers, pack installation and removal, replay
+output, database creation, and alternate-screen restoration.
+
+This review ran on x86_64 Linux. It did not repeat the hosted macOS and Windows
+runs or conduct a sustained fuzzing campaign, so those remain the most useful
+independent checks during release hardening. The separate static frontend was
+outside this repository review. The baseline review itself did not change
+product source or tests.
+
+The replay format correction now makes both tagged records reject undeclared
+fields through the existing typed replay-data error. The dot brush uses the
+same empty record shape as the strict
+[`pack format`](src/packs/format.rs), while valid replay fields and resource
+bounds remain unchanged. The focused
+[`storage regression`](tests/storage.rs) reads a real encoded replay from
+SQLite, confirms it is valid, then injects an unknown brush field and an
+unknown action field through the public decoder. Its brush assertion failed on
+the old implementation and passed after the correction.
+
+The complete locked check passed with 225 tests plus the doctest, strict
+all-target Clippy, dependency policy, and the optimized build. The same 225
+tests passed in the optimized profile. A maximum-size 64 KiB input completed
+through the replay parser fuzz entry point, and `cargo audit --deny warnings`
+found no advisory in the 136 locked dependencies. This closes the confirmed
+format finding; longer fuzz campaigns and native-platform release checks stay
+part of the later hardening work.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in

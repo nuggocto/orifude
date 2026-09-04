@@ -70,9 +70,9 @@ enum DirectionDocument {
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 enum BrushDocument {
-    Dot,
+    Dot {},
     Line { axis: AxisDocument, length: u8 },
 }
 
@@ -91,7 +91,7 @@ struct ParDocument {
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 enum ActionDocument {
     Fold {
         direction: DirectionDocument,
@@ -262,7 +262,7 @@ impl From<DirectionDocument> for FoldDirection {
 impl From<BrushRule> for BrushDocument {
     fn from(brush: BrushRule) -> Self {
         match brush {
-            BrushRule::Dot => Self::Dot,
+            BrushRule::Dot => Self::Dot {},
             BrushRule::Line { axis, length } => Self::Line {
                 axis: axis.into(),
                 length,
@@ -274,7 +274,7 @@ impl From<BrushRule> for BrushDocument {
 impl From<BrushDocument> for BrushRule {
     fn from(brush: BrushDocument) -> Self {
         match brush {
-            BrushDocument::Dot => Self::Dot,
+            BrushDocument::Dot {} => Self::Dot,
             BrushDocument::Line { axis, length } => Self::Line {
                 axis: axis.into(),
                 length,

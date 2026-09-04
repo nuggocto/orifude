@@ -919,6 +919,51 @@ fn replay_reads_reject_unsuccessful_or_mismatched_documents() {
 }
 
 #[test]
+fn replay_reads_reject_unknown_fields_in_tagged_records() {
+    let root = TestDirectory::new("replay-unknown-fields");
+    let paths = root.paths();
+    let (puzzle, replay) = solved_replay("built-in");
+    let mut storage = Storage::open(paths.clone()).unwrap();
+    storage
+        .record_completion(&puzzle, &replay, 1, 0, false)
+        .unwrap();
+    drop(storage);
+
+    let connection = Connection::open(paths.database()).unwrap();
+    let payload: Vec<u8> = connection
+        .query_row(
+            "SELECT payload FROM replays WHERE pack_id = 'built-in'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(decode_replay_bytes(&payload).is_ok());
+    let payload = String::from_utf8(payload).unwrap();
+
+    let mut unknown_brush: toml::Value = toml::from_str(&payload).unwrap();
+    unknown_brush["puzzle"]["brushes"][0]
+        .as_table_mut()
+        .unwrap()
+        .insert("unknown".to_owned(), true.into());
+    let unknown_brush = toml::to_string(&unknown_brush).unwrap();
+    assert!(matches!(
+        decode_replay_bytes(unknown_brush.as_bytes()),
+        Err(StorageError::ReplayData)
+    ));
+
+    let mut unknown_action: toml::Value = toml::from_str(&payload).unwrap();
+    unknown_action["actions"][0]
+        .as_table_mut()
+        .unwrap()
+        .insert("unknown".to_owned(), true.into());
+    let unknown_action = toml::to_string(&unknown_action).unwrap();
+    assert!(matches!(
+        decode_replay_bytes(unknown_action.as_bytes()),
+        Err(StorageError::ReplayData)
+    ));
+}
+
+#[test]
 fn restart_reconciles_each_durable_install_state() {
     let root = TestDirectory::new("recovery");
     let source = root.path().join("source");
