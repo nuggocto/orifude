@@ -863,14 +863,13 @@ CI grows with the behavior it can verify:
 - The `shrek` branch has no branch-protection rule and accepts direct pushes.
   Ordinary CI reports the result after a push; it does not block the update.
   Pull requests remain available but are optional.
-- The terminal foundation adds a small native smoke matrix on Linux x86_64,
-  macOS Apple Silicon, and Windows x86_64. It exercises terminal startup and
-  restoration on pull requests without duplicating the complete test suite. A
-  manual dispatch can run the same matrix for a direct `shrek` push before its
-  native gate closes.
-- The complete playable loop adds `mise run test-native`. The full supported
-  operating-system and architecture matrix runs on `shrek`, manual
-  dispatch, and each release candidate rather than on every source edit.
+- The terminal foundation adds `mise run test-native` as the one focused local
+  command for the shipped-binary PTY suite. Ordinary checks also run that suite
+  on their Linux host as part of the complete test set.
+- The complete playable loop adds the release-profile native task. Its full
+  supported operating-system and architecture matrix runs on pull requests,
+  `shrek` pushes, manual dispatch, and each release candidate. One matrix keeps
+  the same terminal contract at every hosted CI entry point.
 - Release hardening runs the recorded Linux distribution QA and the complete
   native matrix against release binaries. Environments unavailable as hosted
   runners use the same mise task on a designated native host.
@@ -1777,8 +1776,7 @@ accent instead of the only signal.
 - [x] Test view behavior with Ratatui's test backend using small audited
   expectations.
 - [x] Add a shipped-binary smoke test that verifies terminal restoration.
-- [x] Add the pull-request and manual native smoke matrix for Linux x86_64,
-  macOS Apple Silicon, and Windows x86_64 through mise.
+- [x] Add the bounded shipped-binary PTY suite and focused local mise task.
 - [x] Run exploratory QA in common light, dark, limited-color, and monochrome
   terminals.
 
@@ -1831,8 +1829,8 @@ journey.
 - [x] Preserve drafts and attempt state across unrelated dialogs and resizes.
 - [x] Add end-to-end journeys through the actual binary.
 - [x] Add the bounded `mise run test-native` task, run the full supported
-  operating-system and architecture matrix on `shrek` and by manual dispatch,
-  and configure the same gate for release-candidate tags.
+  operating-system and architecture matrix on pull requests, `shrek`, and by
+  manual dispatch, and configure the same gate for release-candidate tags.
 - [x] QA the loop with keyboard-only use and no knowledge of internal commands.
 
 Local x86_64 Linux evidence covers the complete locked check, the bounded

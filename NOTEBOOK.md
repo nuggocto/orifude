@@ -793,16 +793,16 @@ state. Unix PTYs also expose the line-wrap restoration sequence. ConPTY
 intercepts that console mode change and projects a presentation stream, so its
 absence from the captured Windows bytes is not evidence that cleanup failed.
 The injected lifecycle tests verify the line-wrap restoration call on every
-platform. The smoke's opt-in `isolated-test-paths` build feature accepts one
+platform. The suite's opt-in `isolated-test-paths` build feature accepts one
 absolute temporary root
-and is enabled only by the repository test tasks. The smoke proves that its
+and is enabled only by the repository test tasks. The suite proves that its
 database was created below that root, so native tests cannot migrate or
 reconcile a developer's live data. The Linux launcher passes the binary through
 one quoted environment value, which also keeps paths containing spaces intact.
-The test is not built on unsupported Unix targets. Pull requests and manual
-workflow dispatch run the smoke through mise on Linux x86_64, macOS Apple
-Silicon, and Windows x86_64. Manual dispatch supplies native gate evidence for
-a direct `shrek` push without putting the matrix on every push.
+The test is not built on unsupported Unix targets. Hosted CI now runs the
+release-profile suite through one native-player matrix on pull requests,
+`shrek` pushes, manual dispatch, and release tags. Linux x86_64 and ARM64,
+macOS Intel and Apple Silicon, and Windows x86_64 therefore use the same gate.
 
 A whole-repository review on 2026-09-02 confirmed and fixed seven other defects
 at their owning boundaries. An unbound key now redraws the completed opening
@@ -1201,7 +1201,7 @@ daily paper, recovery from a 59-by-19 terminal, and malformed installed-pack
 reporting. The bounded native task runs all seven PTY cases.
 [`ci.yml`](.github/workflows/ci.yml) assigns it to Linux x86_64 and ARM64,
 macOS Intel and Apple Silicon, and Windows x86_64 for direct branch pushes,
-manual runs, and release tags.
+pull requests, manual runs, and release tags.
 
 The first hosted Windows journey exposed test-portability details rather than
 an application failure: ConPTY may split styled screen updates inside a
@@ -1759,8 +1759,8 @@ and restored. The pushed correction at
 passed its
 [`hosted run`](https://github.com/nuggocto/orifude/actions/runs/33860521665):
 the repository gate, all five native OS and architecture jobs, and the Linux
-distribution job were green. The push-only terminal-smoke job was skipped by
-its declared event condition.
+distribution job were green. The pull-request and manual terminal-smoke job was
+skipped on that push by its declared event condition.
 
 This pass ran locally on x86_64 Linux. It did not repeat the already recorded
 multi-million-input sanitizer campaign, minimum supported OS checks, or GUI
@@ -1768,6 +1768,29 @@ checks in macOS Terminal and Windows Terminal. Those limits remain stated in
 the release QA record. The separate static frontend was outside this repository
 review. The registry validation and its focused regression are the only product
 changes made after the review.
+
+## Native CI consolidation on 2026-09-04
+
+The former `terminal-smoke` job and mise task had become duplicate names for
+the complete [`terminal_pty`](tests/terminal_pty.rs) suite. The separate job was
+skipped on every direct push, while the native-player matrix ran the same tests
+in the optimized profile on more platforms. Keeping both paths made the CI
+result harder to read and made manual dispatch run the suite twice.
+
+[`ci.yml`](.github/workflows/ci.yml) now has one native-player matrix for every
+workflow event, and [`mise.toml`](mise.toml) keeps `test-native` as the focused
+local command and `test-native-release` as the hosted optimized command. Pull
+requests spend more runner time than before because they now receive all five
+optimized native jobs instead of three debug smoke jobs. In return, pre-merge,
+direct-push, manual, and release-tag checks all enforce the same native
+contract. The ordinary check still exercises the debug PTY suite on Linux.
+
+The edited workflow parsed successfully, and the remaining mise tasks contain
+no duplicate command. Both focused native commands passed all seven PTY
+journeys. The ordinary and optimized repository gates each passed 227 tests,
+the doctest, strict Clippy, shell checks, dependency policy, formatting, and the
+release build. Hosted CI remains the check for GitHub's event expansion and the
+non-Linux runners.
 
 ## What comes next
 
