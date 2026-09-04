@@ -1712,6 +1712,61 @@ recorded evidence gaps rather than claimed results. They did not reproduce a
 product defect and do not block archive and installer work; the final packaged
 artifacts still need their own minimum-version pass before publication.
 
+## Full-tree review on 2026-09-04
+
+The complete handwritten repository at
+[`4a19a15`](https://github.com/nuggocto/orifude/commit/4a19a15fc306fcbb4aa87ff12943e151bbcdcf17)
+received another correctness, Rust, safety, security, test-quality, and
+user-behavior review. Generated lockfiles were checked through locked Cargo
+metadata and dependency policy rather than treated as handwritten source. The
+paper representation, replay identity, bounded solver and generator, pack
+staging, transactional storage, event ownership, terminal restoration, and TUI
+state flow are cohesive. No high- or medium-severity defect was confirmed.
+
+The review confirmed one low-severity stored-metadata defect. The current
+[`pack parser`](src/packs/format.rs) rejects an all-whitespace title or
+description, but [`validate_registered_pack`](src/storage/mod.rs) only checks
+whether the stored value is empty. A pack accepted by an earlier build can
+therefore leave a whitespace-only registry row that the current startup and
+`pack list` path accept. An isolated real-binary probe installed the example
+pack, changed its registry title to three spaces to reproduce that durable
+state, reopened storage, and observed `paper-garden` with a blank title. The
+older parser at `1888450` was also checked and did accept that value, so this is
+a reachable local upgrade case rather than a theoretical malformed row. It
+does not permit terminal control output, path escape, code execution, or an
+unbounded allocation. The required correction was the same trimmed nonblank
+rule at the registry read boundary, with a persisted-row regression beside the
+existing control-text case in [`storage.rs`](tests/storage.rs).
+
+The registry read boundary now applies that trimmed nonblank rule to both
+fields. The persisted-row regression creates separate legacy title and
+description cases, and startup rejects both as corrupt before either value can
+reach a caller. The regression failed at the title case before the correction
+and passed afterward. An optimized real-binary check installed the example
+pack, changed its stored title to spaces, and confirmed that `pack list` exits
+with the bounded database-recovery message instead of emitting the row.
+
+Both `mise run check` and `mise run release-check` passed: 227 tests passed in
+each of the debug and optimized profiles, along with strict all-target Clippy,
+formatting, shell analysis, locked advisory/license/source policy, the doctest,
+and the optimized build. The separate property gate passed all 2,268 fold
+boundaries, fixed replay seeds, independent solver comparison, deterministic
+generation, and the complete official catalog. The credential scan found no
+high-confidence pattern in the tree or Git history. The direct current-binary
+lifecycle preserved saved progress while the executable and pack were removed
+and restored. The recorded
+[`hosted run`](https://github.com/nuggocto/orifude/actions/runs/33832142361)
+was independently checked and did pass the repository gate, the five native
+OS and architecture jobs, and the Linux distribution job; only review
+documents changed between its code commit and this baseline.
+
+This pass ran locally on x86_64 Linux. It did not repeat the already recorded
+multi-million-input sanitizer campaign, minimum supported OS checks, or GUI
+checks in macOS Terminal and Windows Terminal. Those limits remain stated in
+the release QA record. The separate static frontend was outside this repository
+review. The registry validation and its focused regression are the only product
+changes made after the review.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in

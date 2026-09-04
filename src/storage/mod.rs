@@ -1909,7 +1909,7 @@ fn registered_pack_from_row(row: &rusqlite::Row<'_>) -> Result<RegisteredPack, r
 
 fn validate_registered_pack(pack: &RegisteredPack, managed_name: &str) -> Result<(), StorageError> {
     let display_is_valid = |value: &str, maximum: usize| {
-        !value.is_empty()
+        !value.trim().is_empty()
             && value.chars().count() <= maximum
             && !value.chars().any(char::is_control)
     };

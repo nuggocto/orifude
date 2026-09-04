@@ -1105,6 +1105,38 @@ fn corrupted_registry_text_is_never_returned_to_a_caller() {
 }
 
 #[test]
+fn whitespace_only_registry_display_text_is_rejected_on_restart() {
+    for (label, statement) in [
+        (
+            "registry-blank-title",
+            "UPDATE pack_registry SET title = '   ' WHERE pack_id = 'quiet-grove'",
+        ),
+        (
+            "registry-blank-description",
+            "UPDATE pack_registry SET description = '   ' WHERE pack_id = 'quiet-grove'",
+        ),
+    ] {
+        let root = TestDirectory::new(label);
+        let source = root.path().join("source");
+        fs::create_dir(&source).unwrap();
+        write_pack(&source, "quiet-grove");
+        let paths = root.paths();
+        let mut storage = Storage::open(paths.clone()).unwrap();
+        storage.install_pack(&source, 1).unwrap();
+        drop(storage);
+
+        let connection = Connection::open(paths.database()).unwrap();
+        connection.execute(statement, []).unwrap();
+        drop(connection);
+
+        assert!(
+            matches!(Storage::open(paths), Err(StorageError::Corrupt)),
+            "{label} should be rejected"
+        );
+    }
+}
+
+#[test]
 fn malicious_archive_install_never_writes_outside_managed_storage() {
     let root = TestDirectory::new("archive-escape");
     let archive_path = root.path().join("untrusted-input");
