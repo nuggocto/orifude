@@ -66,7 +66,7 @@ fi
 mkdir -p "$work_root" "$output"
 
 # The EXIT trap invokes this function indirectly.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 cleanup() {
     tmux -L "$socket" kill-server >/dev/null 2>&1 || true
     if [[ "$work_root" == "$repository"/target/orifude-release-measure-* ]]; then
