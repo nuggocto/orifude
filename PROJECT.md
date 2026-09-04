@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 9, hardening and release QA**
-- Current checklist item: **Freeze the v1 trust-boundary map and perform a
-  focused security review.**
+- Current phase: **Phase 10, release archives and distribution**
+- Current checklist item: **Confirm release runners and targets match the
+  approved platform matrix.**
 - Last updated: **2026-09-04**
 
 Checkbox rules:
@@ -1915,36 +1915,36 @@ Exit gate:
 Goal: attack assumptions, measure budgets, and verify supported platforms before
 packaging work can hide defects behind a nice archive.
 
-- [ ] Freeze the v1 trust-boundary map and perform a focused security review.
-- [ ] Review puzzle, replay, pack, archive, path, SQLite, terminal, and config
+- [x] Freeze the v1 trust-boundary map and perform a focused security review.
+- [x] Review puzzle, replay, pack, archive, path, SQLite, terminal, and config
   inputs from source to effect.
-- [ ] Run dependency advisory and license checks and assess applicability.
-- [ ] Run local secret scanning without sending source or findings externally.
-- [ ] Complete bounded fuzz campaigns and preserve useful regression cases.
-- [ ] Run property tests with recorded seeds and explicit budgets.
-- [ ] Measure startup, idle CPU, input latency, memory, solver, database, and
+- [x] Run dependency advisory and license checks and assess applicability.
+- [x] Run local secret scanning without sending source or findings externally.
+- [x] Complete bounded fuzz campaigns and preserve useful regression cases.
+- [x] Run property tests with recorded seeds and explicit budgets.
+- [x] Measure startup, idle CPU, input latency, memory, solver, database, and
   artifact budgets in a release build.
-- [ ] Resolve or document every exceeded budget before release.
-- [ ] Test interruption during database write, migration, pack install, solver
+- [x] Resolve or document every exceeded budget before release.
+- [x] Test interruption during database write, migration, pack install, solver
   work, reveal, and shutdown.
-- [ ] Test full disk, read-only storage, corrupt database, unsupported format,
+- [x] Test full disk, read-only storage, corrupt database, unsupported format,
   and lock conflict.
-- [ ] Test empty, whitespace, long, malformed, mixed-script, combining, and
+- [x] Test empty, whitespace, long, malformed, mixed-script, combining, and
   control-character content.
-- [ ] Run native QA on supported Linux distributions.
-- [ ] Run native QA on supported macOS architectures.
-- [ ] Run native QA on supported Windows architectures.
-- [ ] Run the full native matrix from mise against the release binaries and
+- [x] Run native QA on supported Linux distributions.
+- [x] Run native QA on supported macOS architectures.
+- [x] Run native QA on supported Windows architectures.
+- [x] Run the full native matrix from mise against the release binaries and
   record any designated-host environments that hosted CI cannot provide.
-- [ ] Test common terminal emulators and record exclusions.
-- [ ] Verify install, startup, upgrade, rollback, uninstall, and progress
+- [x] Test common terminal emulators and record exclusions.
+- [x] Verify install, startup, upgrade, rollback, uninstall, and progress
   preservation journeys.
-- [ ] Resolve every release-blocking finding and retest the original path.
-- [ ] Record remaining known issues and residual risk.
+- [x] Resolve every release-blocking finding and retest the original path.
+- [x] Record remaining known issues and residual risk.
 
 Exit gate:
 
-- [ ] QA records a `PASS` or `PASS WITH KNOWN ISSUES` verdict and a `ship`
+- [x] QA records a `PASS` or `PASS WITH KNOWN ISSUES` verdict and a `ship`
   recommendation for the release-candidate behavior on every supported native
   platform.
 

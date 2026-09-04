@@ -1629,6 +1629,89 @@ Its [hosted check](https://github.com/nuggocto/orifude/actions/runs/33826120880)
 passed the locked repository check and the complete player journey on Linux
 x86_64, Linux ARM64, macOS Intel, macOS Apple Silicon, and Windows x86_64.
 
+## Release-candidate hardening and QA on 2026-09-04
+
+The release-candidate review now has a durable
+[`trust-boundary record`](docs/security-review.md) and
+[`QA record`](docs/release-qa.md). The source-to-effect pass covers command
+arguments, puzzle and pack text, replay documents, archives, paths, SQLite,
+terminal input and restoration, configuration, dependencies, and CI. It found
+one low-severity product defect: required display text accepted an all-space
+value. [`validate_display`](src/packs/format.rs) now treats it as blank while
+preserving valid mixed-script and combining-mark text, and the public parser
+regression covers the complete boundary.
+
+```mermaid
+flowchart LR
+    Bytes["Untrusted local bytes"] --> Parse["Bounded strict parsing"]
+    Parse --> Domain["Domain invariants and replay"]
+    Domain --> Effects["Owned paper, SQLite, terminal"]
+    Candidate["Optimized candidate"] --> Local["Properties, fuzz,<br/>faults, lifecycle, budgets"]
+    Candidate --> Native["Linux, macOS,<br/>Windows journeys"]
+    Local --> Verdict["Ship behavior"]
+    Native --> Verdict
+```
+
+[`4264e06`](https://github.com/nuggocto/orifude/commit/4264e06d825fa970aeb9b5a5dcd1fc0e96baeda3)
+added separate locked fuzz tooling, five sanitizer targets, fixed-seed property
+and repository-content checks, optimized release gates, direct-binary lifecycle
+QA, Linux distribution checks, and raw release measurements. The mandatory
+post-implementation review corrected lifecycle cleanup reporting, strengthened
+saved-state comparison to the exact best replay, made untracked filename
+enumeration NUL-safe, and included the first rejected byte above every parser
+limit. A first hosted run then exposed two test-oracle mistakes rather than
+runtime failures: one command named a nonexistent pack path and one expected
+verification output omitted the pack fingerprint. It also showed that the fuzz
+tool belonged to its task instead of every ordinary job. Those corrections
+landed in
+[`ef3385e`](https://github.com/nuggocto/orifude/commit/ef3385ea94a045d0a26f48bfa52378454f1f5920).
+The final automation pass stopped command-backed shell declarations from
+masking setup failures in
+[`769e8b9`](https://github.com/nuggocto/orifude/commit/769e8b945e9a66e10e14c06607633e98762ddc6c).
+[`f89d11d`](https://github.com/nuggocto/orifude/commit/f89d11dcc76ace5223ae7392277d6fb9c4e356ba)
+made the pinned syntax and static-analysis pass part of both ordinary and
+release checks so the correction remains enforced.
+The first hosted enforcement exposed a runner-specific diagnostic for that
+trap-managed cleanup.
+[`89077d2`](https://github.com/nuggocto/orifude/commit/89077d2dec2a706668e793b6f14427de26627dab)
+installs the locked analyzer explicitly in the repository job and limits both
+suppressed diagnostics to the indirectly invoked cleanup function.
+
+The corrected
+[`hosted run`](https://github.com/nuggocto/orifude/actions/runs/33832142361)
+passed all seven runnable jobs: the complete repository gate, five supported
+native OS/architecture combinations, and the pinned
+Ubuntu 24.04, Debian 12, Fedora 44, and Arch userlands. Each native job ran the
+complete optimized PTY player journey and the production command surface. The
+macOS builds set a 13.0 deployment target. The distribution job executed the
+x86_64 musl binary without container capabilities, writable root storage, or
+network access.
+
+Local sanitizer campaigns completed 6,007,659 executions across domain actions,
+puzzle text, metadata, replay text, and archive bytes with no crash, timeout,
+or slow input. The property gate exhausted 2,268 fold boundaries and eight
+32-action replay seeds, with independent solver and generated-content checks.
+Seven mapped interruption cases each passed ten optimized repetitions. The
+direct-binary journey preserved its exact saved replay through upgrade,
+rollback, executable removal, pack removal, reinstall, and uninstall, then
+confirmed cleanup.
+
+The final Linux measurement used 25 starts, 100 visible input samples, a
+three-second idle observation, five 500-write storage sets, the full journey
+solver, and deterministic stripping and compression. Startup p95 was 127.421
+ms, input p95 was 5.065 ms, idle CPU was 0.000%, ordinary play used 7,584 KiB
+RSS, solver high-water memory was 9,232 KiB, and the worst storage p95 was
+28.517 ms. Every declared budget passed. The original, stripped, and compressed
+x86_64 binaries measured 5,798,480, 4,887,288, and 2,203,799 bytes.
+
+Ghostty 1.3.1, foot 1.27.0, tmux 3.7c, Unix PTYs, and Windows ConPTY all
+received real optimized-binary input and restoration checks. Hosted automation
+does not provide the minimum supported OS releases or GUI access to macOS
+Terminal and Windows Terminal, so those designated-host visual checks remain
+recorded evidence gaps rather than claimed results. They did not reproduce a
+product defect and do not block archive and installer work; the final packaged
+artifacts still need their own minimum-version pass before publication.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in
