@@ -14,13 +14,16 @@ for tool in tmux awk sort stat getconf gzip strip sha256sum; do
     fi
 done
 
-readonly repository="$(git rev-parse --show-toplevel)"
-readonly binary="$(realpath "${1:-$repository/target/release/orifude}")"
+repository="$(git rev-parse --show-toplevel)"
+readonly repository
+binary="$(realpath "${1:-$repository/target/release/orifude}")"
+readonly binary
 readonly startup_runs="${ORIFUDE_STARTUP_RUNS:-25}"
 readonly input_runs="${ORIFUDE_INPUT_RUNS:-100}"
 readonly idle_seconds="${ORIFUDE_IDLE_SECONDS:-3}"
 readonly storage_runs="${ORIFUDE_STORAGE_RUNS:-5}"
-readonly output="${ORIFUDE_MEASURE_OUTPUT:-$repository/target/release-measurement-$(date -u +%Y%m%dT%H%M%SZ)}"
+output="${ORIFUDE_MEASURE_OUTPUT:-$repository/target/release-measurement-$(date -u +%Y%m%dT%H%M%SZ)}"
+readonly output
 readonly work_root="$repository/target/orifude-release-measure-$$"
 readonly socket="orifude-measure-$$"
 readonly session="paper"
@@ -62,6 +65,8 @@ fi
 
 mkdir -p "$work_root" "$output"
 
+# The EXIT trap invokes this function indirectly.
+# shellcheck disable=SC2329
 cleanup() {
     tmux -L "$socket" kill-server >/dev/null 2>&1 || true
     if [[ "$work_root" == "$repository"/target/orifude-release-measure-* ]]; then

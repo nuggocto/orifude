@@ -15,15 +15,19 @@ if (($# != 1)) || [[ "$1" != /* ]]; then
     exit 2
 fi
 
-readonly binary="$(realpath -- "$1")"
-readonly repository="$(git rev-parse --show-toplevel)"
+binary="$(realpath -- "$1")"
+readonly binary
+repository="$(git rev-parse --show-toplevel)"
+readonly repository
 if [[ ! -x "$binary" || ! -f "$binary" ]]; then
     printf '%s\n' "error: the Linux musl binary must be an executable regular file" >&2
     exit 1
 fi
 
-readonly expected_version="$("$binary" --version)"
-readonly expected_verification="$("$binary" verify "$repository/puzzles/example-pack")"
+expected_version="$("$binary" --version)"
+readonly expected_version
+expected_verification="$("$binary" verify "$repository/puzzles/example-pack")"
+readonly expected_verification
 readonly images=(
     "ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517"
     "debian:12-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171"

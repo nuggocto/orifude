@@ -4,7 +4,8 @@ set -euo pipefail
 
 readonly credential_pattern='-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----|A[KS]IA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[0-9A-Za-z-]{10,}|sk-(proj-)?[A-Za-z0-9_-]{20,}'
 readonly excluded=':(exclude)scripts/secret-scan.sh'
-readonly result_file="$(mktemp)"
+result_file="$(mktemp)"
+readonly result_file
 trap 'rm -f "$result_file"' EXIT
 found=0
 

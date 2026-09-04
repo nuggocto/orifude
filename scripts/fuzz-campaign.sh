@@ -28,7 +28,8 @@ if ! rustup run "$toolchain" rustc --version >/dev/null 2>&1; then
     printf '%s\n' "error: Rust $toolchain is required for sanitizer instrumentation" >&2
     exit 1
 fi
-readonly toolchain_root="$(rustup run "$toolchain" rustc --print sysroot)"
+toolchain_root="$(rustup run "$toolchain" rustc --print sysroot)"
+readonly toolchain_root
 if [[ ! -d "$toolchain_root/lib/rustlib/src/rust/library" ]]; then
     printf '%s\n' "error: Rust $toolchain must include the rust-src component" >&2
     exit 1
