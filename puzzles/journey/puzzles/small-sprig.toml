@@ -1,33 +1,31 @@
 format_version = 1
 id = "small-sprig"
 title = "Small sprig"
-description = "Three dots make the first little branch."
+description = "Turn the crease and let two paired marks grow."
 width = 4
 height = 4
 target = [
   ".#..",
   "..#.",
+  "..#.",
   ".#..",
-  "....",
 ]
 folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
 ]
 brushes = [
   { kind = "dot" },
 ]
-fold_budget = 0
-stroke_budget = 3
-par = { folds = 0, strokes = 3 }
-tutorial_cues = [
-  "Begin at row 1, column 2.",
-  "Add the middle dot at row 2, column 3.",
-  "Finish at row 3, column 2.",
-  "Open the three-mark paper.",
-]
+fold_budget = 1
+stroke_budget = 2
+par = { folds = 1, strokes = 2 }
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [
-  { kind = "dot", row = 0, column = 1 },
-  { kind = "dot", row = 1, column = 2 },
-  { kind = "dot", row = 2, column = 1 },
+  { kind = "fold", direction = "down", crease = 2 },
+  { kind = "dot", row = 3, column = 1 },
+  { kind = "dot", row = 2, column = 2 },
 ]

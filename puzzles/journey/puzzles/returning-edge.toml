@@ -28,12 +28,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 1
 par = { folds = 2, strokes = 1 }
-tutorial_cues = [
-  "Fold left at crease 4.",
-  "Fold left again at crease 2.",
-  "Mark row 4, column 2.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

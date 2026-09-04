@@ -19,11 +19,6 @@ brushes = [
 fold_budget = 0
 stroke_budget = 2
 par = { folds = 0, strokes = 2 }
-tutorial_cues = [
-  "Draw the horizontal stroke through the center.",
-  "Draw the vertical stroke through the same center.",
-  "Open the crossed paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

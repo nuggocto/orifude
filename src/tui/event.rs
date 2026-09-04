@@ -3,7 +3,7 @@ use std::fmt;
 use std::io;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -12,6 +12,7 @@ use crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 pub(crate) const EVENT_QUEUE_CAPACITY: usize = 256;
 const ACTIVE_TICK_INTERVAL: Duration = Duration::from_nanos(33_333_334);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const SIZE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RuntimeEvent {
@@ -224,12 +225,28 @@ impl EventPump {
     pub(crate) fn start() -> Result<Self, EventError> {
         let shared = Arc::new(SharedQueue::new());
         let failure = Arc::new(Mutex::new(None));
+        let (ready_sender, ready_receiver) = mpsc::sync_channel(0);
         let worker_shared = Arc::clone(&shared);
         let worker_failure = Arc::clone(&failure);
         let worker = thread::Builder::new()
             .name("orifude-terminal-events".to_owned())
             .spawn(move || {
-                match panic::catch_unwind(AssertUnwindSafe(|| run_event_worker(&worker_shared))) {
+                match panic::catch_unwind(AssertUnwindSafe(|| {
+                    // The first poll installs Crossterm's resize source. Keep
+                    // initialization and every later poll/read on this worker.
+                    match event::poll(Duration::ZERO) {
+                        Ok(_) => ready_sender
+                            .send(Ok(()))
+                            .map_err(|_| EventError::QueueUnavailable)?,
+                        Err(error) => {
+                            ready_sender
+                                .send(Err(error))
+                                .map_err(|_| EventError::QueueUnavailable)?;
+                            return Ok(());
+                        }
+                    }
+                    run_event_worker(&worker_shared)
+                })) {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => record_failure(&worker_failure, error),
                     Err(_panic) => record_failure(&worker_failure, EventError::WorkerPanicked),
@@ -238,11 +255,28 @@ impl EventPump {
             })
             .map_err(EventError::Io)?;
 
-        Ok(Self {
-            shared,
-            failure,
-            worker: Some(worker),
-        })
+        match ready_receiver.recv() {
+            Ok(Ok(())) => Ok(Self {
+                shared,
+                failure,
+                worker: Some(worker),
+            }),
+            Ok(Err(error)) => {
+                shared.begin_shutdown();
+                let _ = worker.join();
+                Err(EventError::Io(error))
+            }
+            Err(_) => {
+                shared.begin_shutdown();
+                let _ = worker.join();
+                let error = failure
+                    .lock()
+                    .map_err(|_| EventError::QueueUnavailable)?
+                    .take()
+                    .unwrap_or(EventError::WorkerPanicked);
+                Err(error)
+            }
+        }
     }
 
     pub(crate) fn next(&self) -> Result<Option<RuntimeEvent>, EventError> {
@@ -297,6 +331,8 @@ fn record_failure(failure: &Mutex<Option<EventError>>, error: EventError) {
 fn run_event_worker(shared: &SharedQueue) -> Result<(), EventError> {
     let mut animation_was_active = false;
     let mut next_tick = Instant::now() + ACTIVE_TICK_INTERVAL;
+    let mut observed_size = crossterm::terminal::size().map_err(EventError::Io)?;
+    let mut next_size_check = Instant::now() + SIZE_POLL_INTERVAL;
 
     while !shared.shutdown.load(Ordering::Acquire) {
         let animation_active = shared.animation_active.load(Ordering::Acquire);
@@ -305,20 +341,33 @@ fn run_event_worker(shared: &SharedQueue) -> Result<(), EventError> {
         }
         animation_was_active = animation_active;
 
-        let timeout = if animation_active {
+        let event_timeout = if animation_active {
             next_tick.saturating_duration_since(Instant::now())
         } else {
             IDLE_POLL_INTERVAL
         };
+        let timeout = event_timeout.min(next_size_check.saturating_duration_since(Instant::now()));
 
         if event::poll(timeout).map_err(EventError::Io)?
             && let Some(runtime_event) = translate_event(&event::read().map_err(EventError::Io)?)
         {
+            if let RuntimeEvent::Resize(width, height) = runtime_event {
+                observed_size = (width, height);
+            }
             shared.send(runtime_event)?;
         }
 
-        if animation_active && Instant::now() >= next_tick {
-            let now = Instant::now();
+        let now = Instant::now();
+        if now >= next_size_check {
+            let size = crossterm::terminal::size().map_err(EventError::Io)?;
+            if size != observed_size {
+                observed_size = size;
+                shared.send(RuntimeEvent::Resize(size.0, size.1))?;
+            }
+            next_size_check = now + SIZE_POLL_INTERVAL;
+        }
+
+        if animation_active && now >= next_tick {
             shared.send(RuntimeEvent::Tick(now))?;
             next_tick = now + ACTIVE_TICK_INTERVAL;
         }

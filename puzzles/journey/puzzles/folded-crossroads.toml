@@ -28,14 +28,6 @@ brushes = [
 fold_budget = 4
 stroke_budget = 1
 par = { folds = 4, strokes = 1 }
-tutorial_cues = [
-  "Begin with the short fold from the left.",
-  "Complete the second vertical fold.",
-  "Move the upper band downward.",
-  "Complete the second horizontal fold.",
-  "Mark the deep stack.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

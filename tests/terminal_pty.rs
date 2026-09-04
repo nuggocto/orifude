@@ -28,12 +28,32 @@ fn shipped_binary_restores_the_terminal_after_normal_exit() {
 fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
     let state = tempfile::tempdir().expect("isolated player state");
     let binary = Path::new(env!("CARGO_BIN_EXE_orifude"));
-    let first = run_in_native_pty(
-        binary,
-        state.path(),
-        b"\r\t\rjllb\r\r\r\r\r\rjlb\r\rv\x1bqy",
-    );
+    let replay_steps = [
+        PtyStep {
+            input: b"\r\rjll\r\r\r\r\r\rjl\r\rv",
+            wait_for: b"fresh paper",
+        },
+        PtyStep {
+            input: b"?",
+            wait_for: b"comparison",
+        },
+        PtyStep {
+            input: b"?\r",
+            wait_for: b"row 2, column 2",
+        },
+        PtyStep {
+            input: b"\r",
+            wait_for: b"exactly.",
+        },
+    ];
+    let first = run_in_native_pty_scripted(binary, state.path(), &replay_steps, b"\x1bqy");
     assert!(first.status_success, "first player journey exits cleanly");
+    assert!(
+        find(&first.bytes, b"fresh paper").is_some()
+            && find(&first.bytes, b"row 2, column 2").is_some()
+            && find(&first.bytes, b"exactly.").is_some(),
+        "the saved paper is replayed from fresh paper through its final comparison"
+    );
 
     let paths = AppPaths::injected(
         state.path().join("data"),
@@ -62,13 +82,31 @@ fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
         );
     }
 
-    let second = run_in_native_pty(binary, state.path(), b"jjjj\r\rx\r\x1bqy");
+    let returning_steps = [
+        PtyStep {
+            input: b"jjjj\r\r",
+            wait_for: b"fresh",
+        },
+        PtyStep {
+            input: b"\r",
+            wait_for: b"row 2",
+        },
+        PtyStep {
+            input: b"\r",
+            wait_for: b"exactly.",
+        },
+        PtyStep {
+            input: b"x",
+            wait_for: b"included.",
+        },
+    ];
+    let second = run_in_native_pty_scripted(binary, state.path(), &returning_steps, b"\r\x1bqy");
     assert!(
         second.status_success,
         "returning player journey exits cleanly"
     );
     assert!(
-        find(&second.bytes, b"keepsake").is_some(),
+        find(&second.bytes, b"included.").is_some(),
         "the returning player can revisit, replay, and export the saved paper"
     );
 }

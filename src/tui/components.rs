@@ -40,23 +40,27 @@ const MEDIUM_MARK: [&str; 12] = [
     "        ⠈⠙⠻⠿⣿⣿⣿⣶⣶⣤⠤   ⠈⠓  ⢀⣀⣠⠤⠚⠊⠁",
     "             ⠈⠉⠉⠛⠛⠛⠛⠛⠛⠛⠛⠛⠉⠉",
 ];
-const LARGE_MARK_WIDTH: usize = 48;
-const LARGE_MARK: [&str; 15] = [
-    "                    ⢀⣀⣀⣀⣀⣀",
-    "            ⢀⣀⣤⣴⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣤⣄⡀",
-    "         ⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣀",
-    "      ⢀⣴⣾⣿⣿⣿⣿⣿⣿⠿⠛⠋⠉⠁     ⠈⠉⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡕",
-    "     ⣴⣿⣿⣿⣿⣿⡿⠟⠉               ⠈⠻⣿⡿⣿⣿⠿⣝⠃⠈",
-    "    ⣼⣿⣿⣿⣿⡿⠋         ⢸⣷⡀⢸⣆      ⠈⠙⠂⠉⠁   ⢀⣤⣄",
-    "   ⢸⣿⣿⣿⣿⡿⠁        ⣀⣠⣞⣿⣿⣿⣿⢷⣦⡀     ⢀⣀   ⣀⡀⠈⠉⠳",
-    "   ⣾⣿⣿⣿⣿⠃   ⢀⣤⣶⣾⣿⣿⣿⣿⣿⣿⣿⡷⠿⠗⠛⠷     ⠈⠙⡄⢀⠄⠉⠁   ⣠⡀",
-    "   ⢸⣿⣿⣿⣿   ⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏ ⢀⡜         ⢠⣏⠥ ⠲⠗   ⢉⠁",
-    "   ⠈⢿⣿⣿⣿⡆ ⢰⣿⣿⣿⣿⣿⣿⣦⡙⣿⡿⠷⠶⣿⡦      ⢄⢀⡴⠉ ⢠⣤  ⢈⠟⢁⠞",
-    "    ⠈⢻⣿⣿⣿⣦⣀⢻⣿⣿⣿⣿⣿⣿⣵⣿⣇      ⡀  ⢀⡾⣁⣀⣀⣠⣂⣀⣀⠤⠚⠊⠁",
-    "      ⠙⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠿⠷⠶⠶⣦⣤⣤⣤⣴⠾⠛⠉⠁    ⣤⡄ ⣀⠔⠁",
-    "        ⠈⠛⠿⣿⣿⣿⣿⣿⣧⣤⣀⡀     ⠈⠑⢄⡈⠉⠁ ⠛⠋  ⣠⣂⠴⠊⠁",
-    "            ⠉⠛⠻⠿⣿⣿⣿⣿⣿⣿⣂⣀⣀⣀⣀⣀⣀⣀⣀⣠⡤⠴⠒⠋⠉",
-    "                  ⠉⠉⠉⠛⠛⠛⠛⠛⠛⠛⠉⠉⠁",
+const LARGE_MARK_WIDTH: usize = 60;
+const LARGE_MARK: [&str; 19] = [
+    "                       ⢀⣀⣀⣀⣤⣤⣤⣤⣤⣄⣀⣀⣀",
+    "                 ⣀⣠⣤⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣄⡀",
+    "             ⢀⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣀",
+    "           ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⠿⠿⠛⠛⠛⠛⠛⠛⠻⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄",
+    "         ⣠⣾⣿⣿⣿⣿⣿⣿⣿⡿⠟⠋⠉            ⠈⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣮⠂",
+    "       ⢀⣼⣿⣿⣿⣿⣿⣿⣿⠟⠉                   ⠛⢿⣿⣿⣿⣿⣿⢿⡙⠃⠁⠁",
+    "      ⢀⣾⣿⣿⣿⣿⣿⣿⠟⠁          ⢼⣷⡀⠰⣷        ⠉⠳⢭⣙⠻⠄⠈   ⣀⣄",
+    "      ⣼⣿⣿⣿⣿⣿⣿⠃           ⢀⣿⣿⣷⣶⣿⣧⣄⡀               ⠛⠻⢷⣄",
+    "     ⢀⣿⣿⣿⣿⣿⣿⠃      ⢀⣀⣠⣤⣤⣶⣿⣿⣿⣿⣿⣿⣽⢿⣿⡆      ⢠⣶⡄  ⢠⣴⣄   ⠙⠆",
+    "     ⢸⣿⣿⣿⣿⣿⡟    ⢀⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠿⠟⣛⣙⡿⠂      ⠈⢧⢀⣠⠞⠉    ⢀⣤⣄",
+    "      ⣿⣿⣿⣿⣿⡇   ⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏  ⢰⠃           ⣾⣋⣠⠤⠶⣿⠆   ⢹⠁",
+    "      ⢻⣿⣿⣿⣿⣧  ⢰⣿⣿⣿⣿⣿⣿⣿⣝⢻⣿⣿⣿⣧⣀⣴⣇⡀      ⢀  ⢠⡾⠋⠁ ⡀   ⢶⡶ ⡼",
+    "       ⢿⣿⣿⣿⣿⣧ ⢸⣿⣿⣿⣿⣿⣿⣿⣿⡇⣿⣿⡉⠉⠉⠛⠛⠃   ⢀⠖ ⠈⣧⡴⠋   ⣻⠛  ⢀⢎⡠⠞⡁",
+    "        ⠻⣿⣿⣿⣿⣷⣄⣻⣿⣿⣿⣿⣿⣿⣿⣽⣿⣿⣣⡀  ⠂⠂ ⢀⡤⠁ ⢀⣴⣟⣀⣤⣤⣤⣞⣁⣠⡤⠖⠋⠉⢀⡔",
+    "         ⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣦⣤⣵⣤⣴⣾⠿⠛⠉     ⢀⣤⡄  ⡠⠊",
+    "           ⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⣟⡉⠁      ⠈⠙⠻⢯⡉⠙⠓⠒⠒⠰⢿⠷   ⢠⠏⣁⡴⠋",
+    "              ⠉⠻⢿⣿⣿⣿⣿⣿⣿⣿⣶⣦⣤⣄⣀⣀⣀   ⠻⠗      ⣀⣠⣴⠿⠛⠁",
+    "                 ⠈⠉⠛⠻⠿⣿⣿⣿⣿⣷⣶⣶⣤⣤⣤⣤⣤⣤⣤⣤⣤⣶⣶⠾⠟⠛⠉",
+    "                        ⠈⠉⠉⠙⠛⠛⠛⠛⠛⠛⠛⠉⠉⠁",
 ];
 const ASCII_MARK_WIDTH: usize = 33;
 const ASCII_MARK: [&str; 10] = [
@@ -71,6 +75,78 @@ const ASCII_MARK: [&str; 10] = [
     "   `.`      `-/__\\-------..--'",
     "      `----------------'",
 ];
+const COURIER_UNICODE: [&str; 7] = [
+    "   ╭────╮",
+    " ╭─╯    ╰╮",
+    "╭╯  ╱╲╱╲╰",
+    "│  ( ●)─╯",
+    "╰╮ ╱╰─╯",
+    " ╰─╯╱╲╲",
+    "    ╰╯─╯",
+];
+const COURIER_ASCII: [&str; 7] = [
+    "   .----.",
+    " .-'    `.",
+    ".'  /\\/\\`",
+    "|  ( o)-'",
+    "`. /`-'",
+    " `-' /\\\\",
+    "    `--'",
+];
+// Braille keeps the branch's fine, irregular silhouette inside the fixed home
+// region. The ASCII drawing preserves the same single-bough composition.
+const BRANCH_ART_WIDTH: usize = 44;
+const BRANCH_ART_HEIGHT: usize = 12;
+const BRANCH_UNICODE: [&str; BRANCH_ART_HEIGHT] = [
+    "        ⢰ ⢀⣠⠾⠛⠛⡁  ⣠⠶⠋⢀  ⣧⠞⠁ ⢠⠆ ⢀⡤",
+    "⣤⣤⣤⣀⣀⣀⡤⠴⠺⠋⠁⠁  ⣠⡧⠖⠛⠁  ⣸⠴⠋⠘  ⡰⠃⣠⢴⠏ ⢠⠞        ⢀",
+    "  ⠉⠉⠙⠛⠻⠷⣶⣤⣴⣒⠚⠉⠉  ⣀⡠⠖⠋⠙    ⣀⠴⠊⠡⠋ ⠐⠁   ⡴ ⢀⠞⢀⡴⠋",
+    "         ⠙⢯⡙⠻⠷⣶⣶⣋⡁    ⣀⡤⠖⠋⠁       ⢀⣀⡾⠤⠴⠛⠚⠉⠁",
+    "          ⢠⠛⢦ ⠈⠻⣍⠛⠿⢶⣶⣍⣁⡀    ⣀⣠⠤⠖⠒⠉⠉",
+    "         ⠠⠃  ⡳⡄ ⠈⠳⡀ ⠈⢯⡙⠻⠿⢶⣮⡍⠁",
+    "            ⣰⠃⠘⣆  ⠙⣆  ⠙⢦⡀ ⠙⠻⢶⣦⣄⣀",
+    "            ⠁ ⢀⡎⢦ ⢸⠙⣆⡀  ⠙⢦⡀  ⠈⠙⢺⠭⣒⡦⢤⣀",
+    "              ⠞ ⠈⢧⠃ ⣸⡇    ⡝⢦⡀  ⡏  ⠉⡕⠲⠭⢄⣀⡀",
+    "                ⢀⡎ ⠰⠃⠸⡄⡄ ⡸  ⠙⣦⡘   ⢀⠇  ⡸ ⠉⠙⡖⠒",
+    "                ⠞     ⣿ ⠰⠃  ⢰⠁⠉⠲⣄ ⠸  ⢀⡇   ⢸",
+    "                     ⠰⠋    ⢠⠇  ⢀⡎⠁   ⠘    ⠈⠇",
+];
+const BRANCH_ASCII: [&str; BRANCH_ART_HEIGHT] = [
+    "        |  /--\\     /---\\    /--\\      /",
+    "--------+-'    `---'     `--'    `----'",
+    "         \\       \\       \\             \\",
+    "          \\       \\       `---,         \\",
+    "           \\       \\           `-,       \\",
+    "            `-,     \\             \\       \\",
+    "               \\     `-,           \\       \\",
+    "              \\      \\        `-,       \\",
+    "               `-,    `-,         \\       \\",
+    "                  \\      \\         `-,    \\",
+    "                   `-,    `-,         \\    \\",
+    "                    `-     `-         `-   `",
+];
+const BRANCH_UNICODE_GIFT_SLOTS: [(usize, usize); 8] = [
+    (0, 16),
+    (0, 21),
+    (0, 26),
+    (0, 32),
+    (3, 43),
+    (8, 17),
+    (11, 22),
+    (11, 33),
+];
+const BRANCH_ASCII_GIFT_SLOTS: [(usize, usize); 8] = [
+    (0, 8),
+    (0, 14),
+    (0, 23),
+    (0, 31),
+    (0, 39),
+    (11, 21),
+    (11, 28),
+    (11, 39),
+];
+const BRANCH_UNICODE_GIFTS: [char; 8] = ['◆', '◇', '●', '△', '▾', '◇', '●', '◆'];
+const BRANCH_ASCII_GIFTS: [char; 8] = ['*', '#', 'o', 'A', 'v', '*', 'o', '#'];
 const BRANCH_CHOICES: [&str; 7] = [
     "Continue the journey",
     "Today's paper",
@@ -149,6 +225,8 @@ impl<'a> FocusList<'a> {
 
 pub(crate) struct BranchChoices;
 
+pub(crate) const BRANCH_CARD_WIDTH: u16 = 36;
+
 impl BranchChoices {
     pub(crate) fn render(
         frame: &mut Frame<'_>,
@@ -157,17 +235,8 @@ impl BranchChoices {
         title: &str,
         profile: StyleProfile,
     ) {
-        let card = centered(area, 32, 9);
+        let card = centered(area, BRANCH_CARD_WIDTH, 9);
         FocusList::new(&BRANCH_CHOICES, selected).render(frame, card, title, profile);
-        if card.bottom().saturating_add(1) < area.bottom() {
-            let note = Rect::new(card.x, card.bottom().saturating_add(1), card.width, 1);
-            frame.render_widget(
-                Paragraph::new("Seven paths, entirely offline.")
-                    .style(StyleProfile::muted())
-                    .alignment(Alignment::Center),
-                note,
-            );
-        }
     }
 }
 
@@ -181,30 +250,41 @@ impl BranchGrowth {
         profile: StyleProfile,
     ) {
         let completed_groups = completed_groups.min(content::journey_groups().len());
-        if area.height < 8 || area.width < 34 {
+        if area.height < 16 || usize::from(area.width) < BRANCH_ART_WIDTH {
             frame.render_widget(
                 Paragraph::new(branch_caption(completed_groups))
                     .style(profile.paper())
-                    .alignment(Alignment::Center),
+                    .alignment(Alignment::Center)
+                    .wrap(Wrap { trim: true }),
                 area,
             );
             return;
         }
 
-        let card = centered(area, 42, 12);
+        let card = centered(
+            area,
+            u16::try_from(BRANCH_ART_WIDTH).expect("branch width fits u16"),
+            16,
+        );
         let art = branch_art(completed_groups, profile.glyph_mode())
             .into_iter()
             .map(|line| Line::styled(line, profile.paper()))
-            .chain(std::iter::once(Line::styled(
-                branch_caption(completed_groups),
-                profile.title(),
-            )))
             .collect::<Vec<_>>();
         frame.render_widget(
-            Paragraph::new(art)
+            Paragraph::new(art),
+            Rect::new(
+                card.x,
+                card.y,
+                card.width,
+                u16::try_from(BRANCH_ART_HEIGHT).expect("branch height fits u16"),
+            ),
+        );
+        frame.render_widget(
+            Paragraph::new(branch_caption(completed_groups))
+                .style(profile.title())
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true }),
-            card,
+            Rect::new(card.x, card.y.saturating_add(13), card.width, 3),
         );
     }
 }
@@ -225,68 +305,51 @@ fn branch_caption(completed_groups: usize) -> String {
 }
 
 fn branch_art(completed: usize, glyph_mode: GlyphMode) -> Vec<String> {
-    let visible = |at: usize, symbol: &'static str| if completed >= at { symbol } else { " " };
+    let (base, gift_slots, gifts, dormant) = match glyph_mode {
+        GlyphMode::Unicode => (
+            &BRANCH_UNICODE,
+            &BRANCH_UNICODE_GIFT_SLOTS,
+            &BRANCH_UNICODE_GIFTS,
+            '·',
+        ),
+        GlyphMode::Ascii => (
+            &BRANCH_ASCII,
+            &BRANCH_ASCII_GIFT_SLOTS,
+            &BRANCH_ASCII_GIFTS,
+            '.',
+        ),
+    };
+    assert_eq!(base.len(), BRANCH_ART_HEIGHT);
+    assert_eq!(gift_slots.len(), content::journey_groups().len());
+    assert_eq!(gifts.len(), gift_slots.len());
+
+    let mut art = base
+        .iter()
+        .map(|line| {
+            let mut row = line.chars().collect::<Vec<_>>();
+            assert!(row.len() <= BRANCH_ART_WIDTH);
+            row.resize(BRANCH_ART_WIDTH, ' ');
+            row
+        })
+        .collect::<Vec<_>>();
+    for (index, &(row, column)) in gift_slots.iter().enumerate() {
+        assert!(row < BRANCH_ART_HEIGHT);
+        assert!(column < BRANCH_ART_WIDTH);
+        art[row][column] = if completed > index {
+            gifts[index]
+        } else {
+            dormant
+        };
+    }
+    art.into_iter()
+        .map(|row| row.into_iter().collect())
+        .collect()
+}
+
+pub(crate) const fn courier_art(glyph_mode: GlyphMode) -> &'static [&'static str] {
     match glyph_mode {
-        GlyphMode::Unicode => vec![
-            format!(
-                "                  {}     {}",
-                visible(8, "◇"),
-                visible(8, "◇")
-            ),
-            format!(
-                "             {}  ╭──────{}",
-                visible(7, "●"),
-                visible(2, "◆")
-            ),
-            format!(
-                "          {} ╭───╯   {}",
-                visible(3, "●"),
-                visible(7, "●")
-            ),
-            format!(
-                "       {}────╯      ╭────{}",
-                visible(1, "◆"),
-                visible(2, "◆")
-            ),
-            format!(
-                "  ─────╯       {}──╯  {}",
-                visible(6, "◆"),
-                visible(5, "v")
-            ),
-            format!("       {}        {}", visible(4, "△"), visible(3, "●")),
-            "        \u{2572}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2571}".to_owned(),
-            "             \u{2572}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2571}".to_owned(),
-        ],
-        GlyphMode::Ascii => vec![
-            format!(
-                "                  {}     {}",
-                visible(8, "<>"),
-                visible(8, "<>")
-            ),
-            format!(
-                "             {}  .-------{}",
-                visible(7, "o"),
-                visible(2, "<>")
-            ),
-            format!(
-                "          {} .---'   {}",
-                visible(3, "o"),
-                visible(7, "o")
-            ),
-            format!(
-                "       {}----'      .----{}",
-                visible(1, "<>"),
-                visible(2, "<>")
-            ),
-            format!(
-                "  -----'       {}--'  {}",
-                visible(6, "<>"),
-                visible(5, "v")
-            ),
-            format!("       {}        {}", visible(4, "/\\"), visible(3, "o")),
-            "        `-------------'".to_owned(),
-            "             `-----'".to_owned(),
-        ],
+        GlyphMode::Unicode => &COURIER_UNICODE,
+        GlyphMode::Ascii => &COURIER_ASCII,
     }
 }
 
@@ -299,13 +362,13 @@ impl CompletionCourier {
         group: &JourneyGroup,
         profile: StyleProfile,
     ) {
-        if area.height < 9 || area.width < 40 {
+        if area.height < 12 || area.width < 40 {
             let card = centered(area, 56, 7);
             frame.render_widget(Clear, card);
             frame.render_widget(
                 Paragraph::new(vec![
                     Line::styled(
-                        format!("/)_/)  {} is complete.", group.title),
+                        format!("Courier: {} is complete.", group.title),
                         profile.title(),
                     ),
                     Line::from(format!("I carried {} home.", group.gift.label())),
@@ -319,22 +382,20 @@ impl CompletionCourier {
             );
             return;
         }
-        let card = centered(area, 56, 9);
+        let card = centered(area, 58, 12);
         frame.render_widget(Clear, card);
-        let squirrel = ["  /)_/)", " ( o.o)", " /|_ _|", "(_/ \\__)"];
         let gift = group.gift.label();
-        let body = vec![
-            Line::from(""),
-            Line::styled(squirrel[0], profile.paper()),
-            Line::styled(squirrel[1], profile.paper()),
-            Line::styled(squirrel[2], profile.paper()),
-            Line::styled(squirrel[3], profile.paper()),
-            Line::styled(
-                format!("{} is complete. I carried {gift} home.", group.title),
-                profile.title(),
-            ),
-            Line::from("Enter returns to the changed branch."),
-        ];
+        let body = courier_art(profile.glyph_mode())
+            .iter()
+            .map(|line| Line::styled(*line, profile.paper()))
+            .chain([
+                Line::styled(
+                    format!("{} is complete. I carried {gift} home.", group.title),
+                    profile.title(),
+                ),
+                Line::from("Enter returns to the changed branch."),
+            ])
+            .collect::<Vec<_>>();
         frame.render_widget(
             Paragraph::new(body)
                 .block(Paper::block("A paper joins the branch", profile))
@@ -360,7 +421,7 @@ impl TerminalMark {
         }
 
         match profile.glyph_mode() {
-            GlyphMode::Unicode if area.width >= 52 && area.height >= 20 => render_full_mark(
+            GlyphMode::Unicode if area.width >= 60 && area.height >= 23 => render_full_mark(
                 frame,
                 area,
                 &LARGE_MARK,
@@ -590,11 +651,11 @@ impl Dialog {
         style: Style,
         profile: StyleProfile,
     ) {
-        Self::render_with_height(frame, host, title, body, footer, style, profile, 10);
+        Self::render_with_size(frame, host, title, body, footer, style, profile, 56, 10);
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn render_with_height(
+    fn render_with_size(
         frame: &mut Frame<'_>,
         host: Rect,
         title: &str,
@@ -602,9 +663,10 @@ impl Dialog {
         footer: &str,
         style: Style,
         profile: StyleProfile,
+        width: u16,
         height: u16,
     ) {
-        let area = centered(host, 56, height);
+        let area = centered(host, width, height);
         frame.render_widget(Clear, area);
         let block = Paper::block(title, profile).border_style(style);
         frame.render_widget(
@@ -632,16 +694,38 @@ impl Dialog {
 pub(crate) struct HelpPanel;
 
 impl HelpPanel {
-    pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, message: &str, profile: StyleProfile) {
-        Dialog::render_with_height(
+    pub(crate) fn render(
+        frame: &mut Frame<'_>,
+        area: Rect,
+        message: &[super::text::SafeText],
+        profile: StyleProfile,
+    ) {
+        let height = u16::try_from(message.len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(4)
+            .min(area.height);
+        let lines = message
+            .iter()
+            .map(|line| match line.as_str() {
+                "Move and act"
+                | "Goal, tools, and result"
+                | "Learn by doing"
+                | "Settings"
+                | "How to play"
+                | "Navigation" => Line::styled(line.as_str().to_owned(), profile.title()),
+                _ => Line::from(line.as_str().to_owned()),
+            })
+            .collect::<Vec<_>>();
+        Dialog::render_with_size(
             frame,
             area,
             "Keyboard help",
-            vec![Line::from(message)],
+            lines,
             "Esc or Enter closes help",
             profile.border(),
             profile,
-            area.height.min(18),
+            78,
+            height,
         );
     }
 }
@@ -672,7 +756,7 @@ impl DialogLayer {
         profile: StyleProfile,
     ) {
         match overlay {
-            Overlay::Help(message) => HelpPanel::render(frame, area, message.as_str(), profile),
+            Overlay::Help(message) => HelpPanel::render(frame, area, message, profile),
             Overlay::Quit => Dialog::render(
                 frame,
                 area,
@@ -800,6 +884,28 @@ mod tests {
             "The branch is waiting for its first leaf. [0/8]"
         );
         assert!(branch_caption(8).contains("the full canopy"));
+        assert_eq!(
+            branch_art(0, GlyphMode::Unicode)
+                .concat()
+                .matches('·')
+                .count(),
+            content::journey_groups().len()
+        );
+        assert_eq!(
+            branch_art(0, GlyphMode::Ascii)
+                .concat()
+                .matches('.')
+                .count(),
+            content::journey_groups().len()
+        );
+        for glyph_mode in [GlyphMode::Unicode, GlyphMode::Ascii] {
+            let art = branch_art(0, glyph_mode);
+            assert_eq!(art.len(), BRANCH_ART_HEIGHT);
+            assert!(
+                art.iter()
+                    .all(|line| line.chars().count() == BRANCH_ART_WIDTH)
+            );
+        }
 
         let backend = TestBackend::new(44, 12);
         let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -825,7 +931,7 @@ mod tests {
     #[test]
     fn completion_courier_names_the_group_gift_and_return_action() {
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
-        for height in [8, 20] {
+        for height in [8, 9, 10, 11, 20] {
             let backend = TestBackend::new(60, height);
             let mut terminal = Terminal::new(backend).expect("test terminal");
             terminal

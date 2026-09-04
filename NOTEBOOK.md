@@ -948,33 +948,154 @@ paper is not described as saved until its replay, attempt metadata, and
 progress transaction commit. The result can then retry, replay the stored best
 solution, or show a spoiler-free text keepsake.
 
-Fresh-player QA found that `Tab` could appear inert in the lesson. The old
-handler only cycled choices inside an existing draft, and the lesson has one
-allowed fold. The panes also looked like three unlabeled tab stops even though
-only the paper accepts input. [`session.rs`](src/tui/session.rs) now moves
-`Tab` and `Shift+Tab` through one bounded list of fold and brush actions whose
-budgets still have room. After the lesson fold, the next `Tab` selects the dot
-instead of returning to an exhausted fold. [`view.rs`](src/tui/view.rs) labels
-the target as a reference and gives the folded paper a neutral highlighted,
-uppercase title; the stack remains the cursor's bottom-to-top view. The title
-uses the terminal's default colors instead of the moss active-control color.
-Uppercase keeps the distinction when a terminal ignores styling or uses ASCII.
-Focused state and view regressions cover forward and reverse selection, the
-exhausted-budget message, and both the 100 by 30 and 60 by 20 labels. An
-isolated development-binary run reproduced the inert key before the change,
-then confirmed the fold preview, brush selection, reverse selection,
-post-fold selection, compact layout, and complete minimum-size help text after
-the change.
-The shipped-binary new-player journey now uses `Tab` for its first fold, so the
-native end-to-end check fails if application routing drops the key. The final
-tree passed `mise run check` and all three cases in `mise run test-native` on
-x86_64 Arch Linux with Rust 1.98.0.
+Fresh-player QA first found that `Tab` could appear inert in the lesson. A
+later owner play-through showed that requiring `Tab` before the first useful
+action was itself the larger problem. [`session.rs`](src/tui/session.rs) now
+readies the first legal fold or brush when a paper arrives. `Enter` begins
+immediately, a confirmed action readies the next tool, and an exact target
+match readies Open paper. `Tab` and `Shift+Tab` still traverse every legal tool
+and Open paper, while `Esc` reaches Open paper directly. Undo and reset derive
+the ready tool again from the one owned attempt.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ToolReady: paper arrives
+    ToolReady --> ToolReady: Enter / apply action and ready next tool
+    ToolReady --> OpenReady: exact target, Tab, or Esc
+    OpenReady --> ToolReady: Tab or Shift+Tab
+    OpenReady --> Comparison: Enter
+```
+
+The timed fold and brush cards were removed after owner play-through showed
+that they flashed too quickly to teach anything. [`session.rs`](src/tui/session.rs)
+now retains one bounded action explanation as ordinary state. [`view.rs`](src/tui/view.rs)
+shows that line without covering the paper, and renders placed ink as a filled
+glyph that remains distinct in monochrome and ASCII. The only gameplay
+animation is the bounded opening reveal; reduced motion still replaces it with
+the final state.
+
+An opened paper keeps its stack inspector fixed. Solving needs one movable
+`cursor`, while a compact comparison needs one vertical `comparison_row` to
+reach every row of a board. Both values fit the same validated paper dimensions
+and can cover at most 12 rows. Reusing the cursor for both jobs was rejected
+because result scrolling changed the stack location and made a keepsake look
+interactive. During replay, the cursor follows only the recorded brush actions;
+ordinary movement keys cannot alter it. After the paper opens, Up and Down
+change only the comparison row. The view regression checks both the fixed stack
+and all eight rows of the largest official comparison used by that test.
+
+```mermaid
+flowchart LR
+    Solving["Solving<br/>cursor moves"] -->|open| Opened["Opened paper<br/>cursor fixed"]
+    Replay["Replay<br/>recorded brush position"] -->|final step| Opened
+    Opened --> Stack["Stack inspector<br/>uses cursor"]
+    Opened -->|Up or Down| Rows["Comparison window<br/>uses comparison_row"]
+```
+
+Saved replay originally rebuilt the complete attempt before its first frame.
+That was technically an exact result, but it looked like a frozen duplicate of
+the screen the player had just left. [`session.rs`](src/tui/session.rs) now
+validates the complete replay once, then owns a bounded, read-only playback on
+fresh paper. Enter or Right applies one recorded action, Left rebuilds the
+previous bounded prefix, reset returns to the start, and the step after the last
+action opens the comparison. Invalid or non-solving saved actions are refused
+before playback begins. [`app.rs`](src/tui/app.rs) preserves the paper title and
+[`view.rs`](src/tui/view.rs) names the current step and controls.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Fresh: load and validate saved replay
+    Fresh --> Step: Enter or Right
+    Step --> Step: Enter or Right / next action
+    Step --> Fresh: Left at first action or reset
+    Step --> Step: Left / previous action
+    Step --> Comparison: Enter or Right after last action
+    Comparison --> Step: Left
+    Comparison --> [*]: Enter or Esc
+```
+
+The follow-up tree based on commit `22606a0` passed `mise run check`, including
+strict Clippy, dependency policy, 213 unit, integration, example, and native
+PTY tests, the doctest, and the optimized build. The same 213 tests passed in
+the optimized profile, then all seven native terminal journeys passed again.
+Release-binary QA on x86_64 Arch Linux used a synthetic player root at
+`/tmp/orifude-cast-final`. At 100 by 30, `First drop` kept row 2, column 2 in
+the stack after result arrows and again after loading the replay and pressing
+all four arrows. At 60 by 20, the structured help kept every line and its close
+instruction visible. The goal panel appeared in the wide result and the replay
+stayed free of the success card. The tmux session was removed; the
+synthetic root remains in `/tmp` for inspection. No commit or push was made.
+
+Exact cursor coordinates now stop after onboarding and the first journey
+paper. Later built-in papers begin with the `Pattern to match` and no clue. A
+missed opening reveals the paper's short description as a persistent hint and
+records that help in attempt metadata. Installed packs can still opt into
+authored guidance through the public cue format. The controls panel names the
+ready tool in plain language, while the contextual help is split into movement,
+tools, and result meanings. A saved solution holds a congratulations card on
+screen and explains whether the reference path was found; a valid longer path
+is celebrated without hiding the shorter reference. Keepsake playback omits
+the card so the replay remains visible.
+
+```mermaid
+flowchart LR
+    Source["PlaySource"] --> Lesson["Lesson: state-aware guide"]
+    Source --> First["First journey paper: exact inputs"]
+    Source --> Journey["Later journey paper: pattern only"]
+    Source --> Pack["Pack: optional authored hint"]
+    Action["Confirmed fold or brush"] --> State["Static feedback + visible ink"]
+    State --> Open["Open and compare"]
+    Open -->|miss| Hint["Reveal short hint"]
+    Hint --> State
+    Open -->|match| Save["Durable save"]
+    Save --> Card["Persistent congratulations"]
+```
+
+The opening journey now teaches the brush on two flat papers, then introduces
+one crease on `two-drops`. `open-window` and `small-sprig` turn that crease and
+add a second touch before the later groups build on the same mechanics. Stable
+paper IDs and catalog positions remain unchanged; only these pre-release paper
+definitions changed. The catalog regression requires exactly two flat opening
+papers, and the independent solver still executes every official definition.
+
+The squirrel drawings and opening mark in
+[`components.rs`](src/tui/components.rs) were redrawn from the supplied
+monochrome logo rather than from a generic animal face. The home branch now
+uses one asymmetric twig with eight visible buds that turn into progress gifts.
+Its seven rows fit within 44 columns in Unicode and ASCII, and its caption is
+rendered separately so centering cannot break the drawing. The adjacent home
+card now measures its title against its actual width, keeping `Saved yes`
+complete instead of clipping the last character.
+
+The dirty tree based on commit `22606a0` passed the complete locked check:
+formatting, dependency policy, strict all-target Clippy, 212 unit, integration,
+and example tests, the documentation example, and the optimized build. The
+same 212 tests passed again in the optimized profile, and the seven native PTY
+journeys passed in a separate run. Release-binary play-throughs covered the
+onboarding paper, static fold and ink feedback, persistent success, first-paper
+coordinates, later clue-only play, contextual help, and the connected branch
+at 100 by 30, 80 by 24, and 60 by 20. The six output frames in
+[`journey.cast`](docs/recordings/journey.cast) were recaptured from that 80 by
+24 optimized session. No commit or push was made for this owner-review pass.
+
+Repeating the native terminal suite exposed an older startup race in
+[`event.rs`](src/tui/event.rs): crossterm installs its resize signal source on
+the first poll, so a resize immediately after the first frame could be lost.
+The event pump now initializes that source before returning and verifies the
+terminal dimensions every 250 milliseconds as a bounded fallback. The original
+small-terminal recovery test passed twenty consecutive isolated runs after the
+change, then passed in the full native and optimized suites.
+The final locked check passed strict Clippy, dependency policy, 209 unit,
+integration, and example tests, the doctest, and the optimized build. The same
+209 tests passed in the optimized profile. Warning-denied private
+documentation, all seven native PTY journeys, and every JSON line in the
+recording passed as separate checks.
 
 A screenshot review then found that the highlighted pane still looked like a
 developer focus indicator and that the first paper arrived before the player
-understood the goal. The first-launch card now explains the four-action lesson
-before creating the session: preview the fold, confirm it, move the cursor and
-place ink, then open the paper. The footer names `Enter start` instead of the
+understood the goal. The first-launch card now explains the lesson before
+creating the session: use the ready fold, move the cursor and place ink, then
+open the paper. The footer names `Enter start` instead of the
 menu-only `Up/Down move`, and each lesson cue gives the exact next key or target
 coordinate. The preferred and minimum layouts keep the goal, all four steps,
 the next-move explanation, help keys, and start prompt visible at once.
@@ -1267,12 +1388,12 @@ The player state and minimum layouts received the remaining corrections in
 [`app.rs`](src/tui/app.rs), [`session.rs`](src/tui/session.rs),
 [`components.rs`](src/tui/components.rs), and [`view.rs`](src/tui/view.rs).
 Loading a replay consumes a pending group-delivery card. Arrow keys reuse the
-already bounded cursor to scroll every row of a large opened comparison,
-avoiding a second offset that could drift from cursor state. Group mechanics
-are wrapped body copy instead of oversized border titles, branch captions wrap
-at the preferred minimum, and compact stack and home headings no longer lose
-characters. The stack and home clipping was found during the second
-shipped-binary pass rather than in the supplied reports.
+bounded cursor during play. Once opened, Up and Down use the separate bounded
+comparison row so every row remains inspectable without moving the stack.
+Group mechanics are wrapped body copy instead of oversized border titles,
+branch captions wrap at the preferred minimum, and compact stack and home
+headings no longer lose characters. The stack and home clipping was found
+during the second shipped-binary pass rather than in the supplied reports.
 
 Tutorial cues in the example pack now advance with completed action count, and
 `quiet-canopy` describes one fold per cue. The
@@ -1290,7 +1411,8 @@ passed with strict all-target Clippy, dependency policy, 203 unit, integration,
 and example tests, the doctest, and the optimized build. The same 203 tests
 passed in the optimized profile. Warning-denied private documentation, all
 seven native PTY journeys, the three-paper validator and solver commands, and
-the five 80-by-24 cast frames also passed locally. Commit
+the five 80-by-24 cast frames present at that commit also passed locally.
+Commit
 [`f554992`](https://github.com/nuggocto/orifude/commit/f554992d31a19648118fb5fd6e5070ec7e077eb6)
 then passed the complete locked check and all five native player jobs in
 [push run 33707719803](https://github.com/nuggocto/orifude/actions/runs/33707719803),
@@ -1301,6 +1423,129 @@ Residual judgment remains explicit. Difficulty observation and artwork
 approval still require the two human decisions identified in
 [`PROJECT.md`](PROJECT.md#current-work); code and automation cannot honestly
 close them.
+
+The final owner play-through kept the visible goal but renamed it `Pattern to
+match`, because the pattern defines success while the fold and brush sequence
+remains the puzzle. Later journey papers now reveal their short hint only after
+the first missed opening. The same pass moved the first crease to the third
+journey paper, replaced the staircase placeholder with the bounded eight-bud
+twig, and fixed the home-card width found during release-binary inspection.
+Four focused regressions were observed failing before those behaviors were
+implemented.
+
+The resulting dirty tree passed `mise run check`: dependency policy, strict
+all-target Clippy, 216 unit, integration, native-terminal, and example tests,
+the documentation example, and the optimized build. The same 216 tests passed
+again in the optimized profile, warning-denied private documentation passed,
+and all seven native PTY journeys passed in a separate third run. The
+independent solver covered all forty official papers in both profiles.
+Release-binary QA used isolated player roots at 100 by 30, 80 by 24, and 60 by
+20. It covered hidden and revealed hints, a missed result, comparison scrolling,
+replay input, persistent ink, the success card, contextual help, the full home
+title, and the recorded lesson. Every frame in
+[`journey.cast`](docs/recordings/journey.cast) parses as JSON. No commit or push
+was made.
+
+A focused replay QA pass reproduced the apparent freeze: the old loader placed
+the complete saved attempt on screen before the player could press a key. The
+new player-controlled playback regression failed against that behavior first.
+Session-level sweeps then used the real fold and brush tools to solve all forty
+official papers and walked every saved action forward for all forty replays.
+The locked debug and optimized suites each passed 222 tests, including all
+seven native PTY journeys; strict Clippy, dependency policy, the optimized
+build, warning-denied private documentation, the independent solver, and the
+three example-pack puzzles also passed. A 60-by-20 optimized-binary walkthrough
+confirmed forward stepping, rewind, restart, final comparison, fixed stack
+inspection, terminal restoration, the paper title, and an unclipped footer. The
+returning-player PTY journey also waits for the real text-export overlay instead
+of treating the keepsake menu itself as export evidence.
+Replay documents remain bounded by the validated 64-action limit and are
+executed successfully before their read-only steps become visible. No commit or
+push was made.
+
+A follow-up report check on 2026-09-04 reproduced six player and terminal
+defects before correcting them. [`session.rs`](src/tui/session.rs) now probes
+the bounded fold list against one cloned attempt and readies the first fold that
+can actually be applied; the direct fold shortcut uses the same choice. A
+failed comparison returns to the unchanged attempt with a usable tool ready.
+[`view.rs`](src/tui/view.rs) gives ASCII cursor-on-ink its own `&` glyph and
+uses an ASCII separator throughout the saved-success card.
+[`components.rs`](src/tui/components.rs) keeps the compact courier card until
+the full drawing and both messages have twelve rows available.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ready: scan at most 44 declared folds
+    Ready --> Ready: Enter applies one legal action
+    Ready --> Comparison: open paper
+    Comparison --> Ready: miss / Enter
+    Comparison --> Saved: exact match
+```
+
+The input startup report was also correct. Crossterm requires every `poll` and
+`read` call to stay on one thread. [`event.rs`](src/tui/event.rs) now performs
+the initializing zero-duration poll inside the owned worker and uses one
+bounded rendezvous to tell the caller that input and resize handling are ready
+before the first frame. Initialization failures and panics still join the
+worker and return through the typed event error path.
+
+```mermaid
+sequenceDiagram
+    participant Main as Renderer thread
+    participant Worker as Event worker
+    Main->>Worker: spawn
+    Worker->>Worker: first poll initializes resize source
+    Worker-->>Main: ready rendezvous
+    Main->>Main: render first frame
+    loop until shutdown
+        Worker->>Worker: poll then read
+    end
+```
+
+Two reports were rejected against existing contracts and regressions. Reset
+deliberately keeps personal hint and undo history, as specified by
+[`PROJECT.md`](PROJECT.md#undo-reset-and-replay) and checked in
+[`tests/engine.rs`](tests/engine.rs). Changed built-in gameplay does not inherit
+completion from an older definition: [`Storage::completion_matches`](src/storage/mod.rs)
+decodes the saved best replay and requires its complete embedded puzzle to
+equal the current paper, with the mismatch case covered in
+[`tests/storage.rs`](tests/storage.rs). Old keepsakes remain valid for their own
+embedded paper without unlocking revised journey content.
+
+The five new or extended behavior regressions failed on the reported paths
+before the fixes. The locked repository check then passed dependency policy,
+strict all-target Clippy, 224 unit, integration, native-terminal, and example
+tests, the doctest, and the optimized build. The same 224 tests passed in the
+optimized profile, warning-denied private documentation passed, and the
+optimized resized-terminal startup test passed twenty consecutive runs. This
+pass exercised native terminal behavior on x86_64 Linux; macOS and Windows
+remain for the hosted native matrix after a later authorized push. No commit or
+push was made.
+
+The home branch now follows the etched tree reference and the curved berry
+sprigs in the supplied Orifude mark instead of a row of rising steps.
+[`BranchGrowth`](src/tui/components.rs) uses a fixed 44-by-12 Braille drawing of
+one tapered limb with asymmetric upper and lower twigs. It keeps the wrapped
+progress caption on smaller regions. Eight dormant buds remain visible and are
+replaced by the named journey gifts as groups are completed. ASCII mode has a
+separate bounded drawing with the same composition. The home menu no longer
+repeats an offline caption, and [`view.rs`](src/tui/view.rs) keeps the masthead
+to the Orifude name. The reviewed
+[`terminal recording`](docs/recordings/journey.cast) carries the same masthead
+and branch.
+
+```text
+44 x 16 or larger: etched branch + eight buds + progress caption
+smaller region:    wrapped progress caption
+```
+
+The locked repository check still passed all 224 tests, strict all-target
+Clippy, dependency policy, the doctest, and the optimized build. An isolated
+80-by-24 optimized-binary run confirmed that the new branch and home menu fit
+without clipping. A second isolated run solved the 2026-09-04 daily paper from
+the shipped TUI in one left fold and one dot, producing the exact two-corner
+opened pattern and the reference-score congratulations card. No commit or push
+was made.
 
 ## What comes next
 

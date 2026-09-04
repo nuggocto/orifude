@@ -28,12 +28,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 1
 par = { folds = 2, strokes = 1 }
-tutorial_cues = [
-  "Make the first rightward fold.",
-  "Use the later rightward crease.",
-  "Draw the vertical line through three occupied stacks.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

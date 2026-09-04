@@ -16,8 +16,8 @@ fold_budget = 0
 stroke_budget = 1
 par = { folds = 0, strokes = 1 }
 tutorial_cues = [
-  "Move to the left end, then choose the horizontal line brush and draw the stroke.",
-  "Open the paper after the three-cell stroke.",
+  "Line brush ready. Move @ to the left end; Enter inks.",
+  "Target matched. Enter opens and checks the paper.",
 ]
 author = "Orifude contributors"
 license = "Apache-2.0"

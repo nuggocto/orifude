@@ -10,9 +10,9 @@ a deterministic daily paper, an endless local generator, keepsakes, and local
 community packs.
 
 ```text
-Target             Folded paper           Stack, bottom to top
+Pattern to match   Folded paper           Stack, bottom to top
 . # # .            0 0 @ 0                0: cell 6
-                                            1: cell 5
+                                           1: cell 5
 
 One fold lets one dot pass through both layers.
 ```
@@ -32,12 +32,19 @@ mise run run
 The first launch explains the goal and leads through one real paper. During a
 puzzle:
 
-- Arrow keys or `h`, `j`, `k`, `l` move the cursor.
-- `Tab` previews and cycles through legal folds and brushes.
-- `Enter` confirms the selected action. With no action selected, it opens and
-  checks the paper.
+- An available fold or brush is ready as soon as the paper opens. `Enter` uses it.
+- Arrow keys or `h`, `j`, `k`, `l` change a ready fold or move the brush cursor.
+- Filled `●` marks placed ink; `◉` means the cursor is resting on ink. In ASCII
+  mode, `*` is placed ink, `@` is the dry cursor, and `&` is the cursor on ink.
+- `Tab` moves through folds, brushes, and Open paper. `f` and `b` jump straight
+  to the fold and brush tools. `Esc` cancels a tool and readies Open paper.
+- Opening compares every cell. `?` marks missing ink and `!` marks extra ink.
+  The reference is the expected fold and stroke count, not a requirement for
+  solving the paper.
+- `v` replays a saved solution from fresh paper. `Enter` or Right advances one
+  action, Left rewinds, and one final step opens the paper for comparison.
 - `Space` previews the ink on the unfolded sheet.
-- `u` undoes, `r` resets, `?` opens help, and `q` leaves.
+- `u` undoes, `r` resets, `?` opens a short tool guide, and `q` leaves.
 
 Bindings, color use, glyph mode, and motion can be changed inside terminal
 settings. The minimum interactive terminal is 60 columns by 20 rows. Smaller

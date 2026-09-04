@@ -18,10 +18,6 @@ brushes = [
 fold_budget = 0
 stroke_budget = 1
 par = { folds = 0, strokes = 1 }
-tutorial_cues = [
-  "Choose the vertical line and start at row 1, column 3.",
-  "Open the paper after the stroke.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

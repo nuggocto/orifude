@@ -22,12 +22,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 1
 par = { folds = 2, strokes = 1 }
-tutorial_cues = [
-  "Choose a horizontal fold toward the lower half.",
-  "Choose a vertical fold toward the right half.",
-  "Mark the occupied corner of the folded quarter.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

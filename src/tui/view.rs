@@ -2,19 +2,21 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
 
 use crate::domain::attempt::Attempt;
-use crate::domain::paper::{Coordinate, FoldDirection, InkPattern, PaperAction};
+use crate::domain::paper::{Coordinate, FoldDirection, InkPattern, PaperAction, Row};
 use crate::storage::{ColorMode, GlyphMode, KeyBindings};
 
-use super::app::{App, Screen, action_label, key_label};
+use super::app::{App, Overlay, Screen, action_label, key_label};
 use super::components::{
-    BranchChoices, BranchGrowth, CompletionCourier, DialogLayer, Paper, StatusBar, TerminalMark,
+    BRANCH_CARD_WIDTH, BranchChoices, BranchGrowth, CompletionCourier, DialogLayer, Paper,
+    StatusBar, TerminalMark, courier_art,
 };
-use super::layout::{LayoutMode, MINIMUM_HEIGHT, MINIMUM_WIDTH, ShellLayout};
-use super::session::{Draft, PlaySession, PlaySource, brush_label, fold_label};
+use super::layout::{LayoutMode, MINIMUM_HEIGHT, MINIMUM_WIDTH, ShellLayout, centered};
+use super::session::{Draft, PlaySession, PlaySource, fold_label};
 use super::style::StyleProfile;
 use super::text::SafeText;
 
@@ -28,11 +30,7 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
 
     let shell = ShellLayout::new(area, mode).expect("interactive layout has shell regions");
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("ORIFUDE", profile.title()),
-            Span::styled("  folding and ink, kept offline", StyleProfile::muted()),
-        ]))
-        .alignment(Alignment::Center),
+        Paragraph::new(Line::styled("ORIFUDE", profile.title())).alignment(Alignment::Center),
         shell.title,
     );
     let content = content_area(shell);
@@ -54,13 +52,13 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
                 "Home | Journey {completed}/{} | Saved {saved}",
                 app.journey().len()
             );
-            let title = if detailed_title.chars().count().saturating_add(2)
-                <= usize::from(shell.branch.width)
-            {
-                detailed_title
-            } else {
-                format!("Home | Journey {completed}/{}", app.journey().len())
-            };
+            let card_width = shell.branch.width.min(BRANCH_CARD_WIDTH);
+            let title =
+                if detailed_title.chars().count().saturating_add(2) <= usize::from(card_width) {
+                    detailed_title
+                } else {
+                    format!("Home | Journey {completed}/{}", app.journey().len())
+                };
             BranchChoices::render(frame, shell.branch, app.selection(), &title, profile);
         }
         Screen::Journey => render_journey(frame, content, app, profile),
@@ -87,7 +85,9 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
     let status = status_text(app, profile.glyph_mode(), shell.status.width);
     StatusBar::render(frame, shell.status, app.focused(), &status);
     if let Some(overlay) = app.overlay() {
-        let overlay_area = if mode == LayoutMode::Preferred {
+        let overlay_area = if app.screen() == Screen::Play && matches!(overlay, Overlay::Help(_)) {
+            content
+        } else if mode == LayoutMode::Preferred {
             shell.mark
         } else {
             content
@@ -104,29 +104,29 @@ fn render_capabilities(frame: &mut Frame<'_>, area: Rect, profile: StyleProfile)
         vec![
             Line::styled("The paper is ready.", profile.title()),
             Line::from(""),
-            Line::from("Match the opened paper to the target."),
+            Line::from("Match the paper to the shown pattern."),
             Line::from(""),
-            Line::from("1  Tab previews the fold. + shows the side that will move."),
-            Line::from("2  Enter folds. Arrow keys move the @ cursor."),
-            Line::from("3  Tab selects the brush. Enter places ink through the stack."),
-            Line::from("4  With no action selected, Enter opens and checks the paper."),
+            Line::from("1  An available tool is ready as soon as the paper arrives."),
+            Line::from("2  For a fold, + shows the moving side. Enter folds it."),
+            Line::from("3  Move @ with arrows. The brush inks every layer underneath."),
+            Line::from("4  Enter places ink. When the target matches, Enter opens the paper."),
             Line::from(""),
-            Line::from("The message below the controls gives the next move. ? opens help."),
+            Line::from("Tab changes tools. Esc readies Open paper. ? explains every tool."),
             Line::from(""),
             Line::styled("Enter starts the lesson. Esc leaves.", profile.paper()),
         ]
     } else {
         vec![
             Line::styled("The paper is ready.", profile.title()),
-            Line::from("Match the opened paper to the target."),
+            Line::from("Match the paper to the shown pattern."),
             Line::from(""),
-            Line::from("1  Tab previews the fold. + shows the moving side."),
-            Line::from("2  Enter folds. Arrows move the @ cursor."),
-            Line::from("3  Tab selects the brush. Enter places ink."),
-            Line::from("4  Enter again opens and checks the paper."),
+            Line::from("1  An available tool is already ready."),
+            Line::from("2  + shows a fold's moving side. Enter folds."),
+            Line::from("3  Arrows move @. Enter brushes every layer."),
+            Line::from("4  When the target matches, Enter opens the paper."),
             Line::from(""),
-            Line::from("The message below the controls gives the next move."),
-            Line::from("? opens help. u undoes. r resets."),
+            Line::from("Tab changes tools. Esc readies Open paper."),
+            Line::from("? explains the tools. u undoes. r resets."),
             Line::styled("Enter starts the lesson. Esc leaves.", profile.paper()),
         ]
     };
@@ -357,31 +357,31 @@ fn render_walkthrough(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
             None,
             None,
             None,
-            "The target is the opened sheet. The fresh paper has no ink yet.".to_owned(),
+            "The target is the opened sheet. The fresh paper starts flat and dry.".to_owned(),
         ),
         1 => (
             None,
             fold,
             None,
-            "The crease names the fold. Every + cell is on the side that moves.".to_owned(),
+            "Fold tool: every + cell crosses the named crease when you press Enter.".to_owned(),
         ),
         2 => (
             None,
             None,
             None,
-            "The production fold engine places the moving side on the folded paper.".to_owned(),
+            "The moving side settles on top of the other side, making a stack.".to_owned(),
         ),
         3 => (
             brush_cursor,
             None,
             None,
-            "The stack lists layers from bottom to top at the selected cell.".to_owned(),
+            "Move @ to inspect one stack. Its layers read from bottom to top.".to_owned(),
         ),
         4 => (
             brush_cursor,
             None,
             None,
-            "One brush mark passes through every layer in the selected stack.".to_owned(),
+            "Brush tool: a dot or line inks every layer inside its preview.".to_owned(),
         ),
         _ => {
             let result = attempt.result();
@@ -390,7 +390,7 @@ fn render_walkthrough(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
                 None,
                 Some(paper.puzzle().dimensions().cell_count()),
                 format!(
-                    "Unfold and compare: {} missing, {} extra.",
+                    "Open paper compares every cell: {} missing (?), {} extra (!).",
                     result.comparison().missing().len(),
                     result.comparison().extra().len()
                 ),
@@ -399,7 +399,7 @@ fn render_walkthrough(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
     };
     let regions = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(8), Constraint::Length(4)])
+        .constraints([Constraint::Min(6), Constraint::Length(6)])
         .split(area);
     render_attempt_boards(
         frame,
@@ -440,13 +440,7 @@ fn render_session(
     now: Instant,
     group_completion: Option<&crate::content::JourneyGroup>,
 ) {
-    let status_height = if area.width >= 80 {
-        7
-    } else if session.result().is_some() {
-        6
-    } else {
-        5
-    };
+    let status_height = if area.width >= 80 { 7 } else { 6 };
     let regions = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(6), Constraint::Length(status_height)])
@@ -459,6 +453,7 @@ fn render_session(
             session.puzzle(),
             &reveal.geometry,
             Some(session.cursor()),
+            session.comparison_row(),
             None,
             false,
             reveal
@@ -475,6 +470,7 @@ fn render_session(
             session.puzzle(),
             session.attempt(),
             Some(session.cursor()),
+            session.cursor().row(),
             session.preview_action(),
             session.unfolded_preview(),
             None,
@@ -490,12 +486,99 @@ fn render_session(
         .as_ref()
         .map(|reveal| (reveal.opened_folds, reveal.total_folds, reveal.complete));
     render_session_status(frame, regions[1], session, bindings, profile, reveal_state);
-    if reveal.as_ref().is_some_and(|reveal| reveal.complete)
-        && session.saved()
-        && let Some(group) = group_completion
-    {
-        CompletionCourier::render(frame, regions[0], group, profile);
+    if reveal.as_ref().is_some_and(|reveal| reveal.complete) && session.saved() {
+        if let Some(group) = group_completion {
+            CompletionCourier::render(frame, regions[0], group, profile);
+        } else if !matches!(session.source(), PlaySource::Keepsake) {
+            render_success_card(frame, regions[0], session, bindings, profile);
+        }
     }
+}
+
+fn render_success_card(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    session: &PlaySession,
+    bindings: KeyBindings,
+    profile: StyleProfile,
+) {
+    let result = session.result().expect("success card requires a result");
+    debug_assert!(result.is_success());
+    let score = result.score();
+    let (headline, detail) = if matches!(session.source(), PlaySource::Lesson) {
+        (
+            "Congratulations, your first paper matches.".to_owned(),
+            "The branch is ready for the journey.".to_owned(),
+        )
+    } else {
+        match (session.puzzle().par(), result.meets_par()) {
+            (Some(reference), Some(true)) => (
+                "Congratulations, the opened paper matches.".to_owned(),
+                format!(
+                    "Reference path found: {} and {}.",
+                    counted(reference.folds().get(), "fold"),
+                    counted(reference.strokes().get(), "stroke")
+                ),
+            ),
+            (Some(reference), Some(false)) => (
+                "Congratulations, you found the pattern.".to_owned(),
+                format!(
+                    "You used {} and {}; the reference is {} and {}.",
+                    counted(score.folds().get(), "fold"),
+                    counted(score.strokes().get(), "stroke"),
+                    counted(reference.folds().get(), "fold"),
+                    counted(reference.strokes().get(), "stroke")
+                ),
+            ),
+            (None, None) => (
+                "Congratulations, the opened paper matches.".to_owned(),
+                format!(
+                    "Solved with {} and {}.",
+                    counted(score.folds().get(), "fold"),
+                    counted(score.strokes().get(), "stroke")
+                ),
+            ),
+            (Some(_), None) | (None, Some(_)) => (
+                "Congratulations, the opened paper matches.".to_owned(),
+                "The reference score is unavailable.".to_owned(),
+            ),
+        }
+    };
+    let encouragement = if result.meets_par() == Some(false) {
+        "A shorter path is still hiding, but this one is safely yours."
+    } else {
+        "Your keepsake is saved safely."
+    };
+    let separator = match profile.glyph_mode() {
+        GlyphMode::Unicode => " · ",
+        GlyphMode::Ascii => " | ",
+    };
+    let controls = if matches!(session.source(), PlaySource::Lesson) {
+        format!(
+            "Enter returns to the branch{separator}{} retries",
+            bindings.reset
+        )
+    } else {
+        format!(
+            "Enter back{separator}{} retry{separator}v replay{separator}x keepsake",
+            bindings.reset,
+        )
+    };
+    let preferred_height = if area.width >= 74 { 7 } else { 9 };
+    let height = area.height.min(preferred_height);
+    let card = centered(area, 74, height);
+    frame.render_widget(Clear, card);
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::styled(headline, profile.title()).alignment(Alignment::Center),
+            Line::from(detail).alignment(Alignment::Center),
+            Line::styled(encouragement, profile.paper()).alignment(Alignment::Center),
+            Line::styled(controls, StyleProfile::muted()).alignment(Alignment::Center),
+        ])
+        .block(Paper::block("Paper complete", profile))
+        .wrap(Wrap { trim: true }),
+        card,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -505,6 +588,7 @@ fn render_session_boards(
     puzzle: &crate::domain::puzzle::Puzzle,
     attempt: &Attempt,
     cursor: Option<Coordinate>,
+    focus_row: Row,
     preview: Option<PaperAction>,
     unfolded: bool,
     comparison_reveal: Option<usize>,
@@ -519,6 +603,7 @@ fn render_session_boards(
             puzzle,
             attempt,
             cursor,
+            focus_row,
             preview,
             unfolded,
             comparison_reveal,
@@ -568,6 +653,7 @@ fn render_compact_boards(
     puzzle: &crate::domain::puzzle::Puzzle,
     attempt: &Attempt,
     cursor: Option<Coordinate>,
+    focus_row: Row,
     preview: Option<PaperAction>,
     unfolded: bool,
     comparison_reveal: Option<usize>,
@@ -579,13 +665,13 @@ fn render_compact_boards(
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(72), Constraint::Percentage(28)])
         .split(area);
-    let focus_row = cursor.map_or(0, |coordinate| coordinate.row().get());
+    let focus_row = focus_row.get();
     if target_visible {
         render_grid_window(
             frame,
             regions[0],
-            "TARGET [reference]",
-            target_grid(puzzle),
+            "PATTERN TO MATCH",
+            target_grid(puzzle, profile),
             focus_row,
             true,
             profile,
@@ -594,12 +680,15 @@ fn render_compact_boards(
         let (title, grid) = if let Some(revealed) = comparison_reveal {
             (
                 "OPENED COMPARISON",
-                comparison_grid(attempt, puzzle, ink, revealed),
+                comparison_grid(attempt, puzzle, ink, revealed, profile),
             )
         } else if unfolded {
-            ("UNFOLDED PREVIEW", unfolded_grid(attempt, ink))
+            ("UNFOLDED PREVIEW", unfolded_grid(attempt, ink, profile))
         } else {
-            ("FOLDED PAPER", folded_grid(attempt, cursor, preview, ink))
+            (
+                "FOLDED PAPER",
+                folded_grid(attempt, cursor, preview, ink, profile),
+            )
         };
         render_grid_window(frame, regions[0], title, grid, focus_row, true, profile);
     }
@@ -628,15 +717,15 @@ fn render_attempt_boards(
         ])
         .split(area);
     let target_title = if regions[0].width >= 24 {
-        "Target [reference]"
+        "Pattern to match"
     } else {
-        "Target [ref]"
+        "Goal"
     };
     render_grid(
         frame,
         regions[0],
         target_title,
-        target_grid(puzzle),
+        target_grid(puzzle, profile),
         false,
         profile,
     );
@@ -665,11 +754,11 @@ fn render_attempt_boards(
         "Folded paper"
     };
     let grid = if let Some(revealed) = comparison_reveal {
-        comparison_grid(attempt, puzzle, ink, revealed)
+        comparison_grid(attempt, puzzle, ink, revealed, profile)
     } else if unfolded {
-        unfolded_grid(attempt, ink)
+        unfolded_grid(attempt, ink, profile)
     } else {
-        folded_grid(attempt, cursor, preview, ink)
+        folded_grid(attempt, cursor, preview, ink, profile)
     };
     render_grid(frame, regions[1], title, grid, active, profile);
     render_stack(frame, regions[2], attempt, cursor, preview, ink, profile);
@@ -683,12 +772,11 @@ fn render_lesson_coach(
     bindings: KeyBindings,
     profile: StyleProfile,
 ) {
-    const SQUIRREL_WIDTH: u16 = 8;
+    const SQUIRREL_WIDTH: u16 = 10;
     const GAP_WIDTH: u16 = 1;
-    const MINIMUM_BUBBLE_WIDTH: u16 = 21;
-    const MINIMUM_COACH_HEIGHT: u16 = 5;
+    const MINIMUM_BUBBLE_WIDTH: u16 = 18;
+    const MINIMUM_COACH_HEIGHT: u16 = 7;
     const COACH_HEIGHT: u16 = 7;
-    const SQUIRREL: [&str; 4] = ["  /)_/)", " ( o.o)", " /|_ _|", "(_/ \\__)"];
 
     let inner_width = target_area.width.saturating_sub(2);
     let grid_bottom = target_area
@@ -720,9 +808,14 @@ fn render_lesson_coach(
         ])
         .split(coach_area);
     frame.render_widget(
-        Paragraph::new(SQUIRREL.into_iter().map(Line::from).collect::<Vec<_>>())
-            .style(profile.paper())
-            .alignment(Alignment::Center),
+        Paragraph::new(
+            courier_art(profile.glyph_mode())
+                .iter()
+                .map(|line| Line::from(*line))
+                .collect::<Vec<_>>(),
+        )
+        .style(profile.paper())
+        .alignment(Alignment::Center),
         regions[0],
     );
     let pointer = Rect::new(
@@ -745,11 +838,13 @@ fn lesson_coach_message(session: &PlaySession, bindings: KeyBindings) -> String 
     let stroke_count = session.attempt().stroke_count().get();
     match (fold_count, stroke_count) {
         (0, 0) => match session.draft() {
-            Some(Draft::Fold(_)) => "The + side will move.\nPress Enter to fold.".to_owned(),
+            Some(Draft::Fold(_)) => {
+                "The fold tool is ready.\nPress Enter to fold the + side.".to_owned()
+            }
             Some(Draft::Brush(_)) => {
                 "The fold comes first.\nPress Shift+Tab to go back.".to_owned()
             }
-            None => "Press Tab first.\nIt previews the fold.".to_owned(),
+            None => "Open comes later.\nPress Tab to ready the fold.".to_owned(),
         },
         (0, _) => format!(
             "The ink came before the fold.\nPress {} to undo it.",
@@ -771,12 +866,12 @@ fn lesson_coach_message(session: &PlaySession, bindings: KeyBindings) -> String 
             }
             match session.draft() {
                 Some(Draft::Brush(_)) => {
-                    "One dot marks both layers.\nPress Enter to place it.".to_owned()
+                    "The dot brush is ready.\nEnter inks both layers.".to_owned()
                 }
                 Some(Draft::Fold(_)) => {
-                    "That fold is done.\nPress Esc, then Tab for the dot.".to_owned()
+                    "That fold is done.\nPress Tab for the dot brush.".to_owned()
                 }
-                None => "You found the stack.\nPress Tab for the dot.".to_owned(),
+                None => "You found the stack.\nPress Tab for the dot brush.".to_owned(),
             }
         }
         (_, _) if session.attempt().result().is_success() => {
@@ -805,18 +900,17 @@ fn render_grid(
     frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
-    rows: Vec<String>,
+    rows: Vec<Line<'static>>,
     active: bool,
     profile: StyleProfile,
 ) {
-    let lines = rows.into_iter().map(Line::from).collect::<Vec<_>>();
     let block = if active {
         Paper::highlighted_block(title, profile)
     } else {
         Paper::block(title, profile)
     };
     frame.render_widget(
-        Paragraph::new(lines)
+        Paragraph::new(rows)
             .block(block)
             .alignment(Alignment::Center),
         area,
@@ -827,7 +921,7 @@ fn render_grid_window(
     frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
-    rows: Vec<String>,
+    rows: Vec<Line<'static>>,
     focus_row: u8,
     active: bool,
     profile: StyleProfile,
@@ -854,38 +948,49 @@ fn render_grid_window(
     );
 }
 
-fn target_grid(puzzle: &crate::domain::puzzle::Puzzle) -> Vec<String> {
+fn target_grid(
+    puzzle: &crate::domain::puzzle::Puzzle,
+    profile: StyleProfile,
+) -> Vec<Line<'static>> {
     let dimensions = puzzle.dimensions();
     (0..dimensions.height().get())
         .map(|row| {
-            (0..dimensions.width().get())
-                .map(|column| {
-                    let coordinate = dimensions.coordinate(row, column).expect("grid coordinate");
-                    let id = dimensions.cell_id(coordinate).expect("grid identity");
-                    if puzzle.target().contains(id) {
-                        '#'
-                    } else {
-                        '.'
-                    }
-                })
-                .flat_map(|symbol| [symbol, ' '])
-                .collect()
+            grid_line(
+                (0..dimensions.width().get())
+                    .map(|column| {
+                        let coordinate =
+                            dimensions.coordinate(row, column).expect("grid coordinate");
+                        let id = dimensions.cell_id(coordinate).expect("grid identity");
+                        if puzzle.target().contains(id) {
+                            ('#', profile.paper())
+                        } else {
+                            ('.', StyleProfile::muted())
+                        }
+                    })
+                    .collect(),
+            )
         })
         .collect()
 }
 
-fn unfolded_grid(attempt: &Attempt, ink: InkPattern) -> Vec<String> {
+fn unfolded_grid(attempt: &Attempt, ink: InkPattern, profile: StyleProfile) -> Vec<Line<'static>> {
     let dimensions = attempt.dimensions();
     (0..dimensions.height().get())
         .map(|row| {
-            (0..dimensions.width().get())
-                .map(|column| {
-                    let coordinate = dimensions.coordinate(row, column).expect("grid coordinate");
-                    let id = dimensions.cell_id(coordinate).expect("grid identity");
-                    if ink.contains(id) { '*' } else { '.' }
-                })
-                .flat_map(|symbol| [symbol, ' '])
-                .collect()
+            grid_line(
+                (0..dimensions.width().get())
+                    .map(|column| {
+                        let coordinate =
+                            dimensions.coordinate(row, column).expect("grid coordinate");
+                        let id = dimensions.cell_id(coordinate).expect("grid identity");
+                        if ink.contains(id) {
+                            (ink_symbol(profile.glyph_mode()), profile.ink_mark())
+                        } else {
+                            ('.', StyleProfile::muted())
+                        }
+                    })
+                    .collect(),
+            )
         })
         .collect()
 }
@@ -895,26 +1000,29 @@ fn comparison_grid(
     puzzle: &crate::domain::puzzle::Puzzle,
     ink: InkPattern,
     revealed: usize,
-) -> Vec<String> {
+    profile: StyleProfile,
+) -> Vec<Line<'static>> {
     let dimensions = attempt.dimensions();
     (0..dimensions.height().get())
         .map(|row| {
-            (0..dimensions.width().get())
-                .map(|column| {
-                    let coordinate = dimensions.coordinate(row, column).expect("grid coordinate");
-                    let id = dimensions.cell_id(coordinate).expect("grid identity");
-                    if id.index() >= revealed {
-                        return ' ';
-                    }
-                    match (puzzle.target().contains(id), ink.contains(id)) {
-                        (true, true) => '#',
-                        (true, false) => '?',
-                        (false, true) => '!',
-                        (false, false) => '.',
-                    }
-                })
-                .flat_map(|symbol| [symbol, ' '])
-                .collect()
+            grid_line(
+                (0..dimensions.width().get())
+                    .map(|column| {
+                        let coordinate =
+                            dimensions.coordinate(row, column).expect("grid coordinate");
+                        let id = dimensions.cell_id(coordinate).expect("grid identity");
+                        if id.index() >= revealed {
+                            return (' ', Style::default());
+                        }
+                        match (puzzle.target().contains(id), ink.contains(id)) {
+                            (true, true) => ('#', profile.ink_mark()),
+                            (true, false) => ('?', profile.error()),
+                            (false, true) => ('!', profile.error()),
+                            (false, false) => ('.', StyleProfile::muted()),
+                        }
+                    })
+                    .collect(),
+            )
         })
         .collect()
 }
@@ -924,45 +1032,74 @@ fn folded_grid(
     cursor: Option<Coordinate>,
     preview: Option<PaperAction>,
     ink_pattern: InkPattern,
-) -> Vec<String> {
+    profile: StyleProfile,
+) -> Vec<Line<'static>> {
     let dimensions = attempt.dimensions();
     let footprint = preview_footprint(preview, dimensions);
     (0..dimensions.height().get())
         .map(|row| {
-            (0..dimensions.width().get())
-                .map(|column| {
-                    let coordinate = dimensions.coordinate(row, column).expect("grid coordinate");
-                    if cursor == Some(coordinate) {
-                        return '@';
-                    }
-                    if footprint.contains(&coordinate) {
-                        return '+';
-                    }
-                    let mut count = 0_u8;
-                    let mut ink = false;
-                    for id in attempt.cell_ids() {
-                        let physical = attempt
-                            .physical_cell(id)
-                            .expect("attempt exposes every physical cell");
-                        if physical.coordinate() == coordinate {
-                            count = count.saturating_add(1);
-                            ink |= ink_pattern.contains(id);
+            grid_line(
+                (0..dimensions.width().get())
+                    .map(|column| {
+                        let coordinate =
+                            dimensions.coordinate(row, column).expect("grid coordinate");
+                        let mut count = 0_u8;
+                        let mut ink = false;
+                        for id in attempt.cell_ids() {
+                            let physical = attempt
+                                .physical_cell(id)
+                                .expect("attempt exposes every physical cell");
+                            if physical.coordinate() == coordinate {
+                                count = count.saturating_add(1);
+                                ink |= ink_pattern.contains(id);
+                            }
                         }
-                    }
-                    if ink {
-                        '*'
-                    } else if count == 0 {
-                        ' '
-                    } else if count == 1 {
-                        'o'
-                    } else {
-                        char::from_digit(u32::from(count.min(9)), 10).unwrap_or('9')
-                    }
-                })
-                .flat_map(|symbol| [symbol, ' '])
-                .collect()
+                        if cursor == Some(coordinate) && ink {
+                            (ink_cursor_symbol(profile.glyph_mode()), profile.ink_mark())
+                        } else if cursor == Some(coordinate) {
+                            ('@', profile.active())
+                        } else if footprint.contains(&coordinate) {
+                            ('+', profile.paper())
+                        } else if ink {
+                            (ink_symbol(profile.glyph_mode()), profile.ink_mark())
+                        } else if count == 0 {
+                            (' ', Style::default())
+                        } else if count == 1 {
+                            ('o', profile.ink())
+                        } else {
+                            (
+                                char::from_digit(u32::from(count.min(9)), 10).unwrap_or('9'),
+                                profile.ink(),
+                            )
+                        }
+                    })
+                    .collect(),
+            )
         })
         .collect()
+}
+
+fn grid_line(cells: Vec<(char, Style)>) -> Line<'static> {
+    Line::from(
+        cells
+            .into_iter()
+            .flat_map(|(symbol, style)| [Span::styled(symbol.to_string(), style), Span::raw(" ")])
+            .collect::<Vec<_>>(),
+    )
+}
+
+const fn ink_symbol(glyph_mode: GlyphMode) -> char {
+    match glyph_mode {
+        GlyphMode::Unicode => '●',
+        GlyphMode::Ascii => '*',
+    }
+}
+
+const fn ink_cursor_symbol(glyph_mode: GlyphMode) -> char {
+    match glyph_mode {
+        GlyphMode::Unicode => '◉',
+        GlyphMode::Ascii => '&',
+    }
 }
 
 fn preview_footprint(
@@ -1087,7 +1224,7 @@ fn render_session_status(
             profile.title(),
         ),
         Span::from(format!(
-            "  {}F/{}  {}S/{}",
+            "  Folds {}/{}  Ink {}/{}",
             session.attempt().fold_count().get(),
             session.puzzle().fold_budget().get(),
             session.attempt().stroke_count().get(),
@@ -1095,13 +1232,15 @@ fn render_session_status(
         )),
     ])];
     if session.result().is_some() {
-        lines.extend(result_status_lines(session, bindings, profile, reveal));
+        lines.extend(result_status_lines(
+            session, bindings, profile, reveal, area.width,
+        ));
     } else {
         lines.extend(active_status_lines(session, bindings, profile, area.width));
     }
     frame.render_widget(
         Paragraph::new(lines)
-            .block(Paper::block("Paper controls", profile))
+            .block(Paper::block("Paper", profile))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -1112,6 +1251,7 @@ fn result_status_lines(
     bindings: KeyBindings,
     profile: StyleProfile,
     reveal: Option<(usize, usize, bool)>,
+    width: u16,
 ) -> Vec<Line<'static>> {
     if let Some((opened, total, false)) = reveal {
         return vec![
@@ -1138,7 +1278,7 @@ fn result_status_lines(
     if !result.is_success() {
         lines.push(Line::styled(
             format!(
-                "Arrows inspect rows; Enter returns to the attempt; {} starts over.",
+                "Up/Down inspect rows; Enter returns to the attempt; {} starts over.",
                 bindings.reset
             ),
             profile.error(),
@@ -1153,21 +1293,70 @@ fn result_status_lines(
             "Lesson complete. Enter returns to the home branch.",
             profile.paper(),
         ));
-    } else {
-        let par = match result.meets_par() {
-            Some(true) => " Par met.",
-            Some(false) => " Solved above par.",
-            None => "",
-        };
+    } else if matches!(session.source(), super::session::PlaySource::Keepsake) {
         lines.push(Line::styled(
-            format!(
-                "Saved safely.{par}  Enter returns | {} retry | v replay | x text keepsake",
-                bindings.reset
-            ),
+            "Replay complete. This saved paper matches exactly.",
+            profile.paper(),
+        ));
+    } else {
+        lines.push(Line::styled(
+            saved_score_line(session, result, width),
             profile.paper(),
         ));
     }
     lines
+}
+
+fn saved_score_line(
+    session: &PlaySession,
+    result: crate::domain::score::AttemptResult,
+    width: u16,
+) -> String {
+    let score = result.score();
+    match (session.puzzle().par(), result.meets_par()) {
+        (Some(reference), Some(true)) if width >= 80 => format!(
+            "Saved. You matched the reference: {}, {}.",
+            counted(reference.folds().get(), "fold"),
+            counted(reference.strokes().get(), "stroke")
+        ),
+        (Some(reference), Some(true)) => format!(
+            "Saved. Reference matched: {}F/{}S.",
+            reference.folds().get(),
+            reference.strokes().get()
+        ),
+        (Some(reference), Some(false)) if width >= 80 => format!(
+            "Saved. You used {}, {}; reference: {}, {}.",
+            counted(score.folds().get(), "fold"),
+            counted(score.strokes().get(), "stroke"),
+            counted(reference.folds().get(), "fold"),
+            counted(reference.strokes().get(), "stroke")
+        ),
+        (Some(reference), Some(false)) => format!(
+            "Saved. Used {}F/{}S; reference {}F/{}S.",
+            score.folds().get(),
+            score.strokes().get(),
+            reference.folds().get(),
+            reference.strokes().get()
+        ),
+        (None, None) if width >= 80 => format!(
+            "Saved in {} and {}.",
+            counted(score.folds().get(), "fold"),
+            counted(score.strokes().get(), "stroke")
+        ),
+        (None, None) => format!(
+            "Saved in {}F/{}S.",
+            score.folds().get(),
+            score.strokes().get()
+        ),
+        (Some(_), None) | (None, Some(_)) => {
+            "Saved. The reference score is unavailable.".to_owned()
+        }
+    }
+}
+
+fn counted(count: u8, noun: &str) -> String {
+    let suffix = if count == 1 { "" } else { "s" };
+    format!("{count} {noun}{suffix}")
 }
 
 fn active_status_lines(
@@ -1176,60 +1365,153 @@ fn active_status_lines(
     profile: StyleProfile,
     width: u16,
 ) -> Vec<Line<'static>> {
-    let draft = match session.draft() {
-        Some(Draft::Fold(index)) => session
-            .puzzle()
-            .allowed_folds()
-            .get(index)
-            .copied()
-            .map_or_else(|| "fold unavailable".to_owned(), fold_label),
-        Some(Draft::Brush(index)) => session
-            .puzzle()
-            .allowed_brushes()
-            .get(index)
-            .copied()
-            .map_or_else(|| "brush unavailable".to_owned(), brush_label),
-        None => "none selected".to_owned(),
-    };
+    if let Some(progress) = session.replay_progress() {
+        let line = session.action_feedback().map_or_else(
+            || {
+                if progress.total_actions == 0 {
+                    return "Replay ready: this paper has no recorded actions. Enter opens it."
+                        .to_owned();
+                }
+                format!(
+                    "Replay ready: fresh paper. Enter or Right shows step 1 of {}.",
+                    progress.total_actions
+                )
+            },
+            str::to_owned,
+        );
+        return vec![Line::styled(line, profile.paper())];
+    }
+    let ready = ready_tool_line(session, width < 80, profile.glyph_mode());
     let history = action_history(session.attempt());
     let cue_limit = if width >= 80 {
         120
     } else {
         usize::from(width.saturating_sub(4))
     };
-    let cue = session
+    let authored_cue = session
         .cues()
-        .get(usize::from(session.attempt().action_count().get()))
-        .map_or_else(
-            || SafeText::external_display(&session.description(), cue_limit, profile.glyph_mode()),
-            |cue| SafeText::external_display(cue, cue_limit, profile.glyph_mode()),
-        );
-    if width >= 80 {
-        vec![
-            Line::from(format!("Paper action: {draft}")),
-            Line::from(history),
-            Line::styled(
-                session_keys(profile.glyph_mode(), bindings),
-                StyleProfile::muted(),
-            ),
-            Line::styled(cue.as_str().to_owned(), profile.paper()),
-        ]
+        .get(usize::from(session.attempt().action_count().get()));
+    let guidance = if matches!(session.source(), PlaySource::Lesson) {
+        let message = lesson_coach_message(session, bindings).replace('\n', " ");
+        Some((
+            "Guide",
+            SafeText::external_display(&message, cue_limit, profile.glyph_mode()),
+        ))
+    } else if let Some(cue) = authored_cue {
+        let label = if matches!(session.source(), PlaySource::Journey(0)) {
+            "Guide"
+        } else {
+            "Hint"
+        };
+        Some((
+            label,
+            SafeText::external_display(cue, cue_limit, profile.glyph_mode()),
+        ))
+    } else if matches!(session.source(), PlaySource::Journey(_)) {
+        session.attempt().hints_used().then(|| {
+            (
+                "Hint",
+                SafeText::external_display(&session.description(), cue_limit, profile.glyph_mode()),
+            )
+        })
+    } else if session.description().is_empty() {
+        None
     } else {
-        vec![
-            Line::from(if session.draft().is_some() {
-                format!("Action: {draft} | {history}")
-            } else {
-                history
-            }),
-            Line::styled(cue.as_str().to_owned(), profile.paper()),
-        ]
+        Some((
+            "Note",
+            SafeText::external_display(&session.description(), cue_limit, profile.glyph_mode()),
+        ))
+    };
+    let guidance = guidance.map(|(label, text)| format!("{label}: {}", text.as_str()));
+    if width >= 80 {
+        let mut lines = vec![Line::from(ready)];
+        if let Some(feedback) = session.action_feedback() {
+            lines.push(Line::styled(
+                format!("Last step: {feedback}"),
+                profile.paper(),
+            ));
+        }
+        if let Some(history) = history {
+            lines.push(Line::styled(history, StyleProfile::muted()));
+        }
+        if let Some(guidance) = guidance {
+            lines.push(Line::styled(guidance, profile.paper()));
+        }
+        lines
+    } else {
+        let mut lines = vec![Line::from(
+            session.action_feedback().map_or(ready, str::to_owned),
+        )];
+        if let Some(guidance) = guidance {
+            lines.push(Line::styled(guidance, profile.paper()));
+        }
+        lines
     }
 }
 
-fn action_history(attempt: &Attempt) -> String {
+fn ready_tool_line(session: &PlaySession, compact: bool, glyphs: GlyphMode) -> String {
+    let separator = if glyphs == GlyphMode::Unicode {
+        " · "
+    } else {
+        " | "
+    };
+    match session.draft() {
+        Some(Draft::Fold(index)) => session
+            .puzzle()
+            .allowed_folds()
+            .get(index)
+            .copied()
+            .map_or_else(
+                || "Fold unavailable. Tab chooses another tool.".to_owned(),
+                |fold| {
+                    if compact {
+                        format!(
+                            "Ready: Fold {}, crease {}{separator}Enter folds",
+                            fold.direction(),
+                            fold.crease()
+                        )
+                    } else {
+                        format!(
+                            "Ready: Fold {}, crease {}{separator}+ moves{separator}Enter folds",
+                            fold.direction(),
+                            fold.crease()
+                        )
+                    }
+                },
+            ),
+        Some(Draft::Brush(index)) => session
+            .puzzle()
+            .allowed_brushes()
+            .get(index)
+            .copied()
+            .map_or_else(
+                || "Brush unavailable. Tab chooses another tool.".to_owned(),
+                |brush| match (brush, compact) {
+                    (crate::domain::paper::BrushRule::Dot, true) => {
+                        format!("Ready: Dot brush{separator}Enter inks")
+                    }
+                    (crate::domain::paper::BrushRule::Dot, false) => {
+                        format!(
+                            "Ready: Dot brush{separator}Arrows move @{separator}Enter inks every layer"
+                        )
+                    }
+                    (crate::domain::paper::BrushRule::Line { axis, length }, true) => {
+                        format!("Ready: {length}-cell {axis} line{separator}Enter inks")
+                    }
+                    (crate::domain::paper::BrushRule::Line { axis, length }, false) => format!(
+                        "Ready: {length}-cell {axis} line{separator}Arrows move @{separator}Enter inks its preview"
+                    ),
+                },
+            ),
+        None if compact => format!("Ready: Open paper{separator}Enter compares"),
+        None => format!("Ready: Open paper{separator}Enter unfolds and compares"),
+    }
+}
+
+fn action_history(attempt: &Attempt) -> Option<String> {
     let actions = attempt.actions().collect::<Vec<_>>();
     if actions.is_empty() {
-        return "Actions: none".to_owned();
+        return None;
     }
     let start = actions.len().saturating_sub(3);
     let labels = actions[start..]
@@ -1239,25 +1521,7 @@ fn action_history(attempt: &Attempt) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     let prefix = if start > 0 { "... " } else { "" };
-    format!("Actions: {prefix}{labels}")
-}
-
-fn session_keys(glyphs: GlyphMode, bindings: KeyBindings) -> String {
-    let separator = if glyphs == GlyphMode::Unicode {
-        " · "
-    } else {
-        " | "
-    };
-    [
-        format!("{} fold", bindings.fold),
-        format!("{} brush", bindings.brush),
-        "Tab next action".to_owned(),
-        "Enter confirm/open".to_owned(),
-        format!("{} undo", bindings.undo),
-        format!("{} reset", bindings.reset),
-        format!("{} preview", key_label(bindings.preview)),
-    ]
-    .join(separator)
+    Some(format!("Made: {prefix}{labels}"))
 }
 
 fn status_text(app: &App, glyphs: GlyphMode, width: u16) -> String {
@@ -1272,20 +1536,7 @@ fn status_text(app: &App, glyphs: GlyphMode, width: u16) -> String {
             "Enter start{separator}{} help{separator}{} quit",
             bindings.help, bindings.quit
         ),
-        Screen::Play if width < 80 => format!(
-            "@ move{separator}Tab action{separator}Enter{separator}t {}{separator}{} help{separator}{} quit",
-            if app.session().is_some_and(PlaySession::target_visible) {
-                "paper"
-            } else {
-                "target"
-            },
-            bindings.help,
-            bindings.quit
-        ),
-        Screen::Play => format!(
-            "Arrows move @{separator}Tab action{separator}Enter confirm/open{separator}{} help{separator}{} quit",
-            bindings.help, bindings.quit
-        ),
+        Screen::Play => play_status_text(app, separator, width),
         Screen::HowTo => format!(
             "Left/Right step{separator}Enter next{separator}Esc back{separator}{} help",
             bindings.help
@@ -1303,6 +1554,139 @@ fn status_text(app: &App, glyphs: GlyphMode, width: u16) -> String {
             "Up/Down move{separator}Enter open{separator}{} help{separator}{} quit",
             bindings.help, bindings.quit
         ),
+    }
+}
+
+fn play_status_text(app: &App, separator: &str, width: u16) -> String {
+    let bindings = app.settings().bindings;
+    let Some(session) = app.session() else {
+        return format!("{} help{separator}{} quit", bindings.help, bindings.quit);
+    };
+    if session.replay_progress().is_some() {
+        return replay_status_text(session, bindings, separator, width);
+    }
+    if let Some(result) = session.result() {
+        if !result.is_success() {
+            return if width >= 70 {
+                format!(
+                    "Up/Down inspect{separator}Enter retry{separator}{} reset{separator}{} help{separator}{} quit",
+                    bindings.reset, bindings.help, bindings.quit
+                )
+            } else {
+                format!(
+                    "Up/Down{separator}Enter retry{separator}{} reset{separator}{}{separator}{} quit",
+                    bindings.reset, bindings.help, bindings.quit
+                )
+            };
+        }
+        if !session.saved() {
+            return format!(
+                "Saving{separator}{} help{separator}{} quit",
+                bindings.help, bindings.quit
+            );
+        }
+        if matches!(session.source(), PlaySource::Lesson) {
+            return format!(
+                "Enter branch{separator}{} retry{separator}{} help{separator}{} quit",
+                bindings.reset, bindings.help, bindings.quit
+            );
+        }
+        return if width >= 70 {
+            format!(
+                "Enter back{separator}{} retry{separator}v replay{separator}x keepsake{separator}{} help{separator}{} quit",
+                bindings.reset, bindings.help, bindings.quit
+            )
+        } else {
+            format!(
+                "Enter back{separator}{} retry{separator}v{separator}x{separator}{}{separator}{} quit",
+                bindings.reset, bindings.help, bindings.quit
+            )
+        };
+    }
+    let draft = session.draft();
+    if width < 80 {
+        let target = if session.target_visible() {
+            "paper"
+        } else {
+            "target"
+        };
+        let controls = match (draft, width >= 70) {
+            (Some(Draft::Fold(_)), true) => {
+                format!("Arrows change fold{separator}Tab tool/open{separator}Enter fold")
+            }
+            (Some(Draft::Brush(_)), true) => {
+                format!("Arrows move @{separator}Tab tool/open{separator}Enter ink")
+            }
+            (None, true) => {
+                format!("Arrows inspect{separator}Tab tool/open{separator}Enter open")
+            }
+            (Some(Draft::Fold(_)), false) => {
+                format!("Arrows fold{separator}Tab{separator}Enter")
+            }
+            (Some(Draft::Brush(_)), false) => {
+                format!("Arrows @{separator}Tab{separator}Enter ink")
+            }
+            (None, false) => format!("@{separator}Tab tool{separator}Enter open"),
+        };
+        return format!(
+            "{controls}{separator}t {target}{separator}{} help{separator}{} quit",
+            bindings.help, bindings.quit
+        );
+    }
+    let controls = match draft {
+        Some(Draft::Fold(_)) => "Arrows change fold",
+        Some(Draft::Brush(_)) => "Arrows move @",
+        None => "Arrows inspect",
+    };
+    let enter = match draft {
+        Some(Draft::Fold(_)) => "Enter fold",
+        Some(Draft::Brush(_)) => "Enter ink",
+        None => "Enter open",
+    };
+    format!(
+        "{controls}{separator}Tab tool/open{separator}{enter}{separator}{} help{separator}{} quit",
+        bindings.help, bindings.quit
+    )
+}
+
+fn replay_status_text(
+    session: &PlaySession,
+    bindings: KeyBindings,
+    separator: &str,
+    width: u16,
+) -> String {
+    if session.result().is_some() {
+        return if width >= 80 {
+            format!(
+                "Left rewind{separator}Up/Down inspect{separator}Enter back{separator}{} restart{separator}x keepsake{separator}{} help{separator}{} quit",
+                bindings.reset, bindings.help, bindings.quit
+            )
+        } else {
+            format!(
+                "Left{separator}Up/Down{separator}Enter back{separator}{} restart{separator}{}{separator}{} quit",
+                bindings.reset, bindings.help, bindings.quit
+            )
+        };
+    }
+    if session
+        .replay_progress()
+        .is_some_and(|progress| progress.total_actions == 0)
+    {
+        return format!(
+            "Enter open{separator}{} restart{separator}{} help{separator}{} quit",
+            bindings.reset, bindings.help, bindings.quit
+        );
+    }
+    if width >= 70 {
+        format!(
+            "Left/Right step{separator}Enter next/open{separator}{} restart{separator}{} help{separator}{} quit",
+            bindings.reset, bindings.help, bindings.quit
+        )
+    } else {
+        format!(
+            "Left/Right{separator}Enter next{separator}{} restart{separator}{}{separator}{} quit",
+            bindings.reset, bindings.help, bindings.quit
+        )
     }
 }
 
@@ -1384,7 +1768,7 @@ mod tests {
 
     use super::*;
     use crate::generator::CalendarDate;
-    use crate::storage::{GlyphMode, ProgressPage, Settings};
+    use crate::storage::{GlyphMode, ProgressPage, PuzzleProgress, Settings};
     use crate::tui::style::ColorCapability;
 
     #[test]
@@ -1400,8 +1784,8 @@ mod tests {
                 .expect("view renders");
             if width >= MINIMUM_WIDTH && height >= MINIMUM_HEIGHT {
                 let text = rendered_text(&terminal);
-                assert!(text.contains("Match the opened paper to the target."));
-                assert!(text.contains("Tab previews the fold"));
+                assert!(text.contains("Match the paper to the shown pattern."));
+                assert!(text.contains("An available tool"));
                 assert!(text.contains("Enter starts the lesson"));
                 assert!(text.contains("Enter start"));
                 assert!(!text.contains("Up/Down move"));
@@ -1420,10 +1804,6 @@ mod tests {
             ),
             now,
         );
-        let cue_prefix = app.session().expect("lesson session").cues()[0]
-            .chars()
-            .take(24)
-            .collect::<String>();
         app.handle_key(
             crossterm::event::KeyEvent::new(
                 crossterm::event::KeyCode::Char('f'),
@@ -1438,15 +1818,15 @@ mod tests {
             .draw(|frame| render(frame, &app, profile, now))
             .expect("view renders");
         let text = rendered_text(&terminal);
-        assert!(text.contains("Target [reference]"));
+        assert!(text.contains("Pattern to match"));
         assert!(text.contains("FOLDED PAPER"));
         assert!(!text.contains("[ACTIVE]"));
         assert!(text.contains("Stack, bottom to top"));
         assert!(text.contains('+'));
         assert!(text.contains("Right at crease 2"));
-        assert!(text.contains(&cue_prefix));
+        assert!(text.contains("Guide: The fold tool is ready."));
         assert!(text.contains("Squirrel says"));
-        assert!(text.contains("Press Enter to fold."));
+        assert!(text.contains("Press Enter to fold the + side."));
     }
 
     #[test]
@@ -1457,11 +1837,8 @@ mod tests {
 
         let text = player_text(&app, now);
         assert!(text.contains("Squirrel says"));
-        assert!(text.contains("Press Tab first."));
+        assert!(text.contains("The fold tool is ready."));
         assert!(player_text_with_glyphs(&app, now, GlyphMode::Ascii).is_ascii());
-
-        press(&mut app, crossterm::event::KeyCode::Tab, now);
-        assert!(player_text(&app, now).contains("Press Enter to fold."));
 
         press(&mut app, crossterm::event::KeyCode::Enter, now);
         assert!(player_text(&app, now).contains("Move @ to row 2, column 3"));
@@ -1469,13 +1846,10 @@ mod tests {
         press(&mut app, crossterm::event::KeyCode::Down, now);
         press(&mut app, crossterm::event::KeyCode::Right, now);
         press(&mut app, crossterm::event::KeyCode::Right, now);
-        assert!(player_text(&app, now).contains("Press Tab for the dot."));
-
-        press(&mut app, crossterm::event::KeyCode::Tab, now);
-        assert!(player_text(&app, now).contains("One dot marks both layers."));
+        assert!(player_text(&app, now).contains("The dot brush is ready."));
 
         press(&mut app, crossterm::event::KeyCode::Enter, now);
-        assert!(player_text(&app, now).contains("Press Enter to open."));
+        assert!(player_text(&app, now).contains("Enter opens the paper."));
     }
 
     #[test]
@@ -1486,14 +1860,14 @@ mod tests {
 
         press(&mut app, crossterm::event::KeyCode::Char('b'), now);
         press(&mut app, crossterm::event::KeyCode::Enter, now);
-        assert!(player_text(&app, now).contains("The ink came before the fold."));
+        let text = player_text(&app, now);
+        assert!(text.contains("The ink came"));
+        assert!(text.contains("fold."));
 
         press(&mut app, crossterm::event::KeyCode::Char('u'), now);
-        press(&mut app, crossterm::event::KeyCode::Tab, now);
         press(&mut app, crossterm::event::KeyCode::Enter, now);
         press(&mut app, crossterm::event::KeyCode::Right, now);
         press(&mut app, crossterm::event::KeyCode::Right, now);
-        press(&mut app, crossterm::event::KeyCode::Tab, now);
         press(&mut app, crossterm::event::KeyCode::Enter, now);
         assert!(player_text(&app, now).contains("That dot missed the target."));
 
@@ -1538,6 +1912,39 @@ mod tests {
             .draw(|frame| render(frame, &app, profile, now))
             .expect("paper renders");
         assert!(rendered_text(&terminal).is_ascii());
+    }
+
+    #[test]
+    fn branch_card_keeps_the_saved_status_complete() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        };
+        let app = App::with_state(
+            settings,
+            ProgressPage {
+                entries: vec![PuzzleProgress {
+                    pack_id: "community-paper".into(),
+                    puzzle_id: "first".into(),
+                    attempt_count: 1,
+                    best_folds: 0,
+                    best_strokes: 1,
+                    best_replay_id: 1,
+                    updated_at_unix_seconds: 1,
+                }],
+                has_more: false,
+            },
+            Vec::new(),
+            vec![true; crate::content::journey().len()],
+            CalendarDate::new(2026, 9, 3).expect("valid date"),
+            1,
+            now,
+        );
+
+        let text = menu_text(&app, now, 100, 30);
+        assert!(text.contains("Home | Journey 40/40 | Saved yes"));
     }
 
     #[test]
@@ -1608,7 +2015,7 @@ mod tests {
     }
 
     #[test]
-    fn minimum_player_layout_keeps_history_and_the_active_cue_visible() {
+    fn minimum_player_layout_keeps_the_ready_tool_and_first_paper_cue_visible() {
         let now = Instant::now();
         let settings = Settings {
             lesson_complete: true,
@@ -1635,12 +2042,50 @@ mod tests {
             .draw(|frame| render(frame, &app, profile, now))
             .expect("minimum player renders");
         let text = rendered_text(&terminal);
-        assert!(text.contains("Actions:"));
+        assert!(text.contains("Ready: Dot brush"));
         assert!(text.contains(&cue_prefix));
+        assert!(!text.contains("Actions: none"));
         assert!(text.contains("PAPER"));
         assert!(!text.contains("[ACTIVE]"));
         assert!(text.contains("Low to high"));
         assert!(text.contains("q quit"));
+    }
+
+    #[test]
+    fn later_journey_papers_reveal_a_hint_only_after_a_missed_opening() {
+        let now = Instant::now();
+        let settings = Settings {
+            lesson_complete: true,
+            ..Settings::default()
+        };
+        let mut app = App::with_state(
+            settings,
+            ProgressPage {
+                entries: Vec::new(),
+                has_more: false,
+            },
+            Vec::new(),
+            vec![true; crate::content::journey().len()],
+            CalendarDate::new(2026, 9, 3).expect("valid date"),
+            1,
+            now,
+        );
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+        press(&mut app, crossterm::event::KeyCode::Down, now);
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+
+        let fresh = menu_text(&app, now, 80, 24);
+        assert!(!fresh.contains("The brush follows @; this paper stays flat."));
+        assert!(!fresh.contains("Clue:"));
+        assert!(!fresh.contains("Hint:"));
+
+        press(&mut app, crossterm::event::KeyCode::Esc, now);
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+        press(&mut app, crossterm::event::KeyCode::Enter, now);
+
+        let after_miss = menu_text(&app, now, 80, 24);
+        assert!(after_miss.contains("Hint: The brush follows @; this paper stays flat."));
+        assert!(app.session().expect("paper session").attempt().hints_used());
     }
 
     #[test]
@@ -1671,11 +2116,12 @@ mod tests {
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        let session_area = Rect::new(2, 4, 56, 13);
         terminal
             .draw(|frame| {
                 render_session(
                     frame,
-                    Rect::new(2, 4, 56, 13),
+                    session_area,
                     &session,
                     KeyBindings::default(),
                     profile,
@@ -1685,9 +2131,10 @@ mod tests {
             })
             .expect("compact paper renders");
         let paper = rendered_text(&terminal);
-        assert!(paper.contains("FOLDED PAPER rows 7-12/12"));
+        assert!(paper.contains("FOLDED PAPER rows"));
+        assert!(paper.contains("-12/12"));
         assert!(paper.contains('@'));
-        assert!(!paper.contains("TARGET [reference]"));
+        assert!(!paper.contains("PATTERN TO MATCH"));
 
         session.handle_key(
             crossterm::event::KeyEvent::new(
@@ -1712,12 +2159,13 @@ mod tests {
             })
             .expect("compact target renders");
         let target = rendered_text(&terminal);
-        assert!(target.contains("TARGET [reference] rows 7-12/12"));
+        assert!(target.contains("PATTERN TO MATCH rows"));
+        assert!(target.contains("-12/12"));
         assert!(!target.contains("FOLDED PAPER"));
     }
 
     #[test]
-    fn failed_large_result_scrolls_to_every_comparison_row() {
+    fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
         let paper = crate::content::journey().remove(39);
         let mut session = PlaySession::new(
             paper.puzzle(),
@@ -1727,6 +2175,15 @@ mod tests {
             PlaySource::Journey(39),
         );
         let now = Instant::now();
+        session.handle_key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Esc,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            KeyBindings::default(),
+            now,
+            true,
+        );
         session.handle_key(
             crossterm::event::KeyEvent::new(
                 crossterm::event::KeyCode::Enter,
@@ -1740,11 +2197,20 @@ mod tests {
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        let session_area = Rect::new(2, 4, 56, 13);
+        let boards_area = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(6), Constraint::Length(6)])
+            .split(session_area)[0];
+        let stack_area = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(72), Constraint::Percentage(28)])
+            .split(boards_area)[1];
         terminal
             .draw(|frame| {
                 render_session(
                     frame,
-                    Rect::new(2, 4, 56, 13),
+                    session_area,
                     &session,
                     KeyBindings::default(),
                     profile,
@@ -1753,7 +2219,9 @@ mod tests {
                 );
             })
             .expect("failed result renders");
-        assert!(rendered_text(&terminal).contains("OPENED COMPARISON rows 1-5/8"));
+        let first_result = rendered_text(&terminal);
+        let first_stack = rendered_area_text(&terminal, stack_area);
+        assert!(first_result.contains("OPENED COMPARISON rows 1-5/8"));
 
         for _ in 0..7 {
             session.handle_key(
@@ -1770,7 +2238,7 @@ mod tests {
             .draw(|frame| {
                 render_session(
                     frame,
-                    Rect::new(2, 4, 56, 13),
+                    session_area,
                     &session,
                     KeyBindings::default(),
                     profile,
@@ -1779,9 +2247,13 @@ mod tests {
                 );
             })
             .expect("scrolled failed result renders");
-        let result = rendered_text(&terminal);
+        let result = rendered_text(&terminal)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
         assert!(result.contains("OPENED COMPARISON rows 4-8/8"));
-        assert!(result.contains("Arrows inspect rows"));
+        assert_eq!(rendered_area_text(&terminal, stack_area), first_stack);
+        assert!(result.contains("Up/Down inspect rows"));
     }
 
     #[test]
@@ -1882,7 +2354,7 @@ mod tests {
         session.mark_saved();
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).expect("test terminal");
-        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
         terminal
             .draw(|frame| {
                 render_session(
@@ -1897,12 +2369,257 @@ mod tests {
             })
             .expect("minimum result renders");
         let text = rendered_text(&terminal);
-        assert!(text.contains("Enter returns"));
-        assert!(text.contains("x text keepsake"));
+        assert!(text.contains("Paper complete"));
+        assert!(text.contains("Congratulations, the opened paper matches."));
+        assert!(text.contains("Reference path found: 0 folds and 1 stroke."));
+        assert!(text.contains("Enter back"));
+        assert!(text.contains("x keepsake"));
+        assert!(text.is_ascii());
     }
 
     #[test]
-    fn contextual_play_help_keeps_its_final_binding_visible_at_preferred_minimum() {
+    fn ascii_cursor_preserves_whether_its_stack_contains_ink() {
+        let paper = crate::content::journey().remove(0);
+        let mut attempt = paper.puzzle().start();
+        let coordinate = paper
+            .puzzle()
+            .dimensions()
+            .coordinate(0, 0)
+            .expect("paper origin");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
+        let dry = folded_grid(&attempt, Some(coordinate), None, attempt.ink(), profile);
+        attempt
+            .stamp_dot(coordinate)
+            .expect("the origin is an occupied stack");
+        let cursor_on_ink = folded_grid(&attempt, Some(coordinate), None, attempt.ink(), profile);
+        let placed_ink = folded_grid(&attempt, None, None, attempt.ink(), profile);
+
+        let symbol = |lines: &[Line<'static>]| {
+            lines[0].spans[0]
+                .content
+                .chars()
+                .next()
+                .expect("grid cell has one symbol")
+        };
+        assert_ne!(symbol(&dry), symbol(&cursor_on_ink));
+        assert_ne!(symbol(&placed_ink), symbol(&cursor_on_ink));
+        assert!(symbol(&cursor_on_ink).is_ascii());
+    }
+
+    #[test]
+    fn above_reference_success_is_congratulatory_and_explains_the_shorter_path() {
+        use crate::domain::paper::{BrushRule, CellId, FoldCount, StrokeCount};
+        use crate::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
+        use crate::domain::score::Par;
+
+        let puzzle = Puzzle::new(
+            PuzzleSpec::new(
+                PuzzleIdentity::new("test-pack", "two-strokes").expect("valid identity"),
+                4,
+                4,
+            )
+            .with_target_cells(vec![CellId::new(0).expect("valid cell")])
+            .with_allowed_brushes(vec![BrushRule::Dot])
+            .with_budgets(0, 2)
+            .with_par(Par::new(
+                FoldCount::new(0).expect("valid fold count"),
+                StrokeCount::new(1).expect("valid stroke count"),
+            )),
+        )
+        .expect("valid test puzzle");
+        let mut session = PlaySession::new(
+            &puzzle,
+            "Patient dot",
+            "The same place can hold another touch.",
+            Vec::new(),
+            PlaySource::Pack,
+        );
+        let now = Instant::now();
+        for code in [
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyCode::Tab,
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyCode::Enter,
+        ] {
+            session.handle_key(
+                crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+                KeyBindings::default(),
+                now,
+                true,
+            );
+        }
+        assert_eq!(
+            session
+                .result()
+                .and_then(crate::domain::score::AttemptResult::meets_par),
+            Some(false)
+        );
+        session.mark_saved();
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 76, 17),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    now,
+                    None,
+                );
+            })
+            .expect("above-reference result renders");
+        let text = rendered_text(&terminal)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(text.contains("Congratulations, you found the pattern."));
+        assert!(text.contains("the reference is 0 folds and 1 stroke."));
+        assert!(text.contains("A shorter path is still hiding"));
+    }
+
+    #[test]
+    fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
+        let paper = crate::content::journey().remove(0);
+        let mut attempt = paper.puzzle().start();
+        for &action in paper.solution() {
+            attempt.apply(action).expect("recorded action applies");
+        }
+        let replay = crate::domain::replay::Replay::from_attempt(&attempt);
+        let mut session = PlaySession::from_replay(paper.puzzle(), &replay, paper.title())
+            .expect("recorded replay loads");
+        let now = Instant::now();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 76, 17),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    now,
+                    None,
+                );
+            })
+            .expect("saved replay renders");
+        let text = rendered_text(&terminal);
+        assert!(text.contains("FOLDED PAPER"));
+        assert!(text.contains("Replay ready: fresh paper."));
+        assert!(!text.contains("OPENED COMPARISON"));
+        assert!(
+            replay_status_text(&session, KeyBindings::default(), " · ", 60).contains("Left/Right")
+        );
+
+        session.handle_key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            KeyBindings::default(),
+            now,
+            true,
+        );
+        session.handle_key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            KeyBindings::default(),
+            now,
+            true,
+        );
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 76, 17),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    now,
+                    None,
+                );
+            })
+            .expect("completed replay renders");
+        let text = rendered_text(&terminal);
+        assert!(text.contains("OPENED COMPARISON"));
+        assert!(text.contains("Replay complete."));
+        assert!(!text.contains("Paper complete"));
+        assert!(!text.contains("Congratulations"));
+        let minimum_footer = replay_status_text(&session, KeyBindings::default(), " · ", 56);
+        assert!(minimum_footer.contains("Left"));
+        assert!(minimum_footer.contains("Enter back"));
+        assert!(minimum_footer.contains("q quit"));
+        assert!(minimum_footer.chars().count() <= 56, "{minimum_footer}");
+    }
+
+    #[test]
+    fn replay_without_actions_explains_that_enter_opens_the_paper() {
+        use crate::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
+        use crate::domain::replay::{Replay, ReplayMetadata};
+
+        let puzzle = Puzzle::new(PuzzleSpec::new(
+            PuzzleIdentity::new("test-pack", "blank-paper").unwrap(),
+            4,
+            4,
+        ))
+        .unwrap();
+        let replay = Replay::new(ReplayMetadata::current(&puzzle), Vec::new()).unwrap();
+        let session = PlaySession::from_replay(&puzzle, &replay, "Blank paper").unwrap();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 76, 17),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    Instant::now(),
+                    None,
+                );
+            })
+            .expect("empty replay renders");
+
+        assert!(rendered_text(&terminal).contains("no recorded actions. Enter opens it."));
+        assert!(
+            replay_status_text(&session, KeyBindings::default(), " · ", 76).contains("Enter open")
+        );
+    }
+
+    #[test]
+    fn saved_lesson_footer_names_the_actual_return_action() {
+        let now = Instant::now();
+        let mut app = App::new(Settings::default(), now);
+        for code in [
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyCode::Down,
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyCode::Enter,
+        ] {
+            press(&mut app, code, now);
+        }
+        app.settings_saved(app.settings());
+
+        let footer = play_status_text(&app, " · ", 76);
+        assert!(footer.contains("Enter branch"), "{footer}");
+        assert!(!footer.contains("Enter open"), "{footer}");
+    }
+
+    #[test]
+    fn contextual_play_help_defines_tools_at_supported_sizes() {
         let now = Instant::now();
         let settings = Settings {
             lesson_complete: true,
@@ -1912,20 +2629,148 @@ mod tests {
         press(&mut app, crossterm::event::KeyCode::Enter, now);
         press(&mut app, crossterm::event::KeyCode::Enter, now);
         press(&mut app, crossterm::event::KeyCode::Char('?'), now);
-        let backend = TestBackend::new(80, 24);
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        for (width, height) in [(80, 24), (60, 20)] {
+            let backend = TestBackend::new(width, height);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            terminal
+                .draw(|frame| render(frame, &app, profile, now))
+                .expect("help renders");
+
+            let text = rendered_text(&terminal)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            assert!(text.contains("Move and act"), "{text}");
+            assert!(text.contains("Goal, tools, and result"), "{text}");
+            assert!(
+                text.contains("Pattern to match The opened result, not the moves"),
+                "{text}"
+            );
+            assert!(text.contains("Fold + crosses a crease"), "{text}");
+            assert!(
+                text.contains("Brush Dot or line inks each previewed stack"),
+                "{text}"
+            );
+            assert!(text.contains("score is a guide"), "{text}");
+            assert!(text.contains("Esc or Enter closes help"), "{text}");
+        }
+    }
+
+    #[test]
+    fn applied_fold_keeps_static_feedback_without_covering_the_paper() {
+        let paper = crate::content::lesson();
+        let mut session = PlaySession::new(
+            paper.puzzle(),
+            paper.title(),
+            paper.description(),
+            Vec::new(),
+            PlaySource::Lesson,
+        );
+        let started = Instant::now();
+        session.handle_key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            KeyBindings::default(),
+            started,
+            false,
+        );
+
+        let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
         terminal
-            .draw(|frame| render(frame, &app, profile, now))
-            .expect("help renders");
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 2, 96, 26),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    started,
+                    None,
+                );
+            })
+            .expect("fold feedback renders");
+        let first = rendered_text(&terminal);
+        assert!(first.contains("Last step: Fold complete. The dot brush is ready."));
+        assert!(!first.contains("paper  ›   crease"));
 
-        let text = rendered_text(&terminal)
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        assert!(text.contains("previews unfolded ink"), "{text}");
-        assert!(text.contains("cancels or returns."), "{text}");
-        assert!(text.contains("Esc or Enter closes help"), "{text}");
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 2, 96, 26),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    started + std::time::Duration::from_secs(2),
+                    None,
+                );
+            })
+            .expect("static feedback renders later");
+        let later = rendered_text(&terminal);
+        assert!(later.contains("Last step: Fold complete. The dot brush is ready."));
+        assert!(!later.contains("paper  ›   crease"));
+    }
+
+    #[test]
+    fn placed_ink_stays_visible_in_the_paper_and_stack() {
+        let paper = crate::content::lesson();
+        let mut session = PlaySession::new(
+            paper.puzzle(),
+            paper.title(),
+            paper.description(),
+            Vec::new(),
+            PlaySource::Lesson,
+        );
+        let started = Instant::now();
+        session.handle_key(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            KeyBindings::default(),
+            started,
+            true,
+        );
+        for code in [
+            crossterm::event::KeyCode::Down,
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyCode::Enter,
+        ] {
+            session.handle_key(
+                crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+                KeyBindings::default(),
+                started,
+                false,
+            );
+        }
+
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    Rect::new(2, 4, 56, 13),
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    started,
+                    None,
+                );
+            })
+            .expect("ink state renders");
+        let text = rendered_text(&terminal);
+        assert!(text.contains('◉'));
+        assert!(text.contains("Ink reached 2 layers. Enter opens the paper."));
+        assert!(text.contains("0: cell 6 ink"));
+        assert!(text.contains("1: cell 5 ink"));
     }
 
     #[test]
@@ -1942,12 +2787,12 @@ mod tests {
         press(&mut app, crossterm::event::KeyCode::Enter, now);
 
         let expected = [
-            "fresh paper has no ink",
-            "Every + cell",
-            "production fold engine",
+            "fresh paper starts flat and dry",
+            "every + cell crosses",
+            "settles on top",
             "bottom to top",
-            "passes through every layer",
-            "Unfold and compare: 0 missing, 0 extra",
+            "inks every layer",
+            "Open paper compares every cell: 0 missing (?), 0 extra (!)",
         ];
         for (index, message) in expected.into_iter().enumerate() {
             assert!(
@@ -1970,6 +2815,18 @@ mod tests {
                 text.push_str(cell.symbol());
                 text
             })
+    }
+
+    fn rendered_area_text(terminal: &Terminal<TestBackend>, area: Rect) -> String {
+        let buffer = terminal.backend().buffer();
+        let mut text = String::new();
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                text.push_str(buffer[(x, y)].symbol());
+            }
+            text.push('\n');
+        }
+        text
     }
 
     fn player_text(app: &App, now: Instant) -> String {

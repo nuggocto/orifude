@@ -22,12 +22,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 1
 par = { folds = 2, strokes = 1 }
-tutorial_cues = [
-  "Move one outer column inward.",
-  "Move one outer row toward it.",
-  "Mark the four-cell corner stack.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

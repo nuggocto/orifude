@@ -23,12 +23,6 @@ brushes = [
 fold_budget = 1
 stroke_budget = 2
 par = { folds = 1, strokes = 2 }
-tutorial_cues = [
-  "Fold the left half rightward.",
-  "Draw the vertical line through two stacks.",
-  "Place one dot on the remaining folded corner.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

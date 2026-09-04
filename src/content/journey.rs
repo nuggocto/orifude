@@ -6,7 +6,7 @@ use crate::content::{BranchGift, BuiltInPaper, JourneyGroup};
 const GROUPS: [JourneyGroup; 8] = [
     JourneyGroup {
         title: "Ink on paper",
-        mechanic: "Move the cursor, place dots, and match the target exactly.",
+        mechanic: "Place two marks on flat paper, then let one crease carry ink farther.",
         first_paper: 0,
         paper_count: 5,
         gift: BranchGift::Leaf,

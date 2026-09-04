@@ -25,13 +25,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 2
 par = { folds = 2, strokes = 2 }
-tutorial_cues = [
-  "Move the left band inward.",
-  "Move the upper band downward.",
-  "Draw the short vertical stroke.",
-  "Place the final dot in another stack.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

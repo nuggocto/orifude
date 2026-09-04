@@ -22,12 +22,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 1
 par = { folds = 2, strokes = 1 }
-tutorial_cues = [
-  "Gather the upper half downward.",
-  "Gather the left half rightward.",
-  "Draw across two neighboring four-layer stacks.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

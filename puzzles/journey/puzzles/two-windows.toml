@@ -22,12 +22,6 @@ brushes = [
 fold_budget = 1
 stroke_budget = 2
 par = { folds = 1, strokes = 2 }
-tutorial_cues = [
-  "Choose the fold that gathers the left half onto the right.",
-  "Mark the upper folded row.",
-  "Mark the lower folded row.",
-  "Open the four-mark paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

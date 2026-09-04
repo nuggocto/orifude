@@ -27,13 +27,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 2
 par = { folds = 2, strokes = 2 }
-tutorial_cues = [
-  "Choose the first fold from the target symmetry.",
-  "Gather the other axis into the same quarter.",
-  "Draw the vertical stroke through three deep stacks.",
-  "Place the last dot where the target remains open.",
-  "Open the completed canopy.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

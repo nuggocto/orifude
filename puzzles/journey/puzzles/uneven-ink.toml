@@ -23,12 +23,6 @@ brushes = [
 fold_budget = 1
 stroke_budget = 2
 par = { folds = 1, strokes = 2 }
-tutorial_cues = [
-  "Use the short rightward fold.",
-  "Draw across three occupied positions.",
-  "Add one dot on the far edge.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

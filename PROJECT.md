@@ -183,23 +183,43 @@ and example.
 
 The puzzle screen shows:
 
-- The unfolded target pattern.
+- The unfolded target pattern, labelled `Pattern to match` so it cannot be
+  confused with the reference score.
 - The current folded paper.
 - The active crease or brush cursor.
 - The fold and stroke budget.
 - A compact action history.
-- Contextual keyboard help.
+- Exact coordinates during onboarding and the first journey paper. Later
+  journey hints appear only after a missed comparison.
+- Structured contextual help that defines folds, brushes, comparison marks,
+  and the reference score.
 - A textual status that does not rely on color.
+
+Placed ink uses a distinct filled glyph as well as color, so the paper remains
+legible in monochrome and the cursor does not hide an inked stack.
+
+A paper starts with its first available fold or brush ready, so `Enter` can begin
+play immediately. After a confirmed action, the next available tool becomes
+ready. An exact ink match readies Open paper. `Tab` still reaches every legal
+tool and Open paper, while `Esc` cancels a tool and readies Open paper directly.
 
 The player can undo, reset, preview the unfolded state, inspect the target, and
 quit without losing completed progress.
 
 ### Reveal
 
+Each confirmed fold or brush leaves a bounded status line that names what
+happened and which tool is ready next. It stays until undo, reset, or the next
+paper state replaces it; ordinary actions do not open a timed overlay.
+
 Checking a solution unfolds the paper one crease at a time. The animation must
 remain brief, bounded, interruptible, and optional. Reduced-motion mode replaces
-it with the final state. Failure shows extra and missing ink separately. Success
-records the solution and adds the result to the branch.
+it with the final state. Failure shows extra and missing ink separately. After
+durable saving, success holds a congratulations card on screen, explains the
+actual and reference counts in plain language, and adds the result to the
+branch. Replaying a keepsake shows the paper itself instead of this card. Once
+the paper is open, the stack inspector stays at the final brush position while
+compact comparisons scroll through their rows independently.
 
 ## Canonical game rules
 
@@ -278,6 +298,9 @@ understands stack behavior.
   undo and hint history remain result metadata rather than replay actions.
 - Replaying the same valid actions must produce identical state on every
   supported platform.
+- Replay playback begins on fresh paper and stays read-only. `Enter` or Right
+  applies one saved action, Left rewinds one step, and the step after the last
+  action opens the paper for comparison.
 - Invalid, incompatible, or oversized replays fail without partially mutating
   saved progress.
 
@@ -393,10 +416,10 @@ The default bindings are familiar but not modal-editor cosplay:
 - `r` asks before resetting an in-progress attempt.
 - `Space` previews the unfolded paper.
 - `t` switches between the target and paper in compact puzzle layouts.
-- `Tab` and `Shift+Tab` move forward and backward through the available fold
-  and brush actions.
-- `Enter` confirms the focused action.
-- `Esc` cancels the current transient action.
+- `Tab` and `Shift+Tab` move forward and backward through available folds,
+  brushes, and Open paper.
+- `Enter` uses the ready tool or opens the paper for comparison.
+- `Esc` cancels the ready tool or current transient action.
 - `?` opens contextual help.
 - `q` requests quit and explains whether unsaved work exists.
 
@@ -407,7 +430,8 @@ The bounded event queue preserves key-event order. Repeated tick and resize
 notifications coalesce instead of occupying one slot each. A full queue applies
 backpressure rather than allocating more memory or discarding a key event.
 Shutdown and cancellation remain independently observable so a full queue
-cannot prevent exit.
+cannot prevent exit. The resize source is ready before the first frame, and a
+bounded 250-millisecond size check recovers if a platform drops a resize signal.
 
 ### Accessibility
 
@@ -1840,7 +1864,8 @@ to feel like Orifude rather than a rules demo.
 - [ ] Review difficulty progression with fresh players.
 - [x] Remove puzzles whose solution depends on unexplained interface behavior.
 - [x] Write short titles and descriptions without generic filler.
-- [x] Write tutorial cues that explain one action at a time.
+- [x] Keep exact action cues in onboarding and the first journey paper, then
+  use short non-coordinate clues.
 - [x] Create the initial home-branch progression states.
 - [x] Use the squirrel only for delivery and completion moments.
 - [x] Add at least one official example community pack.

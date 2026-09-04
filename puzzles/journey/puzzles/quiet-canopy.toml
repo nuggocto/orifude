@@ -24,12 +24,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 1
 par = { folds = 2, strokes = 1 }
-tutorial_cues = [
-  "Choose the fold that gathers the paper to the right.",
-  "Choose the downward fold to gather the lower-right quarter.",
-  "Mark the stack that matches the target.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

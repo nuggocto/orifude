@@ -111,9 +111,9 @@ pub(crate) fn lesson() -> BuiltInPaper {
             title: "One fold, one mark",
             description: "Fold the left half across, then let one dot pass through both layers.",
             cues: &[
-                "Tab previews the fold. + marks the moving side; Enter confirms.",
-                "Move @ to row 2, column 3. Tab selects the dot; Enter marks the stack.",
-                "No action is selected. Enter opens the paper and compares it with the target.",
+                "Fold ready. + marks the moving side; Enter folds.",
+                "Dot brush ready. Move @ to row 2, col 3; Enter inks.",
+                "Target matched. Enter opens and checks the paper.",
             ],
         },
         vec![Fold::new(FoldDirection::Right, 2)],

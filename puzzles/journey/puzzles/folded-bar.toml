@@ -22,11 +22,6 @@ brushes = [
 fold_budget = 1
 stroke_budget = 1
 par = { folds = 1, strokes = 1 }
-tutorial_cues = [
-  "Fold down at crease 2.",
-  "Draw a horizontal line from row 3, column 1.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

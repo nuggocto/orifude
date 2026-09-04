@@ -16,8 +16,8 @@ fold_budget = 0
 stroke_budget = 1
 par = { folds = 0, strokes = 1 }
 tutorial_cues = [
-  "Move to row 2, column 2, then choose the dot and place the mark.",
-  "Open the paper to compare it with the target.",
+  "Dot brush ready. Move @ to row 2, col 2; Enter inks.",
+  "Target matched. Enter opens and checks the paper.",
 ]
 author = "Orifude contributors"
 license = "Apache-2.0"

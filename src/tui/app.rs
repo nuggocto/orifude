@@ -39,7 +39,7 @@ pub(crate) enum Screen {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Overlay {
-    Help(SafeText),
+    Help(Box<[SafeText]>),
     Quit,
     Reset,
     Export([SafeText; 3]),
@@ -303,12 +303,13 @@ impl App {
         }
         if matches!(key.code, KeyCode::Char(character) if character == self.settings.bindings.help)
         {
-            let help = self.help_text();
-            self.overlay = Some(Overlay::Help(SafeText::external_display(
-                &help,
-                512,
-                self.settings.glyph_mode,
-            )));
+            let help = self
+                .help_lines()
+                .into_iter()
+                .map(|line| SafeText::external_display(&line, 96, self.settings.glyph_mode))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            self.overlay = Some(Overlay::Help(help));
             return AppAction::Render;
         }
         if matches!(key.code, KeyCode::Char(character) if character == self.settings.bindings.quit)
@@ -544,7 +545,7 @@ impl App {
     }
 
     pub(crate) fn open_replay(&mut self, decoded: &DecodedReplay) {
-        let title = decoded.puzzle().identity().puzzle_id().to_owned();
+        let title = self.replay_title(decoded.puzzle());
         match PlaySession::from_replay(decoded.puzzle(), decoded.replay(), title) {
             Ok(session) => {
                 self.group_completion = None;
@@ -554,6 +555,27 @@ impl App {
             }
             Err(error) => self.show_error(&error),
         }
+    }
+
+    fn replay_title(&self, puzzle: &crate::domain::puzzle::Puzzle) -> Box<str> {
+        let identity = puzzle.identity();
+        self.session
+            .as_ref()
+            .filter(|session| session.puzzle().identity() == identity)
+            .map(|session| session.title().into())
+            .or_else(|| {
+                self.journey
+                    .iter()
+                    .find(|paper| paper.puzzle().identity() == identity)
+                    .map(|paper| paper.title().into())
+            })
+            .or_else(|| {
+                self.pack_papers
+                    .iter()
+                    .find(|paper| paper.puzzle.identity() == identity)
+                    .map(|paper| paper.title.clone())
+            })
+            .unwrap_or_else(|| identity.puzzle_id().into())
     }
 
     fn handle_menu_key(&mut self, code: KeyCode) -> AppAction {
@@ -914,33 +936,73 @@ impl App {
         AppAction::Render
     }
 
-    fn help_text(&self) -> String {
+    fn help_lines(&self) -> Vec<String> {
         let keys = self.settings.bindings;
         match self.screen {
-            Screen::Capabilities => format!(
-                "Match the opened paper to the target. Tab previews an action, Enter confirms it, arrows move the @ cursor, and Enter with no selected action opens the paper. The message below the controls gives the next move. {} closes help.",
-                keys.help
-            ),
-            Screen::Play => format!(
-                "The target is a reference. The highlighted folded paper is where you work, and the stack follows its cursor. Arrows or h/j/k/l move. {} drafts a fold; {} drafts a brush. Tab moves through available actions, Shift+Tab moves back, and Enter applies the action or opens the paper. {} undoes, {} asks before resetting, {} previews unfolded ink, t switches target and paper on compact screens, and Esc cancels or returns.",
-                keys.fold,
-                keys.brush,
-                keys.undo,
-                keys.reset,
-                key_label(keys.preview)
-            ),
-            Screen::Settings => format!(
-                "Up/Down selects. Left/Right changes a display choice. Enter on a key waits for one unused key. Space is available for preview. h/j/k/l and t stay reserved for play; v/x stay reserved for result actions. {} closes help.",
-                keys.help
-            ),
-            Screen::HowTo => format!(
-                "Left/Right or Enter advances the engine-derived teaching frames. Esc returns. {} closes help.",
-                keys.help
-            ),
-            _ => format!(
-                "Up/Down or j/k moves. Enter opens the selected path. Esc returns. {} opens help and {} asks before quitting.",
-                keys.help, keys.quit
-            ),
+            Screen::Capabilities => vec![
+                "Learn by doing".to_owned(),
+                "Enter starts with a ready fold.".to_owned(),
+                "Arrows move @. Enter uses the ready tool.".to_owned(),
+                "Tab changes tools. Esc readies Open paper.".to_owned(),
+                "Fold: every + cell crosses its crease.".to_owned(),
+                "Brush: ink reaches every layer in its preview.".to_owned(),
+            ],
+            Screen::Play
+                if self
+                    .session
+                    .as_ref()
+                    .is_some_and(|session| session.replay_progress().is_some()) =>
+            {
+                vec![
+                    "Saved replay".to_owned(),
+                    "Enter / Right      Show the next saved action".to_owned(),
+                    "Left               Rewind one action".to_owned(),
+                    "After the last action, Enter opens the paper.".to_owned(),
+                    "Up / Down          Inspect opened comparison rows".to_owned(),
+                    format!("{} restart   x keepsake   Esc back", keys.reset),
+                ]
+            }
+            Screen::Play => vec![
+                "Move and act".to_owned(),
+                "Arrows / h j k l   Move @ or choose a fold".to_owned(),
+                "Enter              Use the ready tool or open".to_owned(),
+                "Tab / Shift+Tab   Change tool; Esc readies Open".to_owned(),
+                "Goal, tools, and result".to_owned(),
+                "Pattern to match   The opened result, not the moves".to_owned(),
+                format!("{} Fold    + crosses a crease and stacks on top", keys.fold),
+                format!(
+                    "{} Brush   Dot or line inks each previewed stack",
+                    keys.brush
+                ),
+                format!(
+                    "{} preview   {} undo   {} reset   t boards",
+                    key_label(keys.preview),
+                    keys.undo,
+                    keys.reset
+                ),
+                "Result   ? missing · ! extra · score is a guide".to_owned(),
+            ],
+            Screen::Settings => vec![
+                "Settings".to_owned(),
+                "Up / Down          Choose a setting".to_owned(),
+                "Left / Right       Change a display choice".to_owned(),
+                "Enter              Capture one unused key".to_owned(),
+                "Space may be used for preview.".to_owned(),
+                "h j k l t v x stay reserved for play.".to_owned(),
+            ],
+            Screen::HowTo => vec![
+                "How to play".to_owned(),
+                "Left / Right       Previous / next frame".to_owned(),
+                "Enter              Next frame".to_owned(),
+                "Esc                Return to the branch".to_owned(),
+            ],
+            _ => vec![
+                "Navigation".to_owned(),
+                "Up / Down or j / k   Move through choices".to_owned(),
+                "Enter                Open the selected path".to_owned(),
+                "Esc                  Return".to_owned(),
+                format!("{} help   {} quit", keys.help, keys.quit),
+            ],
         }
     }
 }
@@ -1026,6 +1088,14 @@ mod tests {
             app.session().map(PlaySession::source),
             Some(PlaySource::Lesson)
         ));
+    }
+
+    #[test]
+    fn official_replays_keep_the_paper_title() {
+        let app = App::new(Settings::default(), Instant::now());
+        let paper = content::journey().remove(0);
+
+        assert_eq!(app.replay_title(paper.puzzle()).as_ref(), paper.title());
     }
 
     #[test]

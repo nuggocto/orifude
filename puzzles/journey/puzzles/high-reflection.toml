@@ -22,11 +22,6 @@ brushes = [
 fold_budget = 1
 stroke_budget = 1
 par = { folds = 1, strokes = 1 }
-tutorial_cues = [
-  "Fold up at crease 2.",
-  "Mark row 2, column 3.",
-  "Open the paper after the mark passes through both layers.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

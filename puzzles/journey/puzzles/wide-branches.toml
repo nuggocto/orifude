@@ -27,13 +27,6 @@ brushes = [
 fold_budget = 2
 stroke_budget = 2
 par = { folds = 2, strokes = 2 }
-tutorial_cues = [
-  "Gather the sheet into one quarter.",
-  "Complete the second centered fold.",
-  "Draw the three-stack line shown by the target.",
-  "Place the separate dot.",
-  "Open the paper.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [

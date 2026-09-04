@@ -1,31 +1,30 @@
 format_version = 1
 id = "two-drops"
 title = "Two drops"
-description = "Two separate marks begin a small rhythm."
+description = "One touch can ink both layers of a folded stack."
 width = 4
 height = 4
 target = [
   "....",
-  "#...",
-  "...#",
+  "#..#",
+  "....",
   "....",
 ]
 folds = [
+  { direction = "left", crease = 2 },
+  { direction = "right", crease = 2 },
+  { direction = "up", crease = 2 },
+  { direction = "down", crease = 2 },
 ]
 brushes = [
   { kind = "dot" },
 ]
-fold_budget = 0
-stroke_budget = 2
-par = { folds = 0, strokes = 2 }
-tutorial_cues = [
-  "Place the first dot at row 2, column 1.",
-  "Place the second dot at row 3, column 4.",
-  "Open the paper after both marks are present.",
-]
+fold_budget = 1
+stroke_budget = 1
+par = { folds = 1, strokes = 1 }
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [
-  { kind = "dot", row = 1, column = 0 },
-  { kind = "dot", row = 2, column = 3 },
+  { kind = "fold", direction = "right", crease = 2 },
+  { kind = "dot", row = 1, column = 3 },
 ]

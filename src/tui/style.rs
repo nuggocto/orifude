@@ -132,6 +132,12 @@ impl StyleProfile {
     }
 
     #[must_use]
+    pub fn ink_mark(self) -> Style {
+        self.foreground(PaletteColor::Clay)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    #[must_use]
     pub fn ink(self) -> Style {
         self.foreground(PaletteColor::Ink)
     }

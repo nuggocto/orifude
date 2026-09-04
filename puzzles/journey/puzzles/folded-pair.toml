@@ -22,11 +22,6 @@ brushes = [
 fold_budget = 1
 stroke_budget = 1
 par = { folds = 1, strokes = 1 }
-tutorial_cues = [
-  "Fold right at crease 2.",
-  "Place one dot at row 2, column 3.",
-  "Open the folded pair.",
-]
 author = "Orifude contributors"
 license = "Apache-2.0"
 solution = [
