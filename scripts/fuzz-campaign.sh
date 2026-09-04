@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly toolchain="nightly-2026-07-01"
+readonly toolchain="nightly-2026-09-04"
 readonly seconds="${ORIFUDE_FUZZ_SECONDS:-60}"
 readonly seed="${ORIFUDE_FUZZ_SEED:-424242}"
 readonly output_root="${ORIFUDE_FUZZ_OUTPUT:-target/fuzz-campaign}"

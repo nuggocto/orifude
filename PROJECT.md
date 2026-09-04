@@ -816,10 +816,10 @@ and may reach its memory limit before its visited-state limit.
 
 ## Toolchain and automation
 
-Orifude pins Rust `1.98.0`, the current stable release approved for the
-repository foundation. `rust-toolchain.toml` is the authoritative exact
+Orifude pins Rust `1.98.1`, including the reviewed compiler correctness fix.
+`rust-toolchain.toml` is the authoritative exact
 toolchain selection. It uses the minimal rustup profile and includes `rustfmt`
-and `clippy`. `Cargo.toml` declares `rust-version = "1.98"` as the package's
+and `clippy`. `Cargo.toml` declares `rust-version = "1.98.1"` as the package's
 minimum compiler version. Updating either value is a reviewed compatibility
 change, not an automatic moving-stable update.
 
@@ -1253,9 +1253,9 @@ Exit gate:
 Goal: create a reproducible Rust application base with strict local and CI
 checks before domain code arrives.
 
-- [x] Add `rust-toolchain.toml` pinning Rust `1.98.0` with the minimal profile,
+- [x] Add `rust-toolchain.toml` pinning Rust `1.98.1` with the minimal profile,
   `rustfmt`, and `clippy`.
-- [x] Declare `rust-version = "1.98"` in `Cargo.toml` and verify it remains the
+- [x] Declare `rust-version = "1.98.1"` in `Cargo.toml` and verify it remains the
   intended minimum compiler version.
 - [x] Confirm Rust edition 2024 and the matching Cargo resolver behavior.
 - [x] Encode the approved operating-system, architecture, minimum-version, and

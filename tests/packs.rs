@@ -301,6 +301,129 @@ fn archive_rejects_traversal_links_duplicates_and_resource_excess() {
 }
 
 #[test]
+fn archive_rejects_exact_duplicate_names_before_the_reader_discards_them() {
+    let metadata = metadata("quiet-grove", "Quiet Grove");
+    let mut bytes = zip_bytes(
+        &[
+            ("pack.toml", b"invalid metadata"),
+            ("hack.toml", metadata.as_bytes()),
+            ("puzzles/berry.toml", puzzle().as_bytes()),
+        ],
+        false,
+    );
+    let mut replaced = 0;
+    for index in 0..=bytes.len() - 9 {
+        if &bytes[index..index + 9] == b"hack.toml" {
+            bytes[index..index + 9].copy_from_slice(b"pack.toml");
+            replaced += 1;
+        }
+    }
+    assert_eq!(replaced, 2, "both local and central names change");
+    let error = validate_archive_bytes(&bytes).unwrap_err();
+    assert!(
+        error
+            .issues()
+            .iter()
+            .any(|issue| issue.problem().contains("duplicates"))
+    );
+}
+
+#[test]
+fn archive_rejects_a_decoy_footer_before_parsing_an_excessive_catalog() {
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..300 {
+        writer
+            .start_file(format!("notes/n{index}.txt"), SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(b"x").unwrap();
+    }
+    let mut bytes = writer.finish().unwrap().into_inner();
+    let offset = u32::try_from(bytes.len()).unwrap();
+    bytes.extend_from_slice(b"PK\x05\x06\0\0\0\0\x01\0\x01\0\0\0\0\0");
+    bytes.extend_from_slice(&offset.to_le_bytes());
+    bytes.extend_from_slice(&[0, 0]);
+    let error = validate_archive_bytes(&bytes).unwrap_err();
+    assert!(
+        matches!(error, PackError::Archive),
+        "invalid raw catalog must stop preflight: {error:?}"
+    );
+}
+
+#[test]
+fn archive_never_falls_back_to_an_older_pack_when_the_checked_catalog_is_invalid() {
+    let metadata = metadata("quiet-grove", "Quiet Grove");
+    let pack = zip_bytes(
+        &[
+            ("pack.toml", metadata.as_bytes()),
+            ("puzzles/berry.toml", puzzle().as_bytes()),
+        ],
+        false,
+    );
+    let mut bytes = pack.clone();
+    let base = u32::try_from(bytes.len()).unwrap();
+    bytes.extend_from_slice(&pack);
+    let footer = bytes.len() - 22;
+    let directory = u32::from_le_bytes(bytes[footer + 16..footer + 20].try_into().unwrap()) + base;
+    bytes[footer + 16..footer + 20].copy_from_slice(&directory.to_le_bytes());
+    let directory = usize::try_from(directory).unwrap();
+    // AES without its required extra data makes the dependency reject the new
+    // catalog. The old reader then silently returned the earlier valid pack.
+    bytes[directory + 10..directory + 12].copy_from_slice(&99_u16.to_le_bytes());
+    assert!(matches!(
+        validate_archive_bytes(&bytes),
+        Err(PackError::Archive)
+    ));
+}
+
+#[test]
+fn archive_rejects_footer_signatures_inside_catalog_metadata() {
+    let metadata = metadata("quiet-grove", "Quiet Grove");
+    let mut bytes = zip_bytes(
+        &[
+            ("pack.toml", metadata.as_bytes()),
+            ("puzzles/berry.toml", puzzle().as_bytes()),
+        ],
+        false,
+    );
+    let footer = bytes.len() - 22;
+    let directory = usize::try_from(u32::from_le_bytes(
+        bytes[footer + 16..footer + 20].try_into().unwrap(),
+    ))
+    .unwrap();
+    // Even a signature in a fixed metadata field must not become a fallback
+    // footer if parsing the real catalog fails later.
+    bytes[directory + 16..directory + 20].copy_from_slice(b"PK\x05\x06");
+    let error = validate_archive_bytes(&bytes).unwrap_err();
+    assert!(
+        error
+            .issues()
+            .iter()
+            .any(|issue| issue.problem().contains("embedded footer"))
+    );
+}
+
+#[test]
+fn ordinary_archive_comments_do_not_change_validated_content() {
+    let metadata = metadata("quiet-grove", "Quiet Grove");
+    let mut bytes = zip_bytes(
+        &[
+            ("pack.toml", metadata.as_bytes()),
+            ("puzzles/berry.toml", puzzle().as_bytes()),
+        ],
+        false,
+    );
+    let expected = validate_archive_bytes(&bytes).unwrap().fingerprint();
+    let comment = b"An optional ZIP comment, including PK\x05\x06 without another record.";
+    let length = bytes.len();
+    bytes[length - 2..].copy_from_slice(&u16::try_from(comment.len()).unwrap().to_le_bytes());
+    bytes.extend_from_slice(comment);
+    assert_eq!(
+        validate_archive_bytes(&bytes).unwrap().fingerprint(),
+        expected
+    );
+}
+
+#[test]
 fn archive_rejects_absolute_device_deep_large_and_excess_entry_inputs() {
     for path in [
         "/absolute.toml",

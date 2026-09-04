@@ -2,7 +2,7 @@
 name = "orifude"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.98"
+rust-version = "1.98.1"
 description = "A quiet, offline folding and ink puzzle game for the terminal"
 license = "Apache-2.0"
 repository = "https://github.com/nuggocto/orifude"

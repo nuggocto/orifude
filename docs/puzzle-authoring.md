@@ -48,6 +48,13 @@ optional and uses the same stem as a declared puzzle. Extra files, links,
 special files, absolute paths, parent traversal, and nonportable names are
 rejected.
 
+ZIP packs use stored or deflated files and one bounded central directory ending
+immediately before its footer. Orifude rejects exact and case-only duplicate
+paths, inconsistent catalog lengths, and embedded footer signatures in catalog
+metadata. Ordinary archive comments are allowed. Archives that rely on fallback
+catalogs or offset repair are not supported; recreate them with an ordinary ZIP
+tool or install the unpacked directory.
+
 ## Pack metadata
 
 ```toml

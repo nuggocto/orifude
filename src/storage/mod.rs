@@ -637,6 +637,7 @@ impl Storage {
         let payload = replay::encode(puzzle, replay).map_err(|_| StorageError::ReplayData)?;
         let score = result.score();
         let record = CompletionRecord {
+            puzzle,
             pack_id: puzzle.identity().pack_id(),
             puzzle_id: puzzle.identity().puzzle_id(),
             completed_at: completed_at_unix_seconds,
@@ -1365,6 +1366,7 @@ impl Storage {
 }
 
 struct CompletionRecord<'a> {
+    puzzle: &'a Puzzle,
     pack_id: &'a str,
     puzzle_id: &'a str,
     completed_at: i64,
@@ -1427,9 +1429,23 @@ fn insert_completion_rows(
             },
         )
         .transpose()?;
-    let is_best = previous.is_none_or(|progress| {
-        (record.folds, record.strokes) < (progress.best_folds, progress.best_strokes)
-    });
+    let is_best = match previous {
+        None => true,
+        Some(progress) => {
+            let payload: Vec<u8> = transaction.query_row(
+                "SELECT payload FROM replays WHERE id = ?1",
+                [progress.best_replay_id],
+                |row| row.get(0),
+            )?;
+            let saved = replay::decode(&payload).map_err(|_| StorageError::ReplayData)?;
+            if saved.puzzle().identity() != record.puzzle.identity() {
+                return Err(StorageError::ReplayData);
+            }
+            // A score only competes with solutions to the same gameplay revision.
+            saved.puzzle() != record.puzzle
+                || (record.folds, record.strokes) < (progress.best_folds, progress.best_strokes)
+        }
+    };
     if is_best && let Some(progress) = previous {
         transaction.execute(
             "UPDATE replays SET is_best = 0 WHERE id = ?1",

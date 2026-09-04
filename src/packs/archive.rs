@@ -1,6 +1,8 @@
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Cursor, Read};
+use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
+use zip::read::{ArchiveOffset, Config};
 use zip::{CompressionMethod, ZipArchive};
 
 use super::{
@@ -9,6 +11,8 @@ use super::{
 };
 
 const MAX_ARCHIVE_ENTRIES: usize = MAX_FILES + 2;
+const END_HEADER_BYTES: usize = 22;
+const END_SIGNATURE: &[u8; 4] = b"PK\x05\x06";
 
 pub(super) fn validate_archive_bytes(bytes: &[u8]) -> Result<ValidatedPack, PackError> {
     if bytes.len() > MAX_ARCHIVE_BYTES {
@@ -17,11 +21,28 @@ pub(super) fn validate_archive_bytes(bytes: &[u8]) -> Result<ValidatedPack, Pack
             "compressed size exceeds the limit",
         ));
     }
-    preflight_entry_count(bytes)?;
-    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| PackError::Archive)?;
-    if archive.len() > MAX_ARCHIVE_ENTRIES {
-        return Err(PackError::one("archive", "entry count exceeds the limit"));
+    let catalog = preflight_catalog(bytes)?;
+    let reading_files = Cell::new(false);
+    let reader = ArchiveReader {
+        cursor: Cursor::new(&bytes[..catalog.footer + END_HEADER_BYTES]),
+        catalog_start: catalog.start,
+        footer: catalog.footer,
+        reading_files: &reading_files,
+    };
+    let mut archive = ZipArchive::with_config(
+        Config {
+            archive_offset: ArchiveOffset::Known(0),
+        },
+        reader,
+    )
+    .map_err(|_| PackError::Archive)?;
+    if archive.len() != catalog.entries
+        || archive.central_directory_start() != catalog.start as u64
+        || archive.offset() != 0
+    {
+        return Err(PackError::Archive);
     }
+    reading_files.set(true);
 
     let mut files = BTreeMap::new();
     let mut folded_paths = BTreeSet::new();
@@ -91,10 +112,49 @@ pub(super) fn validate_archive_bytes(bytes: &[u8]) -> Result<ValidatedPack, Pack
     validate_files(files)
 }
 
-fn preflight_entry_count(bytes: &[u8]) -> Result<(), PackError> {
-    const END_HEADER_BYTES: usize = 22;
+struct Catalog {
+    start: usize,
+    footer: usize,
+    entries: usize,
+}
+
+// During metadata parsing, expose only the checked catalog and its one footer.
+// Earlier footers in payloads and signatures in the unused archive comment
+// cannot become fallback catalogs. File reads then see the original bytes at
+// unchanged offsets. No second archive-sized buffer is allocated.
+struct ArchiveReader<'a> {
+    cursor: Cursor<&'a [u8]>,
+    catalog_start: usize,
+    footer: usize,
+    reading_files: &'a Cell<bool>,
+}
+
+impl Read for ArchiveReader<'_> {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        let start = self.cursor.position();
+        let count = self.cursor.read(output)?;
+        if !self.reading_files.get() {
+            for (index, byte) in output[..count].iter_mut().enumerate() {
+                let position = start + index as u64;
+                if position < self.catalog_start as u64
+                    || position >= (self.footer + END_HEADER_BYTES - 2) as u64
+                {
+                    *byte = 0;
+                }
+            }
+        }
+        Ok(count)
+    }
+}
+
+impl Seek for ArchiveReader<'_> {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.cursor.seek(position)
+    }
+}
+
+fn preflight_catalog(bytes: &[u8]) -> Result<Catalog, PackError> {
     const MAX_COMMENT_BYTES: usize = u16::MAX as usize;
-    const SIGNATURE: &[u8; 4] = b"PK\x05\x06";
 
     if bytes.len() < END_HEADER_BYTES {
         return Err(PackError::Archive);
@@ -103,7 +163,7 @@ fn preflight_entry_count(bytes: &[u8]) -> Result<(), PackError> {
         .len()
         .saturating_sub(END_HEADER_BYTES.saturating_add(MAX_COMMENT_BYTES));
     for offset in (start..=bytes.len() - END_HEADER_BYTES).rev() {
-        if &bytes[offset..offset + SIGNATURE.len()] != SIGNATURE {
+        if &bytes[offset..offset + END_SIGNATURE.len()] != END_SIGNATURE {
             continue;
         }
         let comment_bytes = usize::from(read_u16(bytes, offset + 20));
@@ -125,20 +185,74 @@ fn preflight_entry_count(bytes: &[u8]) -> Result<(), PackError> {
         if disk != 0
             || central_disk != 0
             || disk_entries != total_entries
-            || total_entries == u16::MAX
+            || total_entries == 0
             || usize::from(total_entries) > MAX_ARCHIVE_ENTRIES
-            || central_offset
-                .checked_add(central_bytes)
-                .is_none_or(|end| end > offset)
+            || central_offset.checked_add(central_bytes) != Some(offset)
         {
             return Err(PackError::one(
                 "archive",
                 "archive entry table exceeds its supported bounds",
             ));
         }
-        return Ok(());
+        let catalog = Catalog {
+            start: central_offset,
+            footer: offset,
+            entries: usize::from(total_entries),
+        };
+        validate_catalog_entries(bytes, &catalog)?;
+        return Ok(catalog);
     }
     Err(PackError::Archive)
+}
+
+fn validate_catalog_entries(bytes: &[u8], catalog: &Catalog) -> Result<(), PackError> {
+    const CENTRAL_HEADER_BYTES: usize = 46;
+    let directory = &bytes[catalog.start..catalog.footer];
+    // Reject ambiguous metadata even if a later library version starts looking
+    // for fallback footers in extra fields or per-entry comments.
+    if directory
+        .windows(END_SIGNATURE.len())
+        .any(|bytes| bytes == END_SIGNATURE)
+    {
+        return Err(PackError::one(
+            "archive",
+            "catalog contains an embedded footer",
+        ));
+    }
+    let mut remaining = directory;
+    let mut names = BTreeSet::new();
+    for _ in 0..catalog.entries {
+        let header = remaining
+            .get(..CENTRAL_HEADER_BYTES)
+            .ok_or(PackError::Archive)?;
+        if &header[..4] != b"PK\x01\x02" || read_u16(header, 34) != 0 {
+            return Err(PackError::Archive);
+        }
+        let name_bytes = usize::from(read_u16(header, 28));
+        let extra_bytes = usize::from(read_u16(header, 30));
+        let comment_bytes = usize::from(read_u16(header, 32));
+        let name_end = CENTRAL_HEADER_BYTES + name_bytes;
+        let entry_end = name_end + extra_bytes + comment_bytes;
+        let name = std::str::from_utf8(
+            remaining
+                .get(CENTRAL_HEADER_BYTES..name_end)
+                .ok_or(PackError::Archive)?,
+        )
+        .map_err(|_| PackError::Archive)?;
+        let path = name.strip_suffix('/').unwrap_or(name);
+        validate_relative_path(path)?;
+        if !names.insert(path.to_ascii_lowercase()) {
+            return Err(PackError::one(path, "path duplicates another path by case"));
+        }
+        remaining = remaining.get(entry_end..).ok_or(PackError::Archive)?;
+    }
+    if !remaining.is_empty() {
+        return Err(PackError::one(
+            "archive",
+            "catalog size or entry count is inconsistent",
+        ));
+    }
+    Ok(())
 }
 
 fn read_u16(bytes: &[u8], offset: usize) -> u16 {

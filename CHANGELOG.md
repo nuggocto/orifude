@@ -91,6 +91,14 @@ intentionally not included.
 
 ### Fixed
 
+- Compared saved scores within the same puzzle revision so solving revised
+  content keeps its completion and best replay after restart.
+- Synchronized event shutdown with queue waiters so a missed notification
+  cannot leave an input thread waiting during exit.
+- Validated ZIP catalogs before dependency parsing, rejected exact duplicate
+  names, and prevented fallback to an unchecked catalog.
+- Updated the pinned and minimum Rust compiler to 1.98.1 for its compiler
+  correctness fix, and advanced the sanitizer nightly to support that minimum.
 - Kept author-command tests inside their injected storage root on every
   supported operating system.
 - Sanitized and bounded rejected pack paths and nested operational errors

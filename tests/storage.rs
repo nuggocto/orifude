@@ -837,6 +837,62 @@ fn startup_discards_legacy_reserved_pack_state() {
 }
 
 #[test]
+fn revised_completions_replace_obsolete_scores_and_survive_restart() {
+    for strokes in [1, 2] {
+        let root = TestDirectory::new("revised-completion");
+        let paths = root.paths();
+        let (old, old_replay) = solved_replay_for("orifude-journey", "first-drop");
+        let position = old.dimensions().coordinate(0, 1).unwrap();
+        let revised = Puzzle::new(
+            PuzzleSpec::new(old.identity().clone(), 4, 4)
+                .with_target_cells(vec![old.dimensions().cell_id(position).unwrap()])
+                .with_allowed_brushes(vec![BrushRule::Dot])
+                .with_budgets(0, 2),
+        )
+        .unwrap();
+        let mut attempt = revised.start();
+        for _ in 0..strokes {
+            attempt.stamp_dot(position).unwrap();
+        }
+        let replay = Replay::from_attempt(&attempt);
+        let mut storage = Storage::open(paths.clone()).unwrap();
+        storage
+            .record_completion(&old, &old_replay, 1, 0, false)
+            .unwrap();
+        let progress = storage
+            .record_completion(&revised, &replay, 2, 0, false)
+            .unwrap();
+        assert!(storage.completion_matches(&revised).unwrap());
+        assert_eq!(progress.best_strokes, strokes);
+        let tied = storage
+            .record_completion(&revised, &replay, 3, 0, false)
+            .unwrap();
+        assert_eq!(tied.best_replay_id, progress.best_replay_id);
+        drop(storage);
+
+        let storage = Storage::open(paths.clone()).unwrap();
+        assert!(storage.completion_matches(&revised).unwrap());
+        assert!(!storage.completion_matches(&old).unwrap());
+        let saved = storage
+            .best_replay("orifude-journey", "first-drop")
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.replay(), &replay);
+        drop(storage);
+
+        let connection = Connection::open(paths.database()).unwrap();
+        let payload: Vec<u8> = connection
+            .query_row(
+                "SELECT payload FROM replays WHERE created_at = 1 AND is_best = 0",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(decode_replay_bytes(&payload).unwrap().puzzle(), &old);
+    }
+}
+
+#[test]
 fn built_in_completion_requires_the_saved_gameplay_revision() {
     let journey =
         validate_directory(&Path::new(env!("CARGO_MANIFEST_DIR")).join("puzzles/journey")).unwrap();

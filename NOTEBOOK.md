@@ -1797,6 +1797,132 @@ GitHub created exactly the repository check, five native-player jobs, and the
 Linux distribution job. All seven passed, and no terminal-smoke placeholder
 remained.
 
+## Code review on 2026-09-04
+
+A review of the implemented repository at
+[`027360f`](https://github.com/nuggocto/orifude/commit/027360f02d47b2975f7b461338b3272ced7f568c)
+confirmed four issues. The [full report](docs/code-review-2026-09-04.md) records
+locations, reproduction inputs, impact, fix directions, and evidence limits.
+Product source and tests were left unchanged.
+
+[`storage`](src/storage/mod.rs) compares a revised puzzle's score against the
+old revision's best, so an equal or worse new solution can save successfully
+and still lose its completion status after restart. The public API reproduced
+this in a private database. [`event`](src/tui/event.rs) changes its shutdown
+predicate without the waiters' mutex; a controlled scheduling probe reproduced
+a lost wakeup. Ordinary repeated races did not reproduce a hang. The report's
+sequence diagram shows the exact ordering.
+
+[`archive`](src/packs/archive.rs) can preflight a decoy ZIP footer while the
+dependency parses an earlier, larger catalog. A 300-entry probe passed the
+258-entry preflight and failed only after library parsing. Exact duplicate ZIP
+filenames also collapse inside the dependency before Orifude can reject them;
+a duplicate metadata probe returned a valid pack. Neither archive probe wrote
+pack content to disk. These results qualify the earlier security review's ZIP
+and shutdown assurances.
+
+The optimized repository gate and debug all-target suite each passed 227 tests,
+including seven native Linux PTY tests. Formatting, strict Clippy, shell checks,
+locked product and fuzz dependency policy, the doctest, production build,
+property gate, and local credential scan passed. Sandbox restrictions required
+authorized native reruns for advisory locking and CLI filesystem effects.
+The production binary also verified and solved all three example-pack papers.
+This pass did not repeat sustained fuzzing, performance measurements, or
+macOS/Windows and minimum-OS verification; existing evidence remains in
+[release QA](docs/release-qa.md).
+
+The report separately notes the
+[Rust 1.98.1 compiler correction](https://blog.rust-lang.org/2026/09/03/Rust-1.98.1/)
+released after the current toolchain pin. No manifestation of that compiler
+defect was established in Orifude. The review found no reason for an
+architectural rewrite; the confirmed issues need focused corrections.
+
+## Review corrections on 2026-09-04
+
+The four findings in the [review report](docs/code-review-2026-09-04.md) now have
+focused corrections. [`storage`](src/storage/mod.rs) decodes the saved best
+inside the completion transaction and compares scores only when its puzzle
+matches the current gameplay revision. A first completion of revised content
+replaces the obsolete best; the old replay remains eligible for bounded
+history. Equal and worse new scores, same-revision ties, restart, and retention
+are covered in [`storage tests`](tests/storage.rs).
+
+```mermaid
+flowchart LR
+    Save["record_completion_inner"] --> Old["Decode previous best in transaction"]
+    Old --> Revision{"Same Puzzle?"}
+    Revision -- Yes --> Score["Compare folds, then strokes"]
+    Revision -- No --> Replace["Current revision becomes best"]
+    Score --> Commit["Commit progress and replay together"]
+    Replace --> Commit
+```
+
+[`SharedQueue::begin_shutdown`](src/tui/event.rs) now takes the waiters' state
+mutex before changing the shutdown predicate and notifying both conditions.
+It recovers the poisoned guard only to publish shutdown, so poisoned waiters
+still return their normal queue error. The controlled regression covers both
+an empty receiver and a full sender at the check-to-wait boundary. Another case
+checks shutdown after mutex poisoning.
+
+[`archive`](src/packs/archive.rs) validates every raw central entry within the
+258-entry limit, including lengths, portable names, duplicates, and the exact
+catalog end. During dependency metadata parsing, `ArchiveReader` masks earlier
+bytes and omits the unused archive comment. It exposes one checked footer at
+unchanged offsets, then permits ordinary file reads only after the parsed
+catalog matches. The adapter borrows the original bytes and does not allocate
+another archive-sized buffer. Catalog metadata containing an embedded footer
+signature is rejected; normal archive comments remain supported. This stricter
+ZIP contract is documented in the [author guide](docs/puzzle-authoring.md).
+
+```mermaid
+flowchart LR
+    Bytes["ZIP, at most 8 MiB"] --> Raw["preflight_catalog: at most 258 entries"]
+    Raw --> View["ArchiveReader: one visible footer"]
+    View --> Library["ZipArchive metadata"]
+    Library --> Match["Count and offsets match preflight"]
+    Match --> Files["Original bytes, existing extraction bounds"]
+```
+
+The new regressions failed against the old implementations for revised
+completion, shutdown notification ordering, duplicate filenames, a decoy footer,
+and fallback from a malformed current catalog to an older valid pack. They
+passed with the corrections. The review originally named the manifest's ZIP
+minimum, 8.1.0; the actual product and fuzz lockfiles resolve 8.6.0. The report
+now names the locked version, and the before/after regressions used it.
+
+The pinned and minimum compiler are both Rust 1.98.1, so ordinary CI remains
+the minimum-version check. [`mise.lock`](mise.lock) was regenerated without
+changing unrelated tool entries. The sanitizer script now uses
+`nightly-2026-09-04`; the previous nightly reported 1.98.0 and no longer meets
+the package minimum. This nightly emits manifest-style warnings about existing
+fuzz target names and the explicit README field; these are not sanitizer or
+compiler failures.
+
+The added [native terminal regression](tests/terminal_pty.rs) seeds an obsolete
+journey replay, solves the current first paper through the executable, reopens
+storage, and restarts the player to replay the current keepsake. Its initial
+output check incorrectly required a phrase to be contiguous in the raw terminal
+stream. Ratatui splits words across cursor updates, so the check now uses the
+same stable substrings as the existing replay journey. The durable-puzzle
+comparison remains exact.
+
+The final local release gate and debug all-target suite each passed 236 tests,
+including eight native Linux PTY journeys. Formatting, strict all-target Clippy,
+shell analysis, locked product and fuzz dependency policies, the doctest, and
+the default-feature production build passed. The property gate and local
+credential scan also passed. A production-binary check verified and installed
+a ZIP made by the system ZIP tool, rejected conflicting duplicate metadata
+without changing the installed registry, then removed the pack and confirmed
+an empty listing. Its private state and temporary archives were cleaned up.
+
+Five 60-second AddressSanitizer campaigns used seed 424242. Domain actions ran
+396,723 inputs; puzzle parsing 2,860,479; metadata 2,845,897; replay parsing
+2,993,949; and archive parsing 2,932,686. All 12,029,734 executions completed
+without a crash or timeout. The archive campaign started with a valid example
+ZIP so mutations could reach the new catalog checks. The generated corpus and
+sanitizer artifacts remain under ignored test-output directories. These runs
+do not replace minimum-OS or final packaged-artifact verification.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in

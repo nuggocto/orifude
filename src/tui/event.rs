@@ -191,6 +191,12 @@ impl SharedQueue {
     }
 
     fn begin_shutdown(&self) {
+        // Serialize the predicate change with checking it and entering either wait.
+        // Even a poisoned queue must wake its waiters so they can report failure.
+        let _state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.shutdown.store(true, Ordering::Release);
         self.not_empty.notify_all();
         self.not_full.notify_all();
@@ -430,6 +436,68 @@ mod tests {
             queue.receive().expect("receive"),
             Some(RuntimeEvent::Tick(newest_tick))
         );
+    }
+
+    #[test]
+    fn shutdown_wakes_both_waiters_at_the_predicate_to_wait_boundary() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        for full in [false, true] {
+            let queue = Arc::new(SharedQueue::new());
+            if full {
+                for _ in 0..EVENT_QUEUE_CAPACITY {
+                    queue.send(key('x')).expect("fill queue");
+                }
+            }
+            // Hold the mutex at the exact boundary shared by send and receive:
+            // the queue requires waiting, and shutdown is still false.
+            let state = queue.state.lock().expect("queue state");
+            assert!(!queue.shutdown.load(super::Ordering::Acquire));
+            let (started, starting) = mpsc::channel();
+            let (finished, done) = mpsc::channel();
+            let shutdown_queue = Arc::clone(&queue);
+            let shutdown = std::thread::spawn(move || {
+                started.send(()).expect("announce shutdown");
+                shutdown_queue.begin_shutdown();
+                finished.send(()).expect("announce completion");
+            });
+            starting
+                .recv_timeout(Duration::from_secs(2))
+                .expect("shutdown starts");
+            let early = done.recv_timeout(Duration::from_millis(100));
+            let condition = if full {
+                &queue.not_full
+            } else {
+                &queue.not_empty
+            };
+            let (state, timeout) = condition
+                .wait_timeout_while(state, Duration::from_secs(2), |_| {
+                    !queue.shutdown.load(super::Ordering::Acquire)
+                })
+                .expect("shutdown releases waiter");
+            drop(state);
+            shutdown.join().expect("shutdown joins");
+            assert!(
+                matches!(early, Err(mpsc::RecvTimeoutError::Timeout)),
+                "shutdown must not notify between the predicate check and wait"
+            );
+            assert!(!timeout.timed_out(), "waiter must observe shutdown");
+        }
+    }
+
+    #[test]
+    fn shutdown_still_completes_when_the_queue_mutex_is_poisoned() {
+        let queue = Arc::new(SharedQueue::new());
+        let poisoned = Arc::clone(&queue);
+        let worker = std::thread::spawn(move || {
+            let _state = poisoned.state.lock().expect("queue state");
+            panic!("injected queue failure");
+        });
+        assert!(worker.join().is_err());
+        queue.begin_shutdown();
+        assert!(matches!(queue.receive(), Err(EventError::QueueUnavailable)));
+        assert!(queue.shutdown.load(super::Ordering::Acquire));
     }
 
     #[test]

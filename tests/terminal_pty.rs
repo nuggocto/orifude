@@ -112,6 +112,82 @@ fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
 }
 
 #[test]
+fn revised_journey_completion_survives_a_real_player_restart() {
+    use orifude::domain::paper::{BrushRule, Dimensions};
+    use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
+    use orifude::domain::replay::Replay;
+
+    let state = tempfile::tempdir().expect("isolated revised player state");
+    let paths = configured_returning_player(state.path());
+    let dimensions = Dimensions::new(4, 4).unwrap();
+    let old_position = dimensions.coordinate(0, 0).unwrap();
+    let obsolete = Puzzle::new(
+        PuzzleSpec::new(
+            PuzzleIdentity::new("orifude-journey", "first-drop").unwrap(),
+            4,
+            4,
+        )
+        .with_target_cells(vec![dimensions.cell_id(old_position).unwrap()])
+        .with_allowed_brushes(vec![BrushRule::Dot])
+        .with_budgets(0, 1),
+    )
+    .unwrap();
+    let mut old_attempt = obsolete.start();
+    old_attempt.stamp_dot(old_position).unwrap();
+    Storage::open(paths.clone())
+        .unwrap()
+        .record_completion(&obsolete, &Replay::from_attempt(&old_attempt), 1, 0, false)
+        .unwrap();
+
+    let binary = Path::new(env!("CARGO_BIN_EXE_orifude"));
+    let first = run_in_native_pty_scripted(
+        binary,
+        state.path(),
+        &[PtyStep {
+            input: b"\r\rjl\r\r",
+            wait_for: b"Congratulations",
+        }],
+        b"qy",
+    );
+    assert!(first.status_success);
+    let journey = orifude::packs::validate_directory(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("puzzles/journey"),
+    )
+    .unwrap();
+    let current = journey
+        .puzzles()
+        .iter()
+        .find(|paper| paper.puzzle().identity().puzzle_id() == "first-drop")
+        .unwrap();
+    assert!(
+        Storage::open(paths)
+            .unwrap()
+            .completion_matches(current.puzzle())
+            .unwrap()
+    );
+
+    let second = run_in_native_pty_scripted(
+        binary,
+        state.path(),
+        &[
+            PtyStep {
+                input: b"jjjj\r\r",
+                wait_for: b"fresh",
+            },
+            PtyStep {
+                input: b"\r",
+                wait_for: b"row 2",
+            },
+        ],
+        b"\x1bqy",
+    );
+    assert!(
+        second.status_success,
+        "restart replays the current revision"
+    );
+}
+
+#[test]
 fn shipped_player_exercises_preview_undo_reset_and_saved_result_navigation() {
     let state = tempfile::tempdir().expect("isolated player state");
     let paths = configured_returning_player(state.path());
