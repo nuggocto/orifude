@@ -5,7 +5,6 @@ idiomatic_version_file_enable_tools = ["rust"]
 
 [tools]
 "github:EmbarkStudios/cargo-deny" = "0.20.2"
-"cargo:cargo-fuzz" = "0.13.2"
 
 [tasks.run]
 description = "Run Orifude"
@@ -80,6 +79,9 @@ run = "cargo run --quiet --locked --release --example archive_parser_fuzz"
 [tasks.fuzz-campaign]
 description = "Run the bounded sanitizer-backed fuzz campaigns"
 run = "bash scripts/fuzz-campaign.sh"
+
+[tasks.fuzz-campaign.tools]
+"cargo:cargo-fuzz" = "0.13.2"
 
 [tasks.property-check]
 description = "Run the deterministic property and independent-model checks"

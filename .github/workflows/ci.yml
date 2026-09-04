@@ -125,7 +125,7 @@ jobs:
         run: |
           cargo build --locked --release
           cargo run --quiet --locked --release -- --version
-          cargo run --quiet --locked --release -- verify examples/packs/beginner.orifudepack
+          cargo run --quiet --locked --release -- verify puzzles/example-pack
 
   linux-distributions:
     name: Linux distribution compatibility
