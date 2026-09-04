@@ -1623,6 +1623,12 @@ found no advisory in the 136 locked dependencies. This closes the confirmed
 format finding; longer fuzz campaigns and native-platform release checks stay
 part of the later hardening work.
 
+The correction landed in
+[`4538da3`](https://github.com/nuggocto/orifude/commit/4538da3ce0cb1ac3c2adeebc0a88a0c53875a453).
+Its [hosted check](https://github.com/nuggocto/orifude/actions/runs/33826120880)
+passed the locked repository check and the complete player journey on Linux
+x86_64, Linux ARM64, macOS Intel, macOS Apple Silicon, and Windows x86_64.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in
