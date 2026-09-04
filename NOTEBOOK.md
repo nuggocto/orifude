@@ -1754,11 +1754,13 @@ boundaries, fixed replay seeds, independent solver comparison, deterministic
 generation, and the complete official catalog. The credential scan found no
 high-confidence pattern in the tree or Git history. The direct current-binary
 lifecycle preserved saved progress while the executable and pack were removed
-and restored. The recorded
-[`hosted run`](https://github.com/nuggocto/orifude/actions/runs/33832142361)
-was independently checked and did pass the repository gate, the five native
-OS and architecture jobs, and the Linux distribution job; only review
-documents changed between its code commit and this baseline.
+and restored. The pushed correction at
+[`d36df88`](https://github.com/nuggocto/orifude/commit/d36df8821d2e8b5a20486909d6014a7319539f69)
+passed its
+[`hosted run`](https://github.com/nuggocto/orifude/actions/runs/33860521665):
+the repository gate, all five native OS and architecture jobs, and the Linux
+distribution job were green. The push-only terminal-smoke job was skipped by
+its declared event condition.
 
 This pass ran locally on x86_64 Linux. It did not repeat the already recorded
 multi-million-input sanitizer campaign, minimum supported OS checks, or GUI
