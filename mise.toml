@@ -91,6 +91,16 @@ run = "bash scripts/property-check.sh"
 description = "Scan the local tree and Git history for high-confidence credentials"
 run = "bash scripts/secret-scan.sh"
 
+[tasks.shell-check]
+description = "Check release shell automation"
+run = [
+    "bash -n scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh",
+    "shellcheck scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh",
+]
+
+[tasks.shell-check.tools]
+shellcheck = "0.11.0"
+
 [tasks.storage-measure]
 description = "Measure durable completion writes in a release build"
 run = "cargo run --quiet --locked --release --example storage_measure"
@@ -129,6 +139,7 @@ run = [
 description = "Run release-profile code, policy, and native terminal checks"
 run = [
     { task = "fmt-check" },
+    { task = "shell-check" },
     { task = "audit" },
     { task = "lint" },
     { task = "release-test" },
@@ -140,6 +151,7 @@ run = [
 description = "Run every ordinary repository check in a safe order"
 run = [
     { task = "fmt-check" },
+    { task = "shell-check" },
     { task = "audit" },
     { task = "lint" },
     { task = "test" },
