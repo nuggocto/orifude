@@ -1923,6 +1923,18 @@ ZIP so mutations could reach the new catalog checks. The generated corpus and
 sanitizer artifacts remain under ignored test-output directories. These runs
 do not replace minimum-OS or final packaged-artifact verification.
 
+The corrections landed in
+[`7d228c0`](https://github.com/nuggocto/orifude/commit/7d228c0f0300c226dc0ad03fb8d79c7e51b00cbb).
+Its [hosted run](https://github.com/nuggocto/orifude/actions/runs/33920149998)
+passed the repository gate, all five native OS/architecture jobs, and Linux
+distribution compatibility. The logs confirm that the new revised-journey
+restart regression ran on each native platform. The first Apple Silicon job
+ended during toolchain installation because the runner killed `rustup` with
+SIGKILL before compilation. The other six jobs passed. One diagnostic retry of
+that failed job on a fresh runner installed Rust and passed the native journey
+and production commands without source or workflow changes. This was a setup
+failure, not a discarded application-test failure.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in
