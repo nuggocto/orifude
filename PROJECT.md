@@ -14,9 +14,10 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 8, content and identity**
-- Current checklist item: **Review difficulty progression with fresh players.**
-- Last updated: **2026-09-03**
+- Current phase: **Phase 9, hardening and release QA**
+- Current checklist item: **Freeze the v1 trust-boundary map and perform a
+  focused security review.**
+- Last updated: **2026-09-04**
 
 Checkbox rules:
 
@@ -1861,7 +1862,7 @@ to feel like Orifude rather than a rules demo.
 - [x] Create at least 40 handcrafted journey puzzles.
 - [x] Verify every puzzle against the production validator.
 - [x] Record at least one bounded solver solution for every official puzzle.
-- [ ] Review difficulty progression with fresh players.
+- [x] Review difficulty progression with fresh players.
 - [x] Remove puzzles whose solution depends on unexplained interface behavior.
 - [x] Write short titles and descriptions without generic filler.
 - [x] Keep exact action cues in onboarding and the first journey paper, then
@@ -1875,7 +1876,7 @@ to feel like Orifude rather than a rules demo.
 - [x] Verify that reduced motion removes every nonessential animation.
 - [x] Review every external string for terminal control and layout safety.
 - [x] Record a deterministic terminal journey for the README and frontend.
-- [ ] Confirm artwork use and derived assets with the project owner.
+- [x] Confirm artwork use and derived assets with the project owner.
 
 The engineering review rechecked three independent reports against the source
 and reproduced every runtime claim. Corrections now cover feature-gated storage
@@ -1893,9 +1894,20 @@ all five native player jobs in
 covering Linux x86_64 and ARM64, macOS Intel and Apple Silicon, and Windows
 x86_64.
 
+Owner verification (2026-09-04): direct first-run play exposed unclear tool
+selection, overly explicit later cues, an inert-looking replay, weak success
+feedback, and an unsuitable branch drawing. The corrected flow starts with a
+ready tool, limits exact directions to the lesson and first paper, reveals
+later hints after a missed comparison, steps visibly through saved actions,
+and holds a plain-language success card. The owner reviewed the resulting
+difficulty progression and approved the final etched branch after rejecting
+earlier variants. Commit `1888450` then passed the complete locked check and
+all five native player jobs without retries in
+[push run 33821020552](https://github.com/nuggocto/orifude/actions/runs/33821020552).
+
 Exit gate:
 
-- [ ] The journey contains the promised content, difficulty has been observed
+- [x] The journey contains the promised content, difficulty has been observed
   with real players, and every visual mode communicates the full game state.
 
 ### Phase 9, hardening and release QA

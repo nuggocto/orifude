@@ -1547,6 +1547,22 @@ the shipped TUI in one left fold and one dot, producing the exact two-corner
 opened pattern and the reference-score congratulations card. No commit or push
 was made.
 
+The owner then accepted the revised player journey and etched branch after
+direct play had driven several rounds of correction. That review covered how a
+new paper begins, when exact directions disappear, how later hints arrive,
+what saved replay controls do, how a successful comparison is explained, and
+whether the derived terminal artwork still belongs to the supplied Orifude
+identity. This supplies the human judgment that automated validation and
+solver checks cannot provide.
+
+The complete implementation landed in
+[`1888450`](https://github.com/nuggocto/orifude/commit/1888450451297360b2207b4d3d438b6e4b571df3).
+Its [hosted check](https://github.com/nuggocto/orifude/actions/runs/33821020552)
+passed the locked repository check and the complete player journey on Linux
+x86_64, Linux ARM64, macOS Intel, macOS Apple Silicon, and Windows x86_64
+without retries. The work queue can now move from content judgment to focused
+release hardening.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in
