@@ -627,7 +627,7 @@ fn validate_display(
     if issues.len() == MAX_VALIDATION_ISSUES {
         return;
     }
-    if value.is_empty() || value.chars().count() > max_scalars {
+    if value.trim().is_empty() || value.chars().count() > max_scalars {
         record_issue(issues, location, "display text length is outside the limit");
     }
     if value.chars().any(char::is_control) {

@@ -1,0 +1,51 @@
+[package]
+name = "orifude-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+orifude = { path = ".." }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "domain_actions"
+path = "fuzz_targets/domain_actions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "puzzle_parser"
+path = "fuzz_targets/puzzle_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pack_metadata"
+path = "fuzz_targets/pack_metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "replay_parser"
+path = "fuzz_targets/replay_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_parser"
+path = "fuzz_targets/archive_parser.rs"
+test = false
+doc = false
+bench = false

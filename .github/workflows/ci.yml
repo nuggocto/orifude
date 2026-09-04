@@ -101,6 +101,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
       CARGO_TERM_COLOR: always
+      MACOSX_DEPLOYMENT_TARGET: ${{ startsWith(matrix.runner, 'macos-') && '13.0' || '' }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -118,4 +119,44 @@ jobs:
       - name: Exercise the complete player journey
         env:
           MISE_GITHUB_TOKEN: ""
-        run: mise run test-native
+        run: mise run test-native-release
+
+      - name: Exercise the production command surface
+        run: |
+          cargo build --locked --release
+          cargo run --quiet --locked --release -- --version
+          cargo run --quiet --locked --release -- verify examples/packs/beginner.orifudepack
+
+  linux-distributions:
+    name: Linux distribution compatibility
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the declared Rust toolchain
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.8.16
+          install: "true"
+          install_args: "--locked rust"
+          cache: "false"
+
+      - name: Build the Linux musl release binary
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          CC_x86_64_unknown_linux_musl=musl-gcc cargo build --locked --release --target x86_64-unknown-linux-musl
+
+      - name: Exercise pinned distribution userlands
+        env:
+          MISE_GITHUB_TOKEN: ""
+        run: mise run linux-distribution-check -- "$PWD/target/x86_64-unknown-linux-musl/release/orifude"

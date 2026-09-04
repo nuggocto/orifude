@@ -2,6 +2,11 @@
 
 lockfile_version = 1
 
+[[tools."cargo:cargo-fuzz"]]
+version = "0.13.2"
+backend = "cargo:cargo-fuzz"
+specifiers = ["0.13.2"]
+
 [[tools."github:EmbarkStudios/cargo-deny"]]
 version = "0.20.2"
 backend = "github:EmbarkStudios/cargo-deny"

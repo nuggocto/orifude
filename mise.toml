@@ -5,6 +5,7 @@ idiomatic_version_file_enable_tools = ["rust"]
 
 [tools]
 "github:EmbarkStudios/cargo-deny" = "0.20.2"
+"cargo:cargo-fuzz" = "0.13.2"
 
 [tasks.run]
 description = "Run Orifude"
@@ -76,13 +77,62 @@ run = "cargo run --quiet --locked --release --example replay_parser_fuzz"
 description = "Run the bounded ZIP-parser fuzz harness"
 run = "cargo run --quiet --locked --release --example archive_parser_fuzz"
 
+[tasks.fuzz-campaign]
+description = "Run the bounded sanitizer-backed fuzz campaigns"
+run = "bash scripts/fuzz-campaign.sh"
+
+[tasks.property-check]
+description = "Run the deterministic property and independent-model checks"
+run = "bash scripts/property-check.sh"
+
+[tasks.secret-scan]
+description = "Scan the local tree and Git history for high-confidence credentials"
+run = "bash scripts/secret-scan.sh"
+
 [tasks.storage-measure]
 description = "Measure durable completion writes in a release build"
 run = "cargo run --quiet --locked --release --example storage_measure"
 
+[tasks.lifecycle-check]
+description = "Exercise direct-binary install, upgrade, rollback, removal, and saved state on Linux"
+raw_args = true
+run = "cargo run --quiet --locked --release --example release_lifecycle --"
+
+[tasks.release-measure]
+description = "Measure the optimized terminal, process, solver, storage, and binary on Linux"
+raw_args = true
+run = "bash scripts/release-measure.sh"
+
+[tasks.linux-distribution-check]
+description = "Exercise the Linux musl binary in pinned distribution userlands"
+raw_args = true
+run = "bash scripts/linux-distribution-check.sh"
+
+[tasks.release-test]
+description = "Test every Rust target in the release profile"
+run = "cargo test --locked --release --all-targets --features isolated-test-paths"
+
+[tasks.test-native-release]
+description = "Exercise the complete player journey with a release-profile binary"
+run = "cargo test --locked --release --test terminal_pty --features isolated-test-paths"
+
 [tasks.audit]
 description = "Check dependency advisories, licenses, and sources"
-run = "cargo deny --locked check"
+run = [
+    "cargo deny --locked check",
+    "cargo deny --manifest-path fuzz/Cargo.toml --config fuzz/deny.toml --locked check advisories licenses sources",
+]
+
+[tasks.release-check]
+description = "Run release-profile code, policy, and native terminal checks"
+run = [
+    { task = "fmt-check" },
+    { task = "audit" },
+    { task = "lint" },
+    { task = "release-test" },
+    { task = "doctest" },
+    { task = "build" },
+]
 
 [tasks.check]
 description = "Run every ordinary repository check in a safe order"

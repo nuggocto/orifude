@@ -132,6 +132,35 @@ fn display_controls_and_invalid_licenses_are_rejected() {
 }
 
 #[test]
+fn display_text_rejects_blank_and_malformed_values_without_forbidding_unicode() {
+    let blank = metadata("quiet-grove", "   ");
+    let blank_error = validate_metadata_bytes(blank.as_bytes()).unwrap_err();
+    assert!(
+        blank_error
+            .issues()
+            .iter()
+            .any(|issue| issue.location() == "pack.title")
+    );
+
+    let long_title = "枝".repeat(81);
+    let long = metadata("quiet-grove", &long_title);
+    let long_error = validate_metadata_bytes(long.as_bytes()).unwrap_err();
+    assert!(
+        long_error
+            .issues()
+            .iter()
+            .any(|issue| issue.location() == "pack.title")
+    );
+
+    assert!(validate_metadata_bytes(b"\xff\xfe").is_err());
+
+    let unicode_title = "Paper Бумага 紙 Cafe\u{301}";
+    let unicode = metadata("quiet-grove", unicode_title);
+    let accepted = validate_metadata_bytes(unicode.as_bytes()).unwrap();
+    assert_eq!(accepted.title(), unicode_title);
+}
+
+#[test]
 fn schemas_reject_unknown_fields_bad_grids_and_unbounded_error_lists() {
     let bad_grid = puzzle().replace(
         "[\"#...\", \"....\", \"....\", \"....\"]",
