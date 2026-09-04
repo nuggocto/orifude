@@ -1935,6 +1935,25 @@ that failed job on a fresh runner installed Rust and passed the native journey
 and production commands without source or workflow changes. This was a setup
 failure, not a discarded application-test failure.
 
+The documentation follow-up's
+[hosted run](https://github.com/nuggocto/orifude/actions/runs/33920556915)
+exposed a separate native-test setup failure on macOS Intel: the new journey's
+immediate database reopen returned `Locked`, before starting the player. The
+other six jobs passed. That application-test failure was investigated without
+rerunning the failed job. Parallel terminal tests were launching children while
+other fixtures held file locks; inherited descriptors can extend those locks
+past the original owner's close, as documented by
+[`File::try_lock`](https://doc.rust-lang.org/std/fs/struct.File.html#method.try_lock).
+This fits the failure, although the runner log cannot establish its exact
+scheduling. The [native harness](tests/terminal_pty.rs) now holds one mutex across
+each complete journey, from fixture creation through child exit and teardown.
+It keeps immediate storage reopens and all behavior assertions, while preventing
+another journey's child launch from overlapping fixture ownership.
+The correction passed the debug and release native suites, formatting, and
+strict all-target Clippy. Twenty further debug runs requested eight test threads
+each and passed all 160 Linux journeys with the guard in place. The hosted
+matrix attached to this correction's commit provides its native-platform check.
+
 ## What comes next
 
 The ordered build work and its completion evidence stay in

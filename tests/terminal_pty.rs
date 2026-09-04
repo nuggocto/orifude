@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use orifude::generator::{CURRENT_GENERATOR_COMPATIBILITY_VERSION, CalendarDate};
@@ -18,14 +19,20 @@ const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 #[cfg(unix)]
 const ENABLE_LINE_WRAP: &[u8] = b"\x1b[?7h";
 
+// A concurrent child launch can inherit a fixture's lock until exec completes.
+// Cover setup and teardown as well as the child process with the same guard.
+static NATIVE_JOURNEY: Mutex<()> = Mutex::new(());
+
 #[test]
 fn shipped_binary_restores_the_terminal_after_normal_exit() {
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated terminal state");
     assert_terminal_restored(Path::new(env!("CARGO_BIN_EXE_orifude")), state.path());
 }
 
 #[test]
 fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated player state");
     let binary = Path::new(env!("CARGO_BIN_EXE_orifude"));
     let replay_steps = [
@@ -117,6 +124,7 @@ fn revised_journey_completion_survives_a_real_player_restart() {
     use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
     use orifude::domain::replay::Replay;
 
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated revised player state");
     let paths = configured_returning_player(state.path());
     let dimensions = Dimensions::new(4, 4).unwrap();
@@ -189,6 +197,7 @@ fn revised_journey_completion_survives_a_real_player_restart() {
 
 #[test]
 fn shipped_player_exercises_preview_undo_reset_and_saved_result_navigation() {
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated player state");
     let paths = configured_returning_player(state.path());
     let steps = [
@@ -230,6 +239,7 @@ fn shipped_player_exercises_preview_undo_reset_and_saved_result_navigation() {
 
 #[test]
 fn injected_daily_paper_is_stable_in_the_shipped_binary() {
+    let _journey = native_journey();
     let binary = Path::new(env!("CARGO_BIN_EXE_orifude"));
     let date = CalendarDate::new(2026, 9, 2).expect("test date");
     let mut identities = Vec::new();
@@ -255,6 +265,7 @@ fn injected_daily_paper_is_stable_in_the_shipped_binary() {
 
 #[test]
 fn malformed_installed_pack_is_reported_without_terminal_corruption() {
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated pack state");
     let paths = AppPaths::injected(
         state.path().join("data"),
@@ -311,6 +322,7 @@ fn malformed_installed_pack_is_reported_without_terminal_corruption() {
 
 #[test]
 fn shipped_binary_recovers_after_starting_below_the_minimum_size() {
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated resize state");
     let output = run_in_native_pty_resize(Path::new(env!("CARGO_BIN_EXE_orifude")), state.path());
 
@@ -330,11 +342,19 @@ fn shipped_binary_recovers_after_starting_below_the_minimum_size() {
 fn shipped_binary_path_with_spaces_restores_the_terminal() {
     use std::os::unix::fs::symlink;
 
+    let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated terminal state");
     let linked_binary = state.path().join("orifude terminal smoke");
     symlink(env!("CARGO_BIN_EXE_orifude"), &linked_binary).expect("test binary link");
 
     assert_terminal_restored(&linked_binary, state.path());
+}
+
+fn native_journey() -> MutexGuard<'static, ()> {
+    // Keep independent journeys runnable after another test's assertion fails.
+    NATIVE_JOURNEY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn assert_terminal_restored(binary: &Path, state: &Path) {
