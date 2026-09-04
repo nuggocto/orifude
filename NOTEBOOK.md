@@ -1789,8 +1789,13 @@ The edited workflow parsed successfully, and the remaining mise tasks contain
 no duplicate command. Both focused native commands passed all seven PTY
 journeys. The ordinary and optimized repository gates each passed 227 tests,
 the doctest, strict Clippy, shell checks, dependency policy, formatting, and the
-release build. Hosted CI remains the check for GitHub's event expansion and the
-non-Linux runners.
+release build. The consolidation commit at
+[`0c3ddcb`](https://github.com/nuggocto/orifude/commit/0c3ddcbe4150dfb875cb998d5fffaeb8e776f753)
+passed its
+[`hosted run`](https://github.com/nuggocto/orifude/actions/runs/33870503669).
+GitHub created exactly the repository check, five native-player jobs, and the
+Linux distribution job. All seven passed, and no terminal-smoke placeholder
+remained.
 
 ## What comes next
 
