@@ -270,3 +270,9 @@ alternating solver runs showed an 18.8% reduction in median time for the
 memory matched. All player and storage budgets passed, including startup with
 1,024 saved puzzles and maximum-board fold/brush input. These local measurements
 do not establish minimum-OS compatibility or near-limit database latency.
+
+Cleanup commit [`3e38cd7`](https://github.com/nuggocto/orifude/commit/3e38cd7c92ba734dec2e759d0f18db13d25ba564)
+passed all seven jobs in [hosted CI](https://github.com/nuggocto/orifude/actions/runs/33972605646).
+This includes the repository gate, native Linux x86_64 and ARM64, native macOS
+Intel and Apple Silicon, native Windows x86_64, and Linux distribution
+compatibility. No job needed a retry.

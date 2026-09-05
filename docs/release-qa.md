@@ -17,6 +17,12 @@ is published.
 
 ## Cleanup verification on 2026-09-05
 
+Commit [`3e38cd7`](https://github.com/nuggocto/orifude/commit/3e38cd7c92ba734dec2e759d0f18db13d25ba564)
+passed all seven [hosted CI jobs](https://github.com/nuggocto/orifude/actions/runs/33972605646)
+without retries. Local ordinary and release checks each passed 236 tests plus
+the doctest. Independent property checks and the direct-binary upgrade,
+rollback, removal, and reinstall check passed with saved progress preserved.
+
 The cleanup uses Rust 1.98.1 on Linux 7.1.9 x86_64, the same Ryzen AI MAX+ 395
 machine with 32 logical CPUs and 62 GiB RAM. Measurements use the default
 release profile, including overflow checks and unwind panics. CPU boost and
