@@ -1336,23 +1336,16 @@ impl Paper {
         );
         assert_eq!(self.ink.dimensions, self.dimensions);
 
-        let mut identities = [false; MAX_PHYSICAL_CELLS];
         let mut stack_counts = [0_u8; MAX_PHYSICAL_CELLS];
-        for index in 0..self.cells.len() {
-            let cell_id = CellId::from_index(index);
-            assert!(!identities[cell_id.index()]);
-            identities[cell_id.index()] = true;
+        for cell in &self.cells {
             self.dimensions
-                .validate_coordinate(self.cells[index].coordinate)
+                .validate_coordinate(cell.coordinate)
                 .expect("a canonical cell coordinate must remain inside the paper");
-            let coordinate_index = self
-                .dimensions
-                .coordinate_index(self.cells[index].coordinate);
+            let coordinate_index = self.dimensions.coordinate_index(cell.coordinate);
             stack_counts[coordinate_index] = stack_counts[coordinate_index]
                 .checked_add(1)
                 .expect("a canonical stack count must fit in u8");
         }
-        assert!(identities[..self.cells.len()].iter().all(|seen| *seen));
 
         let mut occupied_layers = [[0_u64; INK_WORDS]; MAX_PHYSICAL_CELLS];
         for cell in &self.cells {

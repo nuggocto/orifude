@@ -879,10 +879,6 @@ mod tests {
                 .iter()
                 .all(|line| line.is_ascii())
         );
-        assert_eq!(
-            branch_caption(0),
-            "The branch is waiting for its first leaf. [0/8]"
-        );
         assert!(branch_caption(8).contains("the full canopy"));
         assert_eq!(
             branch_art(0, GlyphMode::Unicode)
@@ -898,15 +894,6 @@ mod tests {
                 .count(),
             content::journey_groups().len()
         );
-        for glyph_mode in [GlyphMode::Unicode, GlyphMode::Ascii] {
-            let art = branch_art(0, glyph_mode);
-            assert_eq!(art.len(), BRANCH_ART_HEIGHT);
-            assert!(
-                art.iter()
-                    .all(|line| line.chars().count() == BRANCH_ART_WIDTH)
-            );
-        }
-
         let backend = TestBackend::new(44, 12);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);

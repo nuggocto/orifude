@@ -184,6 +184,49 @@ for ((run = 1; run <= startup_runs; run += 1)); do
     stop_session
 done
 
+state="$work_root/returning"
+cargo run --quiet --locked --release --example storage_measure -- --prepare "$state" >"$output/player-state.txt"
+for ((run = 1; run <= startup_runs; run += 1)); do
+    started="$(now_ns)"
+    start_session "$state"
+    wait_for_text "Saved yes" 5000
+    ended="$(now_ns)"
+    printf 'returning_startup,%s,%s\n' "$run" "$(((ended - started) / 1000))" >>"$raw"
+    stop_session
+done
+
+start_session "$state"
+wait_for_text "Saved yes" 5000
+tmux -L "$socket" send-keys -t "$session" -l 'jjj'
+tmux -L "$socket" send-keys -t "$session" Enter
+wait_for_text "Installed puzzle packs" 2000
+tmux -L "$socket" send-keys -t "$session" Enter
+wait_for_text "Pack papers" 2000
+tmux -L "$socket" send-keys -t "$session" Enter
+wait_for_text "Ready: Fold right" 2000
+# Put the brush on the first occupied stack before timing complete fold/ink pairs.
+tmux -L "$socket" send-keys -t "$session" Enter
+wait_for_text "Fold complete." 2000
+tmux -L "$socket" send-keys -t "$session" -l 'llllllu'
+wait_for_text "Ready: Fold right" 2000
+for ((run = 1; run <= input_runs; run += 1)); do
+    started="$(now_ns)"
+    tmux -L "$socket" send-keys -t "$session" Enter
+    wait_for_text "Fold complete." 2000
+    ended="$(now_ns)"
+    printf 'fold,%s,%s\n' "$run" "$(((ended - started) / 1000))" >>"$raw"
+    started="$(now_ns)"
+    tmux -L "$socket" send-keys -t "$session" Enter
+    wait_for_text "Ink reached 2 layers." 2000
+    ended="$(now_ns)"
+    printf 'brush,%s,%s\n' "$run" "$(((ended - started) / 1000))" >>"$raw"
+    tmux -L "$socket" send-keys -t "$session" -l 'u'
+    wait_for_text "Ready: Dot brush" 2000
+    tmux -L "$socket" send-keys -t "$session" -l 'u'
+    wait_for_text "Ready: Fold right" 2000
+done
+stop_session
+
 state="$work_root/input"
 start_session "$state"
 wait_for_text "Enter starts the lesson." 5000
@@ -242,13 +285,15 @@ compressed_bytes="$(stat -c '%s' "$work_root/orifude.stripped.gz")"
 binary_sha256="$(sha256sum "$binary" | awk '{ print $1 }')"
 startup_p50_us="$(percentile startup 50)"
 startup_p95_us="$(percentile startup 95)"
-startup_p99_us="$(percentile startup 99)"
+returning_startup_p95_us="$(percentile returning_startup 95)"
+fold_p95_us="$(percentile fold 95)"
+brush_p95_us="$(percentile brush 95)"
 input_p50_us="$(percentile input 50)"
 input_p95_us="$(percentile input 95)"
 input_p99_us="$(percentile input 99)"
 
 for value in \
-    "$startup_p50_us" "$startup_p95_us" "$startup_p99_us" \
+    "$startup_p50_us" "$startup_p95_us" "$returning_startup_p95_us" "$fold_p95_us" "$brush_p95_us" \
     "$input_p50_us" "$input_p95_us" "$input_p99_us" \
     "$rss_kib" "$solver_rss_kib" "$storage_p95_min_us" "$storage_p95_max_us"; do
     case "$value" in
@@ -265,7 +310,9 @@ done
     printf 'startup_runs=%s\n' "$startup_runs"
     printf 'startup_p50_us=%s\n' "$startup_p50_us"
     printf 'startup_p95_us=%s\n' "$startup_p95_us"
-    printf 'startup_p99_us=%s\n' "$startup_p99_us"
+    printf 'returning_startup_p95_us=%s\n' "$returning_startup_p95_us"
+    printf 'fold_p95_us=%s\n' "$fold_p95_us"
+    printf 'brush_p95_us=%s\n' "$brush_p95_us"
     printf 'input_runs=%s\n' "$input_runs"
     printf 'input_p50_us=%s\n' "$input_p50_us"
     printf 'input_p95_us=%s\n' "$input_p95_us"
@@ -285,11 +332,11 @@ done
 printf 'raw_samples=%s\n' "$raw"
 
 budget_failure=0
-if ((startup_p95_us >= 250000)); then
+if ((startup_p95_us >= 250000 || returning_startup_p95_us >= 250000)); then
     printf '%s\n' "error: startup p95 exceeded 250 milliseconds" >&2
     budget_failure=1
 fi
-if ((input_p95_us >= 33334)); then
+if ((input_p95_us >= 33334 || fold_p95_us >= 33334 || brush_p95_us >= 33334)); then
     printf '%s\n' "error: input p95 exceeded one 30 Hz frame" >&2
     budget_failure=1
 fi

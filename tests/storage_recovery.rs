@@ -1,39 +1,11 @@
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use orifude::storage::{AppPaths, Settings, Storage};
 use rusqlite::Connection;
 
-struct TestDirectory(PathBuf);
-
-impl TestDirectory {
-    fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "orifude-storage-hot-journal-{}",
-            std::process::id()
-        ));
-        fs::create_dir(&path).expect("test directory should be unique");
-        Self(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-
-    fn paths(&self) -> AppPaths {
-        AppPaths::injected(
-            self.path().join("data"),
-            self.path().join("config"),
-            self.path().join("cache"),
-        )
-    }
-}
-
-impl Drop for TestDirectory {
-    fn drop(&mut self) {
-        let _cleanup = fs::remove_dir_all(&self.0);
-    }
+fn app_paths(root: &Path) -> AppPaths {
+    AppPaths::injected(root.join("data"), root.join("config"), root.join("cache"))
 }
 
 #[test]
@@ -54,8 +26,8 @@ fn startup_recovers_a_hot_rollback_journal_before_schema_checks() {
         std::process::exit(86);
     }
 
-    let root = TestDirectory::new();
-    let paths = root.paths();
+    let root = tempfile::tempdir().unwrap();
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let connection = Connection::open(paths.database()).unwrap();
     connection

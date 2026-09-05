@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::Path;
 
 use orifude::domain::paper::{BrushRule, Fold, FoldDirection, LineStroke, PaperAction, StrokeAxis};
 use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
@@ -15,38 +14,12 @@ use rusqlite::{Connection, params};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
-struct TestDirectory(PathBuf);
-
-impl TestDirectory {
-    fn new(label: &str) -> Self {
-        let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "orifude-storage-{label}-{}-{sequence}",
-            std::process::id()
-        ));
-        fs::create_dir(&path).expect("test directory should be unique");
-        Self(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-
-    fn paths(&self) -> AppPaths {
-        AppPaths::injected(
-            self.path().join("data"),
-            self.path().join("config"),
-            self.path().join("cache"),
-        )
-    }
+fn test_directory(label: &str) -> tempfile::TempDir {
+    tempfile::Builder::new().prefix(label).tempdir().unwrap()
 }
 
-impl Drop for TestDirectory {
-    fn drop(&mut self) {
-        let _cleanup = fs::remove_dir_all(&self.0);
-    }
+fn app_paths(root: &Path) -> AppPaths {
+    AppPaths::injected(root.join("data"), root.join("config"), root.join("cache"))
 }
 
 fn solved_replay(pack_id: &str) -> (Puzzle, Replay) {
@@ -73,8 +46,8 @@ fn solved_replay_for(pack_id: &str, puzzle_id: &str) -> (Puzzle, Replay) {
 
 #[test]
 fn saved_progress_pages_reach_older_best_solutions_without_unbounded_reads() {
-    let root = TestDirectory::new("progress-pages");
-    let mut storage = Storage::open(root.paths()).unwrap();
+    let root = test_directory("progress-pages");
+    let mut storage = Storage::open(app_paths(root.path())).unwrap();
     for index in 0..129 {
         let puzzle_id = format!("paper-{index}");
         let (puzzle, replay) = solved_replay_for("many-papers", &puzzle_id);
@@ -122,8 +95,8 @@ stroke_budget = 1
 
 #[test]
 fn settings_completion_and_best_replay_survive_restart() {
-    let root = TestDirectory::new("restart");
-    let paths = root.paths();
+    let root = test_directory("restart");
+    let paths = app_paths(root.path());
     let (puzzle, replay) = solved_replay("built-in");
     {
         let mut storage = Storage::open(paths.clone()).unwrap();
@@ -183,10 +156,10 @@ fn settings_completion_and_best_replay_survive_restart() {
 
 #[test]
 fn reopening_a_daily_paper_does_not_clear_its_completion() {
-    let root = TestDirectory::new("daily-reopen");
+    let root = test_directory("daily-reopen");
     let (puzzle, _) = solved_replay("orifude-daily");
     let day = orifude::generator::CalendarDate::new(2026, 9, 2).unwrap();
-    let mut storage = Storage::open(root.paths()).unwrap();
+    let mut storage = Storage::open(app_paths(root.path())).unwrap();
     storage.record_daily(day, 1, &puzzle, true).unwrap();
     storage.record_daily(day, 1, &puzzle, false).unwrap();
 
@@ -204,8 +177,8 @@ fn reopening_a_daily_paper_does_not_clear_its_completion() {
 
 #[test]
 fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
-    let root = TestDirectory::new("ownership");
-    let paths = root.paths();
+    let root = test_directory("ownership");
+    let paths = app_paths(root.path());
     let storage = Storage::open(paths.clone()).unwrap();
     assert!(matches!(
         Storage::open(paths.clone()),
@@ -237,8 +210,8 @@ fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
     ));
     assert_eq!(fs::read(paths.database()).unwrap(), database_before);
 
-    let corrupt_root = TestDirectory::new("corrupt");
-    let corrupt_paths = corrupt_root.paths();
+    let corrupt_root = test_directory("corrupt");
+    let corrupt_paths = app_paths(corrupt_root.path());
     fs::create_dir_all(corrupt_paths.data()).unwrap();
     fs::write(corrupt_paths.database(), b"this is not sqlite").unwrap();
     assert!(matches!(
@@ -250,8 +223,8 @@ fn ownership_schema_corruption_and_database_pragmas_are_enforced() {
 #[test]
 fn a_database_claiming_the_schema_without_its_markers_is_rejected() {
     for version in [1, 2] {
-        let root = TestDirectory::new("false-schema");
-        let paths = root.paths();
+        let root = test_directory("false-schema");
+        let paths = app_paths(root.path());
         fs::create_dir_all(paths.data()).unwrap();
         let connection = Connection::open(paths.database()).unwrap();
         connection
@@ -269,12 +242,12 @@ fn a_database_claiming_the_schema_without_its_markers_is_rejected() {
 
 #[test]
 fn rejected_settings_write_leaves_the_durable_value_unchanged() {
-    let root = TestDirectory::new("settings-footprint");
-    let paths = root.paths();
+    let root = test_directory("settings-footprint");
+    let paths = app_paths(root.path());
     let mut storage = Storage::open(paths.clone()).unwrap();
     let mut shared_memory_name = paths.database().into_os_string();
     shared_memory_name.push("-shm");
-    fs::File::create(PathBuf::from(shared_memory_name))
+    fs::File::create(shared_memory_name)
         .unwrap()
         .set_len(Storage::transient_sidecar_limit() + 1)
         .unwrap();
@@ -292,8 +265,8 @@ fn rejected_settings_write_leaves_the_durable_value_unchanged() {
 
 #[test]
 fn conflicting_bindings_are_rejected_before_storage_changes() {
-    let root = TestDirectory::new("binding-conflict");
-    let mut storage = Storage::open(root.paths()).unwrap();
+    let root = test_directory("binding-conflict");
+    let mut storage = Storage::open(app_paths(root.path())).unwrap();
     let settings = Settings {
         bindings: KeyBindings {
             brush: 'f',
@@ -340,8 +313,8 @@ fn conflicting_bindings_are_rejected_before_storage_changes() {
 
 #[test]
 fn failed_daily_marker_rolls_back_completion_and_replay_together() {
-    let root = TestDirectory::new("daily-atomic");
-    let paths = root.paths();
+    let root = test_directory("daily-atomic");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let connection = Connection::open(paths.database()).unwrap();
     connection
@@ -387,8 +360,8 @@ fn failed_daily_marker_rolls_back_completion_and_replay_together() {
 
 #[test]
 fn schema_one_settings_gain_the_unicode_glyph_default() {
-    let root = TestDirectory::new("settings-migration");
-    let paths = root.paths();
+    let root = test_directory("settings-migration");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let connection = Connection::open(paths.database()).unwrap();
     connection
@@ -421,8 +394,8 @@ fn schema_one_settings_gain_the_unicode_glyph_default() {
 
 #[test]
 fn schema_two_settings_gain_player_defaults() {
-    let root = TestDirectory::new("player-settings-migration");
-    let paths = root.paths();
+    let root = test_directory("player-settings-migration");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let connection = Connection::open(paths.database()).unwrap();
     connection
@@ -447,8 +420,8 @@ fn schema_two_settings_gain_player_defaults() {
 
 #[test]
 fn failed_initial_migration_rolls_back_and_retries_without_partial_schema() {
-    let root = TestDirectory::new("migration-rollback");
-    let paths = root.paths();
+    let root = test_directory("migration-rollback");
+    let paths = app_paths(root.path());
     fs::create_dir_all(paths.data()).unwrap();
     let connection = Connection::open(paths.database()).unwrap();
     connection
@@ -482,8 +455,8 @@ fn failed_initial_migration_rolls_back_and_retries_without_partial_schema() {
 fn read_only_storage_path_has_a_recoverable_typed_error() {
     use std::os::unix::fs::PermissionsExt;
 
-    let root = TestDirectory::new("read-only");
-    let paths = root.paths();
+    let root = test_directory("read-only");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     fs::set_permissions(paths.lock(), fs::Permissions::from_mode(0o400)).unwrap();
     fs::set_permissions(paths.data(), fs::Permissions::from_mode(0o500)).unwrap();
@@ -495,8 +468,8 @@ fn read_only_storage_path_has_a_recoverable_typed_error() {
 
 #[test]
 fn replay_history_is_bounded_without_discarding_the_first_best() {
-    let root = TestDirectory::new("pruning");
-    let paths = root.paths();
+    let root = test_directory("pruning");
+    let paths = app_paths(root.path());
     let (puzzle, replay) = solved_replay("built-in");
     let mut storage = Storage::open(paths.clone()).unwrap();
     for timestamp in 0..25 {
@@ -534,8 +507,8 @@ fn protected_progress_uses_the_reserve_without_retaining_nonessential_history() 
     const MAX_PAGES: i64 = 32_768;
     const RESERVE_PAGES: i64 = 4_096;
 
-    let root = TestDirectory::new("protected-reserve");
-    let paths = root.paths();
+    let root = test_directory("protected-reserve");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
 
     let mut connection = Connection::open(paths.database()).unwrap();
@@ -594,7 +567,7 @@ fn protected_progress_uses_the_reserve_without_retaining_nonessential_history() 
 
 #[test]
 fn a_better_completion_replaces_the_best_atomically() {
-    let root = TestDirectory::new("better-best");
+    let root = test_directory("better-best");
     let dimensions = orifude::domain::paper::Dimensions::new(4, 4).unwrap();
     let first = dimensions.coordinate(0, 1).unwrap();
     let second = dimensions.coordinate(0, 2).unwrap();
@@ -631,7 +604,7 @@ fn a_better_completion_replaces_the_best_atomically() {
         .unwrap();
     assert!(faster.result().is_success());
 
-    let mut storage = Storage::open(root.paths()).unwrap();
+    let mut storage = Storage::open(app_paths(root.path())).unwrap();
     storage
         .record_completion(&puzzle, &Replay::from_attempt(&slower), 1, 0, false)
         .unwrap();
@@ -653,8 +626,8 @@ fn a_better_completion_replaces_the_best_atomically() {
 
 #[test]
 fn a_failed_progress_write_rolls_back_attempt_replay_and_progress_together() {
-    let root = TestDirectory::new("completion-rollback");
-    let paths = root.paths();
+    let root = test_directory("completion-rollback");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let connection = Connection::open(paths.database()).unwrap();
     connection
@@ -687,11 +660,11 @@ fn a_failed_progress_write_rolls_back_attempt_replay_and_progress_together() {
 
 #[test]
 fn installation_load_conflict_removal_and_progress_are_consistent() {
-    let root = TestDirectory::new("install");
+    let root = test_directory("install");
     let source = root.path().join("source");
     fs::create_dir(&source).unwrap();
     write_pack(&source, "quiet-grove");
-    let paths = root.paths();
+    let paths = app_paths(root.path());
     let (puzzle, replay) = solved_replay("quiet-grove");
     let mut storage = Storage::open(paths.clone()).unwrap();
     storage
@@ -758,8 +731,8 @@ fn installation_load_conflict_removal_and_progress_are_consistent() {
 
 #[test]
 fn community_packs_cannot_claim_built_in_pack_identities() {
-    let root = TestDirectory::new("reserved-pack-ids");
-    let mut storage = Storage::open(root.paths()).unwrap();
+    let root = test_directory("reserved-pack-ids");
+    let mut storage = Storage::open(app_paths(root.path())).unwrap();
     for pack_id in [
         "orifude-lesson",
         "orifude-journey",
@@ -779,11 +752,11 @@ fn community_packs_cannot_claim_built_in_pack_identities() {
 
 #[test]
 fn startup_discards_legacy_reserved_pack_state() {
-    let registered_root = TestDirectory::new("legacy-reserved-registry");
+    let registered_root = test_directory("legacy-reserved-registry");
     let registered_source = registered_root.path().join("source");
     fs::create_dir(&registered_source).unwrap();
     write_pack(&registered_source, "quiet-grove");
-    let registered_paths = registered_root.paths();
+    let registered_paths = app_paths(registered_root.path());
     let mut storage = Storage::open(registered_paths.clone()).unwrap();
     let installed_name = match storage.install_pack(&registered_source, 1).unwrap() {
         InstallOutcome::Installed(pack) => orifude::packs::fingerprint_hex(pack.fingerprint),
@@ -810,13 +783,13 @@ fn startup_discards_legacy_reserved_pack_state() {
     );
     drop(storage);
 
-    let pending_root = TestDirectory::new("legacy-reserved-pending");
+    let pending_root = test_directory("legacy-reserved-pending");
     let pending_source = pending_root.path().join("source");
     fs::create_dir(&pending_source).unwrap();
     write_pack(&pending_source, "orifude-journey");
     let validated = validate_directory(&pending_source).unwrap();
     let final_name = validated.fingerprint_hex();
-    let pending_paths = pending_root.paths();
+    let pending_paths = app_paths(pending_root.path());
     drop(Storage::open(pending_paths.clone()).unwrap());
     copy_directory(
         &pending_source,
@@ -839,8 +812,8 @@ fn startup_discards_legacy_reserved_pack_state() {
 #[test]
 fn revised_completions_replace_obsolete_scores_and_survive_restart() {
     for strokes in [1, 2] {
-        let root = TestDirectory::new("revised-completion");
-        let paths = root.paths();
+        let root = test_directory("revised-completion");
+        let paths = app_paths(root.path());
         let (old, old_replay) = solved_replay_for("orifude-journey", "first-drop");
         let position = old.dimensions().coordinate(0, 1).unwrap();
         let revised = Puzzle::new(
@@ -902,16 +875,16 @@ fn built_in_completion_requires_the_saved_gameplay_revision() {
         .find(|paper| paper.puzzle().identity().puzzle_id() == "first-drop")
         .expect("first journey paper");
 
-    let mismatched_root = TestDirectory::new("mismatched-built-in-progress");
+    let mismatched_root = test_directory("mismatched-built-in-progress");
     let (different, replay) = solved_replay_for("orifude-journey", "first-drop");
-    let mut storage = Storage::open(mismatched_root.paths()).unwrap();
+    let mut storage = Storage::open(app_paths(mismatched_root.path())).unwrap();
     storage
         .record_completion(&different, &replay, 1, 0, false)
         .unwrap();
     assert!(!storage.completion_matches(official.puzzle()).unwrap());
 
-    let matching_root = TestDirectory::new("matching-built-in-progress");
-    let mut storage = Storage::open(matching_root.paths()).unwrap();
+    let matching_root = test_directory("matching-built-in-progress");
+    let mut storage = Storage::open(app_paths(matching_root.path())).unwrap();
     storage
         .record_completion(
             official.puzzle(),
@@ -926,8 +899,8 @@ fn built_in_completion_requires_the_saved_gameplay_revision() {
 
 #[test]
 fn replay_reads_reject_unsuccessful_or_mismatched_documents() {
-    let root = TestDirectory::new("replay-validation");
-    let paths = root.paths();
+    let root = test_directory("replay-validation");
+    let paths = app_paths(root.path());
     let (first_puzzle, first_replay) = solved_replay("built-in");
     let (other_puzzle, other_replay) = solved_replay("other-pack");
     let mut storage = Storage::open(paths.clone()).unwrap();
@@ -976,8 +949,8 @@ fn replay_reads_reject_unsuccessful_or_mismatched_documents() {
 
 #[test]
 fn replay_reads_reject_unknown_fields_in_tagged_records() {
-    let root = TestDirectory::new("replay-unknown-fields");
-    let paths = root.paths();
+    let root = test_directory("replay-unknown-fields");
+    let paths = app_paths(root.path());
     let (puzzle, replay) = solved_replay("built-in");
     let mut storage = Storage::open(paths.clone()).unwrap();
     storage
@@ -1021,14 +994,14 @@ fn replay_reads_reject_unknown_fields_in_tagged_records() {
 
 #[test]
 fn restart_reconciles_each_durable_install_state() {
-    let root = TestDirectory::new("recovery");
+    let root = test_directory("recovery");
     let source = root.path().join("source");
     fs::create_dir(&source).unwrap();
     write_pack(&source, "quiet-grove");
     let validated = validate_directory(&source).unwrap();
     let fingerprint = validated.fingerprint();
     let final_name = validated.fingerprint_hex();
-    let paths = root.paths();
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
 
     copy_directory(&source, &paths.pack_staging());
@@ -1062,11 +1035,11 @@ fn restart_reconciles_each_durable_install_state() {
 
 #[test]
 fn startup_removes_a_registry_row_when_its_managed_directory_is_missing() {
-    let root = TestDirectory::new("missing-managed-pack");
+    let root = test_directory("missing-managed-pack");
     let source = root.path().join("source");
     fs::create_dir(&source).unwrap();
     write_pack(&source, "quiet-grove");
-    let paths = root.paths();
+    let paths = app_paths(root.path());
     let mut storage = Storage::open(paths.clone()).unwrap();
     let outcome = storage.install_pack(&source, 91).unwrap();
     let fingerprint = match outcome {
@@ -1087,8 +1060,8 @@ fn startup_removes_a_registry_row_when_its_managed_directory_is_missing() {
 
 #[test]
 fn startup_cleans_unknown_files_from_managed_pack_storage() {
-    let root = TestDirectory::new("unknown-managed-file");
-    let paths = root.paths();
+    let root = test_directory("unknown-managed-file");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let unknown = paths.managed_packs().join(".DS_Store");
     fs::write(&unknown, b"finder metadata").unwrap();
@@ -1102,8 +1075,8 @@ fn startup_cleans_unknown_files_from_managed_pack_storage() {
 fn startup_rejects_a_symlinked_managed_pack_root_without_following_it() {
     use std::os::unix::fs::symlink;
 
-    let root = TestDirectory::new("managed-root-link");
-    let paths = root.paths();
+    let root = test_directory("managed-root-link");
+    let paths = app_paths(root.path());
     fs::create_dir_all(paths.data()).unwrap();
     let outside = root.path().join("outside");
     let orphan = outside.join("a".repeat(64));
@@ -1122,8 +1095,8 @@ fn startup_rejects_a_symlinked_managed_pack_root_without_following_it() {
 fn failed_orphan_cleanup_is_reported_and_retried_on_restart() {
     use std::os::unix::fs::PermissionsExt;
 
-    let root = TestDirectory::new("cleanup-retry");
-    let paths = root.paths();
+    let root = test_directory("cleanup-retry");
+    let paths = app_paths(root.path());
     drop(Storage::open(paths.clone()).unwrap());
     let orphan = paths.managed_packs().join("a".repeat(64));
     fs::create_dir(&orphan).unwrap();
@@ -1140,11 +1113,11 @@ fn failed_orphan_cleanup_is_reported_and_retried_on_restart() {
 
 #[test]
 fn corrupted_registry_text_is_never_returned_to_a_caller() {
-    let root = TestDirectory::new("registry-controls");
+    let root = test_directory("registry-controls");
     let source = root.path().join("source");
     fs::create_dir(&source).unwrap();
     write_pack(&source, "quiet-grove");
-    let paths = root.paths();
+    let paths = app_paths(root.path());
     let mut storage = Storage::open(paths.clone()).unwrap();
     storage.install_pack(&source, 1).unwrap();
     drop(storage);
@@ -1172,11 +1145,11 @@ fn whitespace_only_registry_display_text_is_rejected_on_restart() {
             "UPDATE pack_registry SET description = '   ' WHERE pack_id = 'quiet-grove'",
         ),
     ] {
-        let root = TestDirectory::new(label);
+        let root = test_directory(label);
         let source = root.path().join("source");
         fs::create_dir(&source).unwrap();
         write_pack(&source, "quiet-grove");
-        let paths = root.paths();
+        let paths = app_paths(root.path());
         let mut storage = Storage::open(paths.clone()).unwrap();
         storage.install_pack(&source, 1).unwrap();
         drop(storage);
@@ -1194,7 +1167,7 @@ fn whitespace_only_registry_display_text_is_rejected_on_restart() {
 
 #[test]
 fn malicious_archive_install_never_writes_outside_managed_storage() {
-    let root = TestDirectory::new("archive-escape");
+    let root = test_directory("archive-escape");
     let archive_path = root.path().join("untrusted-input");
     let archive = fs::File::create(&archive_path).unwrap();
     let mut writer = ZipWriter::new(archive);
@@ -1203,7 +1176,7 @@ fn malicious_archive_install_never_writes_outside_managed_storage() {
     writer.write_all(b"outside").unwrap();
     writer.finish().unwrap();
 
-    let paths = root.paths();
+    let paths = app_paths(root.path());
     let mut storage = Storage::open(paths.clone()).unwrap();
     assert!(matches!(
         storage.install_pack(&archive_path, 1),

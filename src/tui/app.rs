@@ -74,7 +74,7 @@ pub(crate) struct App {
     settings: Settings,
     focused: bool,
     reveal_started: Option<Instant>,
-    journey: Vec<content::BuiltInPaper>,
+    journey: &'static [content::BuiltInPaper],
     journey_done: Vec<bool>,
     recent: Vec<PuzzleProgress>,
     keepsake_offset: u64,
@@ -182,7 +182,7 @@ impl App {
     }
 
     pub(crate) fn journey(&self) -> &[content::BuiltInPaper] {
-        &self.journey
+        self.journey
     }
 
     pub(crate) fn recent(&self) -> &[PuzzleProgress] {
@@ -1093,7 +1093,7 @@ mod tests {
     #[test]
     fn official_replays_keep_the_paper_title() {
         let app = App::new(Settings::default(), Instant::now());
-        let paper = content::journey().remove(0);
+        let paper = &content::journey()[0];
 
         assert_eq!(app.replay_title(paper.puzzle()).as_ref(), paper.title());
     }
@@ -1101,7 +1101,7 @@ mod tests {
     #[test]
     fn journey_lock_follows_durable_progress() {
         let now = Instant::now();
-        let first = content::journey().remove(0);
+        let first = &content::journey()[0];
         let progress = PuzzleProgress {
             pack_id: first.puzzle().identity().pack_id().into(),
             puzzle_id: first.puzzle().identity().puzzle_id().into(),

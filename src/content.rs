@@ -125,8 +125,8 @@ pub(crate) fn lesson() -> BuiltInPaper {
     )
 }
 
-pub(crate) fn journey() -> Vec<BuiltInPaper> {
-    journey::papers().to_vec()
+pub(crate) fn journey() -> &'static [BuiltInPaper] {
+    journey::papers()
 }
 
 pub(crate) fn generator(pack_id: &str) -> Result<Generator, GenerationError> {
@@ -227,10 +227,7 @@ mod tests {
 
     #[test]
     fn built_in_papers_are_solved_by_their_recorded_actions() {
-        let mut papers = journey();
-        papers.push(lesson());
-
-        for paper in papers {
+        for paper in journey().iter().chain(std::iter::once(&lesson())) {
             let replay = Replay::new(
                 ReplayMetadata::current(paper.puzzle()),
                 paper.solution().to_vec(),

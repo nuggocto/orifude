@@ -369,6 +369,15 @@ impl<'a, C: Cancellation + ?Sized> Search<'a, C> {
                     return SolveOutcome::Cancelled(self.stats);
                 }
                 let action = self.catalog[catalog_index];
+                let budget_available = match action {
+                    PaperAction::Fold(_) => node.score.folds() < self.puzzle.fold_budget(),
+                    PaperAction::Dot(_) | PaperAction::Line(_) => {
+                        node.score.strokes() < self.puzzle.stroke_budget()
+                    }
+                };
+                if !budget_available {
+                    continue;
+                }
                 let ink_before = self.work_attempt.ink();
                 self.stats.checked_actions = self
                     .stats
@@ -382,9 +391,8 @@ impl<'a, C: Cancellation + ?Sized> Search<'a, C> {
                 let ink_after = self.work_attempt.ink();
                 let brush_changed_ink =
                     matches!(action, PaperAction::Fold(_)) || ink_after != ink_before;
-                let ink_stays_within_target = ink_after
-                    .cell_ids()
-                    .all(|cell_id| self.puzzle.target().contains(cell_id));
+                let ink_stays_within_target =
+                    self.work_attempt.result().comparison().extra().is_empty();
                 if brush_changed_ink && ink_stays_within_target {
                     let child_depth = node
                         .depth

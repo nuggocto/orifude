@@ -1,6 +1,6 @@
 # Release-candidate QA
 
-This record covers commit
+The original record below covers commit
 [`89077d2`](https://github.com/nuggocto/orifude/commit/89077d2dec2a706668e793b6f14427de26627dab)
 on 2026-09-04. The verdict is **PASS WITH KNOWN ISSUES**. The behavior is
 recommended to ship on the supported Linux, macOS, and Windows targets and to
@@ -14,6 +14,60 @@ with a 13.0 deployment target, while native execution covers current hosted
 versions and every supported architecture. Final artifacts should still receive
 a designated-host pass on those minimum OS versions before their support claim
 is published.
+
+## Cleanup verification on 2026-09-05
+
+The cleanup uses Rust 1.98.1 on Linux 7.1.9 x86_64, the same Ryzen AI MAX+ 395
+machine with 32 logical CPUs and 62 GiB RAM. Measurements use the default
+release profile, including overflow checks and unwind panics. CPU boost and
+normal desktop scheduling remain enabled; this is local regression evidence.
+The measured player SHA-256 is
+`9e2207485e5a78978ea8f8823aae6256eaa4e7da93c053f8846a4c8d86b24ac4`.
+
+| Measurement | Result | Observations |
+| --- | ---: | --- |
+| Fresh startup p95 | 121.282 ms | 25 starts |
+| Returning startup p95 | 106.432 ms | 25 starts with 1,024 saved puzzles |
+| Help input p95 | 4.888 ms | 100 inputs |
+| Maximum-board fold p95 | 5.092 ms | 100 folds on a 12-by-12 paper |
+| Maximum-board brush p95 | 5.074 ms | 100 strokes through two layers |
+| Fresh durable write p95 | 21.314 to 29.415 ms | Five processes, 500 writes each |
+| Populated durable write p95 | 22.429 to 28.775 ms | Five processes, 500 writes after 1,024 distinct puzzles |
+| Idle CPU | 0.000% | Three seconds |
+| Ordinary play RSS | 7,592 KiB | Sampled player process |
+| Journey solver RSS | 9,148 KiB | Sampled solver process |
+| Binary / stripped / gzip | 5,837,312 / 4,912,120 / 2,210,670 bytes | Default release artifact |
+
+All existing budgets passed. Terminal timing includes tmux input and observation
+overhead and uses a single sequential player. These are warm filesystem starts
+with isolated player roots, not cold machine boots. The 1,024-puzzle fixture
+exercises populated startup and writes, but does not represent a database near
+its 128 MiB limit. The older 25-start p99 below is historical output; the updated
+script no longer reports that estimate.
+
+An exploratory solver comparison ran three independent processes per version
+in baseline/candidate, candidate/baseline, baseline/candidate order. The baseline
+uses `cc4c0654d8993f8f392d7d3c9917c61b689e31cf` production sources with the updated
+`solver_measure` example copied in before building. Both versions use
+`cargo build --locked --release --example solver_measure` and identical fixtures.
+No build or test jobs ran alongside the comparison.
+
+The 20,000-state solve took 2.276 to 2.382 seconds before and 1.856 to 1.908
+seconds after, an 18.8% reduction between process medians. Every process exhausted
+the same visited-state limit after 1,427,056 checked actions with 26,327,728
+retained bytes. The two-axis fixture's batch medians fell from 176.930 to 187.106
+microseconds to 122.860 to 125.223 microseconds, a 31.8% reduction between process
+medians. It still visited 35 states and expanded 21; skipping exhausted action
+classes reduced attempted actions from 798 to 218. Three runs show direction
+and observed variability, not a formal confidence interval or a portable promise.
+
+Reproduce the player measurements with `mise run release-measure` and the solver
+workloads with `mise run solver-measure`. Raw terminal, storage, and solver output
+from this run remains under ignored `target/cleanup-measurement` and
+`target/cleanup-comparison`. The versioned examples retain the fixture definitions.
+The baseline and candidate solver executable SHA-256 values are respectively
+`ce8b1378e27b784eabe06c749cf063dc5b83f4da36042657d5386730cd009d13` and
+`65c1fa75be42c0c3fe4eb12a46f30919af69797484fb8e231b118bb8e53af54f`.
 
 ## Evidence shape
 

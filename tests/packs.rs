@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::{Cursor, Write};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::Path;
 
 use orifude::packs::{
     MAX_ARCHIVE_BYTES, MAX_VALIDATION_ISSUES, PackError, validate_archive_bytes,
@@ -10,30 +9,8 @@ use orifude::packs::{
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
-struct TestDirectory(PathBuf);
-
-impl TestDirectory {
-    fn new(label: &str) -> Self {
-        let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "orifude-pack-{label}-{}-{sequence}",
-            std::process::id()
-        ));
-        fs::create_dir(&path).expect("test directory should be unique");
-        Self(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for TestDirectory {
-    fn drop(&mut self) {
-        let _cleanup = fs::remove_dir_all(&self.0);
-    }
+fn test_directory(label: &str) -> tempfile::TempDir {
+    tempfile::Builder::new().prefix(label).tempdir().unwrap()
 }
 
 fn metadata(pack_id: &str, title: &str) -> String {
@@ -87,7 +64,7 @@ fn zip_bytes(entries: &[(&str, &[u8])], reverse: bool) -> Vec<u8> {
 
 #[test]
 fn directory_and_archive_preserve_validated_meaning_and_fingerprint() {
-    let source = TestDirectory::new("stable-fingerprint");
+    let source = test_directory("stable-fingerprint");
     write_pack(source.path(), "quiet-grove", "Quiet Grove 🍂");
     let directory = validate_directory(source.path()).unwrap();
     let pack_metadata = metadata("quiet-grove", "Quiet Grove 🍂");
@@ -107,7 +84,7 @@ fn directory_and_archive_preserve_validated_meaning_and_fingerprint() {
 
 #[test]
 fn display_controls_and_invalid_licenses_are_rejected() {
-    let source = TestDirectory::new("controls");
+    let source = test_directory("controls");
     write_pack(source.path(), "quiet-grove", "Quiet\\u001b[31mGrove");
     let control_error = validate_directory(source.path()).unwrap_err();
     assert!(
@@ -452,7 +429,7 @@ fn archive_rejects_absolute_device_deep_large_and_excess_entry_inputs() {
 
 #[test]
 fn undeclared_directories_are_rejected_for_both_source_types() {
-    let source = TestDirectory::new("undeclared-directory");
+    let source = test_directory("undeclared-directory");
     write_pack(source.path(), "quiet-grove", "Quiet Grove");
     fs::create_dir(source.path().join("extras")).unwrap();
     assert!(validate_directory(source.path()).is_err());
@@ -469,7 +446,7 @@ fn undeclared_directories_are_rejected_for_both_source_types() {
 fn directory_rejects_symbolic_links_without_following_them() {
     use std::os::unix::fs::symlink;
 
-    let source = TestDirectory::new("link");
+    let source = test_directory("link");
     write_pack(source.path(), "quiet-grove", "Quiet Grove");
     fs::remove_file(source.path().join("puzzles/berry.toml")).unwrap();
     symlink("../../outside", source.path().join("puzzles/berry.toml")).unwrap();
@@ -479,7 +456,7 @@ fn directory_rejects_symbolic_links_without_following_them() {
 #[cfg(unix)]
 #[test]
 fn directory_rejects_hard_links() {
-    let source = TestDirectory::new("hard-link");
+    let source = test_directory("hard-link");
     write_pack(source.path(), "quiet-grove", "Quiet Grove");
     let puzzle_path = source.path().join("puzzles/berry.toml");
     fs::hard_link(&puzzle_path, source.path().join("puzzles/copy.toml")).unwrap();

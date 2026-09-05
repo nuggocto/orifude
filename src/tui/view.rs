@@ -7,7 +7,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
 
 use crate::domain::attempt::Attempt;
-use crate::domain::paper::{Coordinate, FoldDirection, InkPattern, PaperAction, Row};
+use crate::domain::paper::{
+    Coordinate, FoldDirection, InkPattern, MAX_PHYSICAL_CELLS, PaperAction, Row,
+};
 use crate::storage::{ColorMode, GlyphMode, KeyBindings};
 
 use super::app::{App, Overlay, Screen, action_label, key_label};
@@ -1036,6 +1038,18 @@ fn folded_grid(
 ) -> Vec<Line<'static>> {
     let dimensions = attempt.dimensions();
     let footprint = preview_footprint(preview, dimensions);
+    let mut stacks = [(0_u8, false); MAX_PHYSICAL_CELLS];
+    for id in attempt.cell_ids() {
+        let physical = attempt
+            .physical_cell(id)
+            .expect("attempt exposes every physical cell");
+        let position = dimensions
+            .cell_id(physical.coordinate())
+            .expect("cell position");
+        let (count, ink) = &mut stacks[position.index()];
+        *count += 1;
+        *ink |= ink_pattern.contains(id);
+    }
     (0..dimensions.height().get())
         .map(|row| {
             grid_line(
@@ -1043,17 +1057,8 @@ fn folded_grid(
                     .map(|column| {
                         let coordinate =
                             dimensions.coordinate(row, column).expect("grid coordinate");
-                        let mut count = 0_u8;
-                        let mut ink = false;
-                        for id in attempt.cell_ids() {
-                            let physical = attempt
-                                .physical_cell(id)
-                                .expect("attempt exposes every physical cell");
-                            if physical.coordinate() == coordinate {
-                                count = count.saturating_add(1);
-                                ink |= ink_pattern.contains(id);
-                            }
-                        }
+                        let position = dimensions.cell_id(coordinate).expect("grid position");
+                        let (count, ink) = stacks[position.index()];
                         if cursor == Some(coordinate) && ink {
                             (ink_cursor_symbol(profile.glyph_mode()), profile.ink_mark())
                         } else if cursor == Some(coordinate) {
@@ -2166,7 +2171,7 @@ mod tests {
 
     #[test]
     fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
-        let paper = crate::content::journey().remove(39);
+        let paper = &crate::content::journey()[39];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -2328,7 +2333,7 @@ mod tests {
 
     #[test]
     fn minimum_saved_result_keeps_its_return_and_export_controls_visible() {
-        let paper = crate::content::journey().remove(0);
+        let paper = &crate::content::journey()[0];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -2379,7 +2384,7 @@ mod tests {
 
     #[test]
     fn ascii_cursor_preserves_whether_its_stack_contains_ink() {
-        let paper = crate::content::journey().remove(0);
+        let paper = &crate::content::journey()[0];
         let mut attempt = paper.puzzle().start();
         let coordinate = paper
             .puzzle()
@@ -2483,7 +2488,7 @@ mod tests {
 
     #[test]
     fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
-        let paper = crate::content::journey().remove(0);
+        let paper = &crate::content::journey()[0];
         let mut attempt = paper.puzzle().start();
         for &action in paper.solution() {
             attempt.apply(action).expect("recorded action applies");

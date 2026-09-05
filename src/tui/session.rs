@@ -870,7 +870,7 @@ mod tests {
             Some("Fold complete. The dot brush is ready.")
         );
 
-        let first_drop = content::journey().remove(0);
+        let first_drop = &content::journey()[0];
         let first_drop_session = PlaySession::new(
             first_drop.puzzle(),
             first_drop.title(),
@@ -936,7 +936,7 @@ mod tests {
 
     #[test]
     fn failed_comparison_returns_to_the_same_attempt() {
-        let paper = content::journey().remove(0);
+        let paper = &content::journey()[0];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -979,7 +979,7 @@ mod tests {
 
     #[test]
     fn a_saved_result_exports_three_lines_and_enter_returns() {
-        let paper = content::journey().remove(0);
+        let paper = &content::journey()[0];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -1064,7 +1064,7 @@ mod tests {
 
     #[test]
     fn result_reveal_opens_validated_folds_one_at_a_time() {
-        let paper = content::journey().remove(10);
+        let paper = &content::journey()[10];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -1171,7 +1171,7 @@ mod tests {
 
     #[test]
     fn a_dot_reports_the_inked_layers_and_readies_open_paper() {
-        let paper = content::journey().remove(0);
+        let paper = &content::journey()[0];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -1197,7 +1197,7 @@ mod tests {
 
     #[test]
     fn a_missed_journey_paper_reveals_its_hint_and_records_use() {
-        let paper = content::journey().remove(1);
+        let paper = &content::journey()[1];
         let mut session = PlaySession::new(
             paper.puzzle(),
             paper.title(),
@@ -1227,7 +1227,7 @@ mod tests {
         let now = Instant::now();
         let mut checked_folds = 0_usize;
 
-        for (index, paper) in content::journey().into_iter().enumerate() {
+        for (index, paper) in content::journey().iter().enumerate() {
             if paper.puzzle().fold_budget().get() < 2 {
                 continue;
             }
@@ -1276,7 +1276,7 @@ mod tests {
 
     #[test]
     fn a_replay_starts_fresh_and_steps_through_the_saved_actions() {
-        let paper = content::journey().remove(0);
+        let paper = &content::journey()[0];
         let mut attempt = paper.puzzle().start();
         for &action in paper.solution() {
             attempt.apply(action).expect("recorded action applies");
@@ -1330,7 +1330,7 @@ mod tests {
 
     #[test]
     fn replay_playback_rejects_a_valid_but_unsuccessful_action_list() {
-        let paper = content::journey().remove(0);
+        let paper = &content::journey()[0];
         let replay = Replay::new(
             crate::domain::replay::ReplayMetadata::current(paper.puzzle()),
             Vec::new(),
@@ -1379,7 +1379,7 @@ mod tests {
     #[test]
     fn every_official_paper_is_playable_through_the_session_tools() {
         let now = Instant::now();
-        for (index, paper) in content::journey().into_iter().enumerate() {
+        for (index, paper) in content::journey().iter().enumerate() {
             let mut session = PlaySession::new(
                 paper.puzzle(),
                 paper.title(),

@@ -9,7 +9,7 @@ and contributor machines from malformed or malicious local input.
 The static website, future release publication, installers, and package
 repositories are outside this review. They do not run from this repository yet.
 
-A later [code review](code-review-2026-09-04.md) found gaps in ZIP catalog
+A later [code review](https://github.com/nuggocto/orifude/blob/cc4c0654d8993f8f392d7d3c9917c61b689e31cf/docs/code-review-2026-09-04.md) found gaps in ZIP catalog
 validation and event shutdown, plus a puzzle-revision persistence defect.
 The [correction record](../NOTEBOOK.md#review-corrections-on-2026-09-04) explains
 the fixes and their focused regressions. The earlier verdict below is retained

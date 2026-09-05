@@ -12,7 +12,9 @@ use orifude::domain::paper::{
 use orifude::domain::puzzle::{
     MAX_ALLOWED_FOLDS, MAX_BRUSH_RULES, Puzzle, PuzzleIdentity, PuzzleSpec,
 };
-use orifude::solver::{NeverCancel, SolveOutcome, SolveStats, Solver, SolverLimits};
+use orifude::solver::{
+    ExhaustionReason, NeverCancel, SolveOutcome, SolveStats, Solver, SolverLimits,
+};
 
 const SAMPLE_COUNT: usize = 25;
 const SIMPLE_ITERATIONS: usize = 250;
@@ -48,7 +50,9 @@ fn main() -> ExitCode {
 
     let fixtures = representative_puzzles();
     println!("Solver results use {SAMPLE_COUNT} samples in one release process.");
-    println!("Times are nanoseconds per solve and are directional, not portable promises.\n");
+    println!(
+        "Times summarize batch-average nanoseconds per solve, not individual latency tails.\n"
+    );
     println!(
         "class                  visited  expanded   checked      median         p95         max"
     );
@@ -70,6 +74,8 @@ fn main() -> ExitCode {
             timings.maximum,
         );
     }
+
+    measure_broad_search();
 
     let (frontier_attempt, frontier_actions) = maximum_depth_attempt();
     let mut replay_attempt = frontier_attempt.puzzle().start();
@@ -138,6 +144,35 @@ fn main() -> ExitCode {
     println!("Lower bounds exclude allocator bookkeeping and collection spare capacity.");
     println!("The production charge includes a 512-byte margin for those unknowns.");
     ExitCode::SUCCESS
+}
+
+fn measure_broad_search() {
+    let puzzle = puzzle(
+        "measure-broad",
+        12,
+        12,
+        (0..16).map(cell).collect(),
+        Vec::new(),
+        0,
+        8,
+    );
+    let limits = SolverLimits::new(20_000, 128 * 1024 * 1024, 20);
+    let started = Instant::now();
+    let outcome = Solver::solve(&puzzle, limits, &NeverCancel);
+    let elapsed = started.elapsed();
+    let SolveOutcome::Exhausted {
+        reason: ExhaustionReason::VisitedStates,
+        stats,
+    } = outcome
+    else {
+        panic!("the broad search must stop at its visited-state limit: {outcome:?}");
+    };
+    assert_eq!(stats.visited_states(), limits.max_visited_states());
+    println!("\nBroad 12-by-12 search, one bounded solve per process:");
+    println!("broad_elapsed_us={}", elapsed.as_micros());
+    println!("broad_visited={}", stats.visited_states());
+    println!("broad_checked={}", stats.checked_actions());
+    println!("broad_retained_bytes={}", stats.retained_memory_bytes());
 }
 
 fn representative_puzzles() -> [(&'static str, Puzzle, usize); 4] {

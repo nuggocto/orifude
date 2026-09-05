@@ -775,15 +775,6 @@ impl Storage {
         })
     }
 
-    /// Returns the newest bounded page of saved puzzle summaries.
-    ///
-    /// # Errors
-    ///
-    /// Returns when a row is corrupt or SQLite cannot complete the read.
-    pub fn recent_progress(&self) -> Result<Vec<PuzzleProgress>, StorageError> {
-        self.progress_page(0).map(|page| page.entries)
-    }
-
     /// Loads and validates the current best replay document.
     ///
     /// # Errors

@@ -75,6 +75,11 @@ intentionally not included.
 
 ### Changed
 
+- Reduced repeated cell scans in search and folded-paper drawing, skipped
+  exhausted solver actions, and shared the validated journey catalog at startup.
+- Expanded performance checks to populated player state, maximum-board fold
+  and brush input, and a bounded 20,000-state search.
+
 - Clarified that a moved stack may become the only stack at an empty destination
   inside the original bounded working area.
 - Recorded the current direct-push policy for `shrek` while preserving the
