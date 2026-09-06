@@ -34,7 +34,7 @@ jobs:
         with:
           version: 2026.8.16
           install: "true"
-          install_args: "--locked rust github:EmbarkStudios/cargo-deny shellcheck@0.11.0"
+          install_args: "--locked rust github:EmbarkStudios/cargo-deny shellcheck@0.11.0 python@3.14.7 ruff@0.16.4"
           cache: "false"
 
       - name: Check the repository
