@@ -45,8 +45,8 @@ executable bytes.
 
 The installer tests render a private copy pointing at a local HTTPS fixture.
 Published scripts have fixed GitHub release URLs and no fixture URL override.
-Windows temporarily trusts the fixture certificate in the test account and removes
-it afterward. Package-manager fixtures use local archive URLs. Homebrew and Scoop
+The private Windows copy passes its fixture CA directly to curl; it leaves the
+account certificate store unchanged. Package-manager fixtures use local archive URLs. Homebrew and Scoop
 upgrade tests use a package metadata revision with the same verified executable.
 The Arch job assembles both architectures and installs x86_64 natively; the ARM
 executable has its own native Linux player journey.

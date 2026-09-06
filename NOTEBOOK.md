@@ -332,3 +332,10 @@ by fingerprint afterward. Two macOS setup failures killed the runner's `rustup`
 before application compilation; release tool installation is now sequential to
 remove overlapping setup work. Their logs remain failed evidence, not player-test
 failures or successful checks.
+
+Windows certificate-store import also prompted through `certutil`, so the fixture
+now passes its private CA with curl's supported `--cacert` option. This removes
+the certificate-store setup and cleanup entirely. TLS verification remains active;
+only the fixture copy receives its local URL and CA. See the
+[curl certificate option](https://curl.se/docs/manpage.html#--cacert) and
+[installer fixture](scripts/release/install_check.py).

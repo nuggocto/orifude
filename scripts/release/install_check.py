@@ -101,6 +101,7 @@ def verify(directory: Path, target: str) -> None:
         thread.start()
         environment = os.environ.copy()
         environment["CURL_CA_BUNDLE"] = str(certificate)
+        environment["ORIFUDE_FIXTURE_CA"] = str(certificate)
         environment["XDG_DATA_HOME"] = str(root / "data")
         environment["XDG_CONFIG_HOME"] = str(root / "config")
         environment["XDG_CACHE_HOME"] = str(root / "cache")
@@ -117,6 +118,12 @@ def verify(directory: Path, target: str) -> None:
         fixture_script = original_script.replace(
             url, f"https://localhost:{server.server_port}"
         )
+        if windows:
+            # Schannel ignores CURL_CA_BUNDLE; pass the private CA explicitly.
+            fixture_script = fixture_script.replace(
+                "--connect-timeout",
+                "--cacert $env:ORIFUDE_FIXTURE_CA --connect-timeout",
+            )
         script.write_text(fixture_script, encoding="utf-8")
         command = (
             [
@@ -133,45 +140,7 @@ def verify(directory: Path, target: str) -> None:
             if windows
             else ["sh", str(script), "--bin-dir", str(destination)]
         )
-        thumbprint = None
         try:
-            if windows:
-                # Windows curl uses Schannel. Trust only this fixture certificate for this test.
-                der_certificate = root / "localhost.cer"
-                release.run(
-                    "openssl",
-                    "x509",
-                    "-in",
-                    str(certificate),
-                    "-outform",
-                    "DER",
-                    "-out",
-                    str(der_certificate),
-                    timeout=30,
-                )
-                thumbprint = (
-                    release.run(
-                        "openssl",
-                        "x509",
-                        "-in",
-                        str(certificate),
-                        "-noout",
-                        "-fingerprint",
-                        "-sha1",
-                        timeout=30,
-                    )
-                    .split("=", 1)[1]
-                    .replace(":", "")
-                )
-                release.run(
-                    "certutil.exe",
-                    "-user",
-                    "-f",
-                    "-addstore",
-                    "Root",
-                    str(der_certificate),
-                    timeout=30,
-                )
             sentinel = root / "executed-partial-installer"
             environment["ORIFUDE_DOWNLOAD_SENTINEL"] = str(sentinel)
             partial = root / name.replace("install", "partial")
@@ -184,7 +153,7 @@ def verify(directory: Path, target: str) -> None:
                 wrapper.write_text(
                     "param($Destination, $Url)\n$ErrorActionPreference = 'Stop'\n"
                     "curl.exe --fail --location --proto '=https' --proto-redir '=https' "
-                    "--tlsv1.2 --max-time 10 --output $Destination $Url\n"
+                    "--tlsv1.2 --cacert $env:ORIFUDE_FIXTURE_CA --max-time 10 --output $Destination $Url\n"
                     "if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }\n"
                     "& $Destination\n",
                     encoding="utf-8",
@@ -302,10 +271,6 @@ def verify(directory: Path, target: str) -> None:
             server.shutdown()
             thread.join(timeout=5)
             server.server_close()
-            if thumbprint:
-                release.run(
-                    "certutil.exe", "-user", "-delstore", "Root", thumbprint, timeout=30
-                )
 
 
 if __name__ == "__main__":
