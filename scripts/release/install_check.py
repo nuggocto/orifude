@@ -12,7 +12,6 @@ import tempfile
 import threading
 
 import release
-from test_release import fixture_set
 
 
 def execute(
@@ -57,9 +56,10 @@ def verify(directory: Path, target: str) -> None:
         root = Path(temporary)
         fixture = root / "release"
         fixture.mkdir()
-        fixture_set(fixture)
+        for native_target in release.targets():
+            name = release.archive_name(native_target)
+            shutil.copyfile(directory / name, fixture / name)
         archive = fixture / release.archive_name(target)
-        shutil.copyfile(directory / archive.name, archive)
         release.assemble(fixture)
         original_archive = archive.read_bytes()
         destination = root / "bin with spaces"

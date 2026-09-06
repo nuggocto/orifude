@@ -371,3 +371,10 @@ on the fixture's staging command.
 Native artifact and package checks run independently after archive verification,
 even if the classic installer check fails. The job still fails, but its report
 now retains all available installation results instead of hiding later failures.
+
+The Windows installer and extracted-player journey passed together. Scoop then
+exposed a missing bootstrap directory in its disposable checkout; the fixture now
+creates the standard shims and buckets directories before invoking its CLI. It also
+checks an explicit completion result and exact shim version. Homebrew's upgrade
+check now confirms the installed package revision. Installer fixtures copy all five
+real candidate archives instead of generating dummy foreign-platform payloads.

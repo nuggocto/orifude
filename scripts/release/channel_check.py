@@ -41,6 +41,9 @@ def homebrew(directory: Path, base: str) -> None:
             encoding="utf-8",
         )
         release.run("brew", "upgrade", f"{name}/orifude", timeout=600)
+        installed = release.run("brew", "list", "--versions", f"{name}/orifude").split()
+        if f"{release.version()}_1" not in installed:
+            raise RuntimeError("Homebrew did not install the package revision")
         release.run("brew", "test", f"{name}/orifude", timeout=60)
     finally:
         subprocess.run(
@@ -52,6 +55,8 @@ def homebrew(directory: Path, base: str) -> None:
 
 def scoop(directory: Path, root: Path, base: str) -> None:
     scoop_root = root / "scoop"
+    for name in ("shims", "buckets"):
+        (scoop_root / name).mkdir(parents=True)
     checkout = scoop_root / "apps/scoop/current"
     release.run(
         "git",
@@ -84,7 +89,7 @@ def scoop(directory: Path, root: Path, base: str) -> None:
     )
     script = root / "check.ps1"
     script.write_text(
-        r"""param($Root, $Bucket)
+        r"""param($Root, $Bucket, $Version)
 $ErrorActionPreference = 'Stop'
 $env:SCOOP = $Root
 $env:SCOOP_GLOBAL = Join-Path $Root 'global'
@@ -97,8 +102,8 @@ $Scoop = Join-Path $Root 'apps/scoop/current/bin/scoop.ps1'
 & $Scoop install fixture/orifude
 if ($LASTEXITCODE -ne 0) { throw 'Scoop installation failed.' }
 $Binary = Join-Path $Root 'shims/orifude.exe'
-& $Binary --version
-if ($LASTEXITCODE -ne 0) { throw 'Scoop shim failed.' }
+$ActualVersion = & $Binary --version
+if ($LASTEXITCODE -ne 0 -or $ActualVersion -cne "orifude $Version") { throw 'Scoop shim failed.' }
 $ManifestPath = Join-Path $Root 'buckets/fixture/orifude.json'
 $Manifest = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
 $Manifest.version = $Manifest.version + '.1'
@@ -107,25 +112,33 @@ $Manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ManifestPath -En
 if ($LASTEXITCODE -ne 0) { throw 'Scoop update failed.' }
 $Installed = Get-Content -Raw -LiteralPath (Join-Path $Root 'apps/orifude/current/manifest.json') | ConvertFrom-Json
 if ($Installed.version -ne $Manifest.version) { throw 'Scoop did not install the package revision.' }
-& $Binary --version
-if ($LASTEXITCODE -ne 0) { throw 'Updated Scoop shim failed.' }
+$ActualVersion = & $Binary --version
+if ($LASTEXITCODE -ne 0 -or $ActualVersion -cne "orifude $Version") { throw 'Updated Scoop shim failed.' }
 & $Scoop uninstall orifude
 if (Test-Path -LiteralPath $Binary) { throw 'Scoop uninstall left the shim.' }
+Write-Output 'scoop_journey=complete'
 """,
         encoding="utf-8",
     )
-    release.run(
-        "powershell.exe",
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(script),
-        str(scoop_root),
-        str(bucket),
-        timeout=600,
-    )
+    try:
+        output = release.run(
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            str(scoop_root),
+            str(bucket),
+            release.version(),
+            timeout=600,
+        )
+    except subprocess.CalledProcessError as error:
+        print(error.stdout)
+        raise
+    if not output.endswith("scoop_journey=complete"):
+        raise RuntimeError("Scoop stopped before completing the installation journey")
     print("scoop_install_upgrade_uninstall=pass")
 
 
