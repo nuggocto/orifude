@@ -14,10 +14,10 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 10, release archives and distribution**
-- Current checklist item: **Confirm release runners and targets match the
-  approved platform matrix.**
-- Last updated: **2026-09-04**
+- Current phase: **Phase 11, `orifude-front`**
+- Current checklist item: **Confirm the Cloudflare Pages build command, output
+  directory, production branch, domain, and `www` redirect.**
+- Last updated: **2026-09-06**
 
 Checkbox rules:
 
@@ -1951,54 +1951,74 @@ Exit gate:
 Goal: create repeatable, least-privileged publication for canonical archives,
 installers, and the three approved package channels.
 
-- [ ] Confirm release runners and targets match the approved platform matrix.
-- [ ] Keep release publication separate from ordinary CI and require passing
+- [x] Confirm release runners and targets match the approved platform matrix.
+- [x] Keep release publication separate from ordinary CI and require passing
   ordinary and native checks for the exact approved commit.
-- [ ] Build every artifact on a suitable native runner or document verified
+- [x] Build every artifact on a suitable native runner or document verified
   cross-build boundaries.
-- [ ] Set and test the final release profile.
-- [ ] Produce deterministic archive names and contents.
-- [ ] Include license, concise README, and binary in each archive.
-- [ ] Generate one complete SHA-256 checksum file after every archive exists.
-- [ ] Generate both release-specific installers from the completed archive and
+- [x] Set and test the final release profile.
+- [x] Produce deterministic archive names and contents.
+- [x] Include license, concise README, and binary in each archive.
+- [x] Generate one complete SHA-256 checksum file after every archive exists.
+- [x] Generate both release-specific installers from the completed archive and
   checksum manifest.
-- [ ] Embed the expected checksum for every supported archive in each relevant
+- [x] Embed the expected checksum for every supported archive in each relevant
   installer.
-- [ ] Add a local release check that extracts every archive and verifies binary
+- [x] Add a local release check that extracts every archive and verifies binary
   version, help, checksum file, and embedded installer checksums.
-- [ ] Write the version-pinned POSIX installer.
-- [ ] Write the version-pinned PowerShell installer.
-- [ ] Test both installers against a local immutable fixture release.
-- [ ] Test clean install, upgrade, tampered archive, tampered checksum file,
+- [x] Write the version-pinned POSIX installer.
+- [x] Write the version-pinned PowerShell installer.
+- [x] Test both installers against a local immutable fixture release.
+- [x] Test clean install, upgrade, tampered archive, tampered checksum file,
   embedded-hash mismatch, unsupported platform, destination conflict, and
   cleanup behavior.
-- [ ] Test that failed and truncated installer downloads are never executed and
+- [x] Test that failed and truncated installer downloads are never executed and
   make no filesystem change.
-- [ ] Document separate download, inspection, and execution commands. Do not
+- [x] Document separate download, inspection, and execution commands. Do not
   publish pipe-to-shell or pipe-to-`Invoke-Expression` forms.
-- [ ] Render the macOS-only Homebrew formula for `nuggocto/homebrew-tap`.
-- [ ] Test the formula on Intel and Apple Silicon macOS.
-- [ ] Render the Scoop manifest for `nuggocto/scoop-bucket`.
-- [ ] Test Scoop install, version, upgrade, and uninstall on supported Windows.
-- [ ] Render `PKGBUILD` and `.SRCINFO` for only `orifude-bin`.
-- [ ] Confirm the dedicated AUR SSH identity `aur@sshmoi.com` and official remote
+- [x] Render the macOS-only Homebrew formula for `nuggocto/homebrew-tap`.
+- [x] Test the formula on Intel and Apple Silicon macOS.
+- [x] Render the Scoop manifest for `nuggocto/scoop-bucket`.
+- [x] Test Scoop install, version, upgrade, and uninstall on supported Windows.
+- [x] Render `PKGBUILD` and `.SRCINFO` for only `orifude-bin`.
+- [x] Confirm the dedicated AUR SSH identity `aur@sshmoi.com` and official remote
   without exposing private key material.
-- [ ] Test `orifude-bin` in clean Arch Linux build and install environments.
-- [ ] Restrict release credentials to the exact repository and operation each
+- [x] Test `orifude-bin` in clean Arch Linux build and install environments.
+- [x] Restrict release credentials to the exact repository and operation each
   publisher needs.
-- [ ] Pin all release workflow actions to immutable reviewed revisions.
-- [ ] Ensure pull requests from forks cannot access publication credentials.
-- [ ] Add dry-run behavior for every external repository update.
-- [ ] Make publication stop if the tag, checksum, archive matrix, or current
+- [x] Pin all release workflow actions to immutable reviewed revisions.
+- [x] Ensure pull requests from forks cannot access publication credentials.
+- [x] Add dry-run behavior for every external repository update.
+- [x] Make publication stop if the tag, checksum, archive matrix, or current
   branch commit is inconsistent.
-- [ ] Enable immutable GitHub releases and verify the generated release
-  attestation with GitHub CLI.
-- [ ] Document rollback and package correction procedures.
+- [x] Enable immutable GitHub releases and require GitHub CLI release and asset
+  attestation verification before package publication.
+- [x] Document rollback and package correction procedures.
 
 Exit gate:
 
-- [ ] One release candidate installs from archives, both classic installers,
+- [x] One release candidate installs from archives, both classic installers,
   Homebrew, Scoop, and `orifude-bin` using the exact artifacts intended for v1.
+
+Verification: commit
+[`eebe25b`](https://github.com/nuggocto/orifude/commit/eebe25b1c49df03a26ccdda9f3c9e4431d5d6985)
+passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34008975101)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34008975129).
+The same five `1.0.0` archives passed native installer, player, and package checks.
+Local publication, the separate
+[publication workflow dry run](https://github.com/nuggocto/orifude/actions/runs/34009326859),
+and all three package-repository dry runs passed without writing public artifacts
+or package updates. The
+[distribution guide](docs/distribution.md) records the commands and trust boundaries;
+the [QA record](docs/release-qa.md) retains measurements and minimum-OS evidence gaps.
+
+Publication sequencing follows the agreed build plan. This phase enables release
+immutability and implements and tests the attestation guard. Live verification of
+the first published release and every public installation channel remains in
+Phase 12, where the signed tag and public `v1.0.0` release are created. The checklist
+wording above makes that dependency explicit; it does not claim that a public
+attestation has already been verified. No public release or package update was
+created during candidate verification.
 
 ### Phase 11, `orifude-front`
 
@@ -2060,7 +2080,7 @@ the result as a user would receive it.
 - [ ] Complete every earlier exit gate or record an explicit owner-approved
   scope change in this document.
 - [ ] Freeze release scope and stop unrelated refactoring.
-- [ ] Set package and binary version to `1.0.0`.
+- [x] Set package and binary version to `1.0.0`.
 - [ ] Finalize the canonical changelog and release notes.
 - [ ] Confirm dependency, license, security, and known-issue records.
 - [ ] Build the release candidate from a clean locked checkout.

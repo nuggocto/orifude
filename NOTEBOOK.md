@@ -383,3 +383,19 @@ Scoop requires a Git URL when adding a bucket and rejected the fixture's Windows
 filesystem path. The fixture now passes its local `file:///` URI and reports bucket
 setup failure immediately. The package definition and its public HTTPS URL are
 unchanged by this test setup correction.
+
+Commit [`eebe25b`](https://github.com/nuggocto/orifude/commit/eebe25b1c49df03a26ccdda9f3c9e4431d5d6985)
+passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34008975101)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34008975129)
+without a job retry. This includes both Homebrew architectures, Scoop installation,
+version, upgrade and uninstall, Arch packaging, both classic installers, and all
+five extracted-player journeys. The local publication dry run then downloaded and
+verified that exact successful candidate and printed all eight proposed asset
+hashes. No tag, release, or package repository changed. The
+[QA verdict](docs/release-qa.md#native-distribution-verification-on-2026-09-06)
+records the completed review and remaining publication and minimum-OS limits.
+
+The separate [publication workflow dry run](https://github.com/nuggocto/orifude/actions/runs/34009326859)
+also passed on that commit using the environment's read-only default token. Its
+archive and installer hashes matched the local proposal. Actual publication remains
+an explicit operation with the signed tag and scoped publication credential.

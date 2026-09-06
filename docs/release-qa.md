@@ -15,6 +15,39 @@ versions and every supported architecture. Final artifacts should still receive
 a designated-host pass on those minimum OS versions before their support claim
 is published.
 
+## Native distribution verification on 2026-09-06
+
+Commit [`eebe25b`](https://github.com/nuggocto/orifude/commit/eebe25b1c49df03a26ccdda9f3c9e4431d5d6985)
+passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34008975101)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34008975129)
+without rerunning a job. Earlier failed attempts and their corrections remain in
+[the notebook](../NOTEBOOK.md#release-tooling-on-2026-09-06).
+
+The candidate contains five native `1.0.0` archives. Each passed architecture,
+archive-layout, checksum, version, help, example-pack, and extracted-player checks.
+POSIX installation passed on both Linux architectures and both macOS architectures.
+Windows PowerShell installation passed on x86_64. Failure cases covered tampering,
+missing and partial downloads, embedded-hash mismatch, destination conflicts,
+previous-binary preservation, and cleanup. POSIX also exercised unknown platforms
+and an unwritable destination.
+
+Homebrew installed, tested, upgraded, and uninstalled on Intel and Apple Silicon.
+Scoop installed, checked the shim version, upgraded a package revision, and
+uninstalled on Windows. The clean Arch container installed, upgraded, and removed
+x86_64 `orifude-bin` and assembled the ARM package. ARM payload execution was checked
+on native ARM Linux. Fixture installers use local HTTPS and package managers use
+local archive URLs; their published templates retain exact GitHub HTTPS URLs.
+
+The [publication workflow dry run](https://github.com/nuggocto/orifude/actions/runs/34009326859)
+verified the exact successful candidate with read-only credentials. Its eight asset
+hashes matched the local proposal. No public release or package update was created.
+
+Self-review verdict: **PASS: No confirmed findings remain in the reviewed scope.**
+The distribution QA verdict is **PASS WITH KNOWN ISSUES**, with a **ship**
+recommendation for candidate behavior. The minimum-OS and terminal-GUI gaps above
+remain. Public release creation, live release attestation, and public-channel
+installation are separate verification requirements at publication time.
+
 ## Packaged binary measurements on 2026-09-06
 
 The Linux x86_64 static musl binary came from the five-archive hosted set for
