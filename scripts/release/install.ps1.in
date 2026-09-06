@@ -21,7 +21,7 @@ if (Test-Path -LiteralPath $Destination) {
         throw 'Destination must be a regular file.'
     }
 }
-$Curl = (Get-Command curl.exe -CommandType Application -ErrorAction Stop).Source
+$Curl = (Get-Command curl.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $Work = Join-Path ([IO.Path]::GetTempPath()) ('orifude-install-' + [Guid]::NewGuid().ToString('N'))
 $Stage = $null
 try {

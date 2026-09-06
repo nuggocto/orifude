@@ -5,6 +5,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+import channels
 import publish
 import release
 
@@ -97,6 +98,22 @@ class PublicationGate(unittest.TestCase):
         ]["verified"] = False
         with self.assertRaisesRegex(ValueError, "tag signature or commit"):
             publish.preflight("v1.0.0", COMMIT, "123", publishing=True)
+
+
+class PackagePublicationGate(unittest.TestCase):
+    def test_failed_attestation_stops_before_package_checkout_or_write(self) -> None:
+        from pathlib import Path
+
+        with (
+            patch.object(release, "check"),
+            patch.object(channels, "gh", side_effect=ValueError("unverified release")),
+            patch.object(release, "run") as command,
+        ):
+            for channel in channels.CHANNELS:
+                with self.subTest(channel=channel):
+                    with self.assertRaisesRegex(ValueError, "unverified release"):
+                        channels.update(Path("candidate"), channel, push=True)
+            command.assert_not_called()
 
 
 if __name__ == "__main__":

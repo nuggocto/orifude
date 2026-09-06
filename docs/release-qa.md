@@ -15,6 +15,35 @@ versions and every supported architecture. Final artifacts should still receive
 a designated-host pass on those minimum OS versions before their support claim
 is published.
 
+## Packaged binary measurements on 2026-09-06
+
+The Linux x86_64 static musl binary came from the five-archive hosted set for
+[`1e65b60`](https://github.com/nuggocto/orifude/commit/1e65b602ce47245d08676927bd02c2a81d747803).
+Its SHA-256 is
+`ec57fa12e4c9d8809290b3e9578d5b52694b4a578690104caf8060ec3de12600`.
+The local machine and measurement settings match the cleanup record below.
+The shipped binary uses the default features, static CRT, overflow checks, and
+panic unwinding. No local build or test load ran beside the measurement.
+
+| Measurement | Result | Workload |
+| --- | ---: | --- |
+| Fresh startup p95 | 127.060 ms | 25 starts |
+| Returning startup p95 | 103.916 ms | 25 starts with 1,024 saved puzzles |
+| Help input p95 / p99 | 5.408 / 5.863 ms | 100 inputs |
+| Maximum-board fold p95 | 5.434 ms | 100 folds |
+| Maximum-board brush p95 | 5.397 ms | 100 strokes |
+| Idle CPU | 0.000% | Three seconds |
+| Ordinary play RSS | 6,832 KiB | Packaged player process |
+| Binary / stripped / gzip | 5,736,928 / 4,860,904 / 2,193,284 bytes | Hosted musl binary |
+
+All measured budgets passed. The script also rechecked local solver and storage
+examples; those helpers use the local GNU target and do not establish musl
+solver or database microbenchmark results. Player timing does use the downloaded
+musl binary. Raw samples remain under ignored
+`target/release-measurement-20260906T025343Z`; reproduce with
+`mise run release-measure -- /absolute/path/to/extracted/orifude`.
+The existing minimum-OS and terminal-GUI evidence gaps still apply.
+
 ## Cleanup verification on 2026-09-05
 
 Commit [`3e38cd7`](https://github.com/nuggocto/orifude/commit/3e38cd7c92ba734dec2e759d0f18db13d25ba564)

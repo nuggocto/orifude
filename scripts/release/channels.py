@@ -34,16 +34,19 @@ def update(directory: Path, channel: str, push: bool) -> None:
     release.check(directory)
     tag = f"v{release.version()}"
     remote, branch, source, destination = CHANNELS[channel]
-    gh("release", "verify", tag, "--repo", release.REPOSITORY)
-    for target in release.targets():
-        gh(
-            "release",
-            "verify-asset",
-            tag,
-            str(directory / release.archive_name(target)),
-            "--repo",
-            release.REPOSITORY,
-        )
+    if push:
+        gh("release", "verify", tag, "--repo", release.REPOSITORY)
+        for target in release.targets():
+            gh(
+                "release",
+                "verify-asset",
+                tag,
+                str(directory / release.archive_name(target)),
+                "--repo",
+                release.REPOSITORY,
+            )
+    else:
+        print("release_attestation=not_checked; required before push")
     with tempfile.TemporaryDirectory(prefix="orifude-channel-") as temporary:
         checkout = Path(temporary) / "repository"
         release.run(

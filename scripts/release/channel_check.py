@@ -97,10 +97,11 @@ def scoop(directory: Path, root: Path, base: str) -> None:
 $ErrorActionPreference = 'Stop'
 $env:SCOOP = $Root
 $env:SCOOP_GLOBAL = Join-Path $Root 'global'
-$env:SCOOP_CONFIG = Join-Path $Root 'config.json'
+$env:XDG_CONFIG_HOME = Join-Path $Root 'config'
 $env:PATH = (Join-Path $Root 'shims') + ';' + $env:PATH
 $Scoop = Join-Path $Root 'apps/scoop/current/bin/scoop.ps1'
 & $Scoop config aria2-enabled false
+& $Scoop config last_update ([DateTime]::Now.ToString('o'))
 & $Scoop bucket add fixture $Bucket
 & $Scoop install fixture/orifude
 if ($LASTEXITCODE -ne 0) { throw 'Scoop installation failed.' }

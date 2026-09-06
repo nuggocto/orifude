@@ -8,6 +8,16 @@ intentionally not included.
 
 ### Added
 
+- Added native release archives for Linux x86_64 and ARM64, Intel and Apple
+  Silicon macOS, and Windows x86_64, with fixed archive contents and SHA-256
+  checksums.
+- Added version-pinned POSIX and PowerShell installers, Homebrew, Scoop, and
+  `orifude-bin` package metadata, and installation checks using the actual
+  archived binaries.
+- Added separate candidate and publication workflows, package-update dry runs,
+  exact-commit release guards, and immutable-release verification before package
+  publication.
+
 - Defined Orifude as a native, keyboard-driven folding-and-ink puzzle that
   works fully offline and keeps progress on the player's computer.
 - Recorded the canonical paper, fold, ink, target, undo, replay, scoring,

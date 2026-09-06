@@ -139,8 +139,10 @@ mise run release-channel -- target/release-dist scoop
 mise run release-channel -- target/release-dist aur
 ```
 
-These commands verify the immutable release and show the proposed repository diff.
-Only `--push` writes an external repository. Each update clones the exact approved
+These dry runs validate the candidate and show the proposed repository diff, even
+before publication. Their output states that release attestation has not been
+checked. `--push` first verifies the immutable release and each archive attestation;
+only then can it write an external repository. Each update clones the exact approved
 remote into a temporary checkout and uses a normal non-force push. A concurrent
 change stops the update. Use credentials scoped separately to the tap and bucket;
 AUR uses the operator's dedicated `aur@sshmoi.com` SSH identity. The tooling never

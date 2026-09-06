@@ -339,3 +339,32 @@ the certificate-store setup and cleanup entirely. TLS verification remains activ
 only the fixture copy receives its local URL and CA. See the
 [curl certificate option](https://curl.se/docs/manpage.html#--cacert) and
 [installer fixture](scripts/release/install_check.py).
+
+All three package-update dry runs inspected the actual approved remote repositories
+using the hosted `1.0.0` archive set. Homebrew and Scoop showed the new package files;
+AUR showed both `PKGBUILD` and `.SRCINFO`. None pushed. Candidate previews now work
+before a public tag exists, while the write path verifies release and asset
+attestations first. A focused regression confirms that failed attestation stops
+before any package checkout or write. The extra-archive regression now restores
+the complete matrix before adding an unexpected file, so it tests that failure
+independently of a missing archive.
+
+Review of the pinned Scoop source found that `SCOOP_CONFIG` is not a supported
+configuration override, and a fresh checkout normally self-updates on first install.
+The fixture now uses its supported `XDG_CONFIG_HOME` directory and records a fresh
+update time to retain the pinned Scoop commit throughout the short test. This keeps
+configuration inside the disposable root and prevents an unnoticed tool revision
+change during verification.
+
+The downloaded Linux musl binary passed the existing performance budgets. Fresh
+startup p95 was 127.060 ms, returning startup 103.916 ms, fold 5.434 ms, and brush
+5.397 ms. Idle CPU was 0.000%, with 6,832 KiB resident memory during ordinary play.
+The [QA measurement record](docs/release-qa.md#packaged-binary-measurements-on-2026-09-06)
+links the hosted commit, binary hash, workloads, and limits. Solver and storage
+microbenchmarks still use local GNU helpers and are labelled accordingly.
+
+Once the Windows HTTPS fixture could run, it exposed a real installer error on
+hosts with both Windows curl and Git curl in PATH. `Get-Command` returned both
+executables and PowerShell tried to invoke their combined paths. The installer
+now selects the first application match, following normal PATH precedence. The
+native job retains both curl installations, so the same case remains covered.
