@@ -256,3 +256,20 @@ player journey, and Arch package install, revision upgrade, removal, and ARM pac
 assembly passed. A deliberate bypass of generated-file validation made its tamper
 test fail; the restored implementation passes. Native hosted replacement checks
 are pending, so these local results alone do not close the candidate gate.
+
+Review then reproduced and fixed duplicate ZIP catalog normalization. The new test
+rejects a fourth physical record even when the footer claims only three. The real
+hosted archive set passes the stricter reader. All eleven tooling tests pass in
+ordinary and optimized profiles.
+
+The first Rust candidate run required one diagnostic rerun after Apple Silicon's
+preinstalled `rustup` was killed before compilation. The rerun passed. Windows's
+installer fixture subsequently failed because OpenSSL read its response file in
+text mode, truncating binary ZIP data; its player and Scoop journeys still passed.
+The fixture now requests binary reads. Its native correction remains to be checked.
+
+Intel Homebrew also received a truncated local HTTP response. The fixture now clears
+inherited nonblocking mode on accepted sockets and reports request errors. Its
+complete-transfer test uses a 4 MiB response. Intel's classic installer and archived
+player journey passed before that package failure. Both fixture corrections will be
+verified in the next native candidate.

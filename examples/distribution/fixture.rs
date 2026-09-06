@@ -57,6 +57,7 @@ impl Https {
                     "s_server",
                     "-quiet",
                     "-HTTP",
+                    "-http_server_binmode",
                     "-accept",
                     &address.to_string(),
                     "-cert",
@@ -127,10 +128,14 @@ impl Http {
             while !stopping.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Accepted sockets inherit nonblocking mode on some hosts.
+                        stream.set_nonblocking(false)?;
                         stream.set_read_timeout(Some(Duration::from_secs(5)))?;
                         stream.set_write_timeout(Some(Duration::from_secs(10)))?;
                         // Disconnects are normal when a package manager probes a URL.
-                        let _ = respond(&mut stream, &directory);
+                        if let Err(error) = respond(&mut stream, &directory) {
+                            eprintln!("package fixture request failed: {error}");
+                        }
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(25));

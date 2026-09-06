@@ -309,7 +309,7 @@ fn package_fixture_serves_complete_bytes_after_reading_request_headers() {
     use std::net::TcpStream;
     use std::time::Duration;
     let root = tempfile::tempdir().unwrap();
-    let payload = vec![123; 32_768];
+    let payload = vec![123; 4 * 1024 * 1024];
     fs::write(root.path().join("archive.zip"), &payload).unwrap();
     let server = super::fixture::Http::start(root.path()).unwrap();
     let mut stream = TcpStream::connect(server.base.strip_prefix("http://").unwrap()).unwrap();
@@ -330,4 +330,36 @@ fn package_fixture_serves_complete_bytes_after_reading_request_headers() {
         + 4;
     assert!(response.starts_with(b"HTTP/1.0 200 OK\r\n"));
     assert_eq!(&response[header_end..], payload);
+}
+
+#[test]
+fn duplicate_zip_catalog_records_are_rejected_before_library_normalization() {
+    let root = fixture();
+    let target = "x86_64-pc-windows-msvc";
+    let path = root.path().join(archive::name(target).unwrap());
+    let original = fs::read(&path).unwrap();
+    let footer = original.len() - 22;
+    let catalog =
+        u32::from_le_bytes(original[footer + 16..footer + 20].try_into().unwrap()) as usize;
+    let record_size = 46
+        + usize::from(u16::from_le_bytes(
+            original[catalog + 28..catalog + 30].try_into().unwrap(),
+        ));
+    let mut bytes = original[..footer].to_vec();
+    bytes.extend_from_slice(&original[catalog..catalog + record_size]);
+    let new_footer = bytes.len();
+    bytes.extend_from_slice(&original[footer..]);
+    bytes[new_footer + 8..new_footer + 10].copy_from_slice(&4_u16.to_le_bytes());
+    bytes[new_footer + 10..new_footer + 12].copy_from_slice(&4_u16.to_le_bytes());
+    bytes[new_footer + 12..new_footer + 16]
+        .copy_from_slice(&u32::try_from(new_footer - catalog).unwrap().to_le_bytes());
+    for count in [4_u16, 3] {
+        bytes[new_footer + 8..new_footer + 10].copy_from_slice(&count.to_le_bytes());
+        bytes[new_footer + 10..new_footer + 12].copy_from_slice(&count.to_le_bytes());
+        fs::write(&path, &bytes).unwrap();
+        let error = archive::files(&path, target)
+            .err()
+            .expect("duplicate catalog was accepted");
+        assert!(error.to_string().contains("ZIP catalog"));
+    }
 }

@@ -424,3 +424,27 @@ before asserting that execution never occurred. The private HTTPS fixture uses
 OpenSSL's complete-response mode; the Rust owner stops and reaps the server. Package
 HTTP requests have bounded headers and timeouts. No TLS library enters the game.
 Native hosted verification of this replacement is still pending.
+
+Further review reproduced duplicate ZIP catalog records being accepted because the
+ZIP library normalizes repeated names. The [archive checker](examples/distribution/archive.rs)
+now validates the three physical catalog records, bounds, and expected names before
+library parsing. The regression failed before the correction and now rejects both
+honest and forged record counts. All eleven tooling tests pass in both profiles.
+The cleanup assertion also recognizes the POSIX staging prefix's dot separator.
+
+The first Rust [candidate run](https://github.com/nuggocto/orifude/actions/runs/34010553440)
+lost its Apple Silicon runner's `rustup` process to SIGKILL before compilation.
+Ordinary native CI passed on the same image and commit; one diagnostic rerun of the
+failed job passed. This is retained as an infrastructure failure, not a product fix.
+The later Windows fixture run exposed OpenSSL's default text-mode file reads:
+even the complete ZIP transfer ended early. The fixture now explicitly uses
+[`-http_server_binmode`](https://docs.openssl.org/3.0/man1/openssl-s_server/).
+Windows's extracted player journey and Scoop install, upgrade, and removal passed
+independently. The corrected fixture requires another native run.
+
+Intel Homebrew then reproduced a truncated local HTTP transfer. Accepted sockets
+can inherit the listener's nonblocking mode on macOS, so the fixture now explicitly
+sets each accepted stream to blocking mode before bounded reads and writes. It also
+reports request errors instead of discarding them. The complete-transfer regression
+uses a 4 MiB body, matching archive-scale traffic. Intel's installer and extracted
+player journey had passed; Homebrew's corrected fixture needs native verification.

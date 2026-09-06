@@ -232,7 +232,17 @@ pub fn files(path: &Path, target: &str) -> Result<Files> {
         Ok(())
     };
     if target.contains("windows") {
-        let mut archive = ZipArchive::new(Cursor::new(data))?;
+        let catalog = zip_catalog(&data, &expected)?;
+        let mut archive = ZipArchive::with_config(
+            zip::read::Config {
+                archive_offset: zip::read::ArchiveOffset::Known(0),
+            },
+            Cursor::new(data),
+        )?;
+        require(
+            archive.offset() == 0 && archive.central_directory_start() == catalog as u64,
+            "invalid ZIP catalog offset",
+        )?;
         require(
             archive.len() == 3,
             "archive must contain exactly three regular files",
@@ -279,6 +289,53 @@ pub fn files(path: &Path, target: &str) -> Result<Files> {
         "archive documentation differs from candidate",
     )?;
     Ok(files)
+}
+
+// Our three-file, sub-64-MiB ZIPs need neither ZIP64 nor comments. Check the
+// physical catalog before the library deduplicates names or allocates metadata.
+fn zip_catalog(data: &[u8], expected: &BTreeSet<String>) -> Result<usize> {
+    let footer = data.len().checked_sub(22).ok_or("truncated ZIP catalog")?;
+    require(
+        data[footer..].starts_with(b"PK\x05\x06")
+            && little(data, footer + 4, 4)? == 0
+            && little(data, footer + 8, 2)? == 3
+            && little(data, footer + 10, 2)? == 3
+            && little(data, footer + 20, 2)? == 0,
+        "ZIP catalog must contain exactly three files without comments or disks",
+    )?;
+    let start = usize::try_from(little(data, footer + 16, 4)?)?;
+    let size = usize::try_from(little(data, footer + 12, 4)?)?;
+    require(
+        start.checked_add(size) == Some(footer),
+        "invalid ZIP catalog extent",
+    )?;
+    let mut offset = start;
+    let mut seen = BTreeSet::new();
+    for _ in 0..3 {
+        let header = data
+            .get(offset..offset.saturating_add(46))
+            .ok_or("truncated ZIP catalog record")?;
+        require(
+            header.starts_with(b"PK\x01\x02")
+                && little(header, 30, 2)? == 0
+                && little(header, 32, 2)? == 0
+                && little(header, 34, 2)? == 0,
+            "invalid ZIP catalog extensions",
+        )?;
+        let name_length = usize::try_from(little(header, 28, 2)?)?;
+        let name_start = offset + 46;
+        offset = offset
+            .checked_add(46 + name_length)
+            .ok_or("invalid ZIP catalog record length")?;
+        require(offset <= footer, "ZIP catalog record exceeds its extent")?;
+        let name = std::str::from_utf8(&data[name_start..offset])?;
+        require(
+            expected.contains(name) && seen.insert(name),
+            "invalid archive member in ZIP catalog",
+        )?;
+    }
+    require(offset == footer, "ZIP catalog contains extra records")?;
+    Ok(start)
 }
 pub fn manifest(directory: &Path) -> Result<BTreeMap<String, String>> {
     let targets = targets()?;

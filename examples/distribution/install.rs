@@ -215,7 +215,7 @@ pub fn verify(directory: &Path, target: &str) -> Result<()> {
             let name = entry?.file_name();
             let name = name.to_string_lossy();
             require(
-                !name.starts_with(".orifude-install-") && !name.starts_with("orifude-install"),
+                !name.starts_with(".orifude-install") && !name.starts_with("orifude-install"),
                 "installer left temporary state",
             )?;
         }
