@@ -254,8 +254,7 @@ Local ordinary and optimized checks passed, including dependency policy and ten
 release-tool tests. Linux musl packaging, the HTTPS installer fixture, the extracted
 player journey, and Arch package install, revision upgrade, removal, and ARM package
 assembly passed. A deliberate bypass of generated-file validation made its tamper
-test fail; the restored implementation passes. Native hosted replacement checks
-are pending, so these local results alone do not close the candidate gate.
+test fail; the restored implementation passes. The completed native verification is recorded below.
 
 Review then reproduced and fixed duplicate ZIP catalog normalization. The new test
 rejects a fourth physical record even when the footer claims only three. The real
@@ -266,16 +265,31 @@ The first Rust candidate run required one diagnostic rerun after Apple Silicon's
 preinstalled `rustup` was killed before compilation. The rerun passed. Windows's
 installer fixture subsequently failed because OpenSSL read its response file in
 text mode, truncating binary ZIP data; its player and Scoop journeys still passed.
-The fixture now requests binary reads. Its native correction remains to be checked.
+The fixture now requests binary reads. The native correction is verified in the completed run below.
 
 Intel Homebrew also received a truncated local HTTP response. The fixture now clears
 inherited nonblocking mode on accepted sockets and reports request errors. Its
 complete-transfer test uses a 4 MiB response. Intel's classic installer and archived
-player journey passed before that package failure. Both fixture corrections will be
-verified in the next native candidate.
+player journey passed before that package failure. Both corrections were checked again in the subsequent native candidates.
 
 The corrected Windows fixture passed installer replacement and failure checks,
 alongside the extracted player and Scoop journeys. The binary-mode option is now
 limited to Windows because macOS's bundled LibreSSL does not support it and Unix
 file reads do not need it. Startup stderr is retained for diagnosis. Linux checks
-passed after this portability adjustment; macOS must be rechecked.
+passed after this portability adjustment; the completed native run below verifies macOS as well.
+
+The final implementation at
+[`962d7c3`](https://github.com/nuggocto/orifude/commit/962d7c31c238da7c06c5e5064e73e143a1c5a23e)
+passed all seven [ordinary jobs](https://github.com/nuggocto/orifude/actions/runs/34011618551)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34011618555)
+without retries. Every native installer, archived-player journey, Homebrew architecture,
+Scoop journey, and Arch package check passed. Local and hosted
+[publication dry runs](https://github.com/nuggocto/orifude/actions/runs/34011974392)
+proposed identical asset hashes, and all three package-repository dry runs passed.
+
+Review: PASS, no confirmed findings remain in the distribution changes. QA:
+PASS WITH KNOWN ISSUES; ship the candidate. The existing minimum-OS and terminal-GUI
+evidence gaps remain; live attestation and public-channel checks belong to the public
+release handoff. No public release or package update was created. The final Linux
+musl executable's SHA-256 matches the earlier measured binary exactly, so its
+recorded startup, interaction, memory, idle CPU, and size results still apply.

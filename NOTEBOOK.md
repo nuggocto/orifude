@@ -376,8 +376,8 @@ The Windows installer and extracted-player journey passed together. Scoop then
 exposed a missing bootstrap directory in its disposable checkout; the fixture now
 creates the standard shims and buckets directories before invoking its CLI. It also
 checks an explicit completion result and exact shim version. Homebrew's upgrade
-check now confirms the installed package revision. Installer fixtures copy all five
-real candidate archives instead of generating dummy foreign-platform payloads.
+check now confirms the installed package revision. Installer fixtures validate all five real candidate archives and serve the native
+archive through a private URL. They use no dummy foreign-platform payloads.
 
 Scoop requires a Git URL when adding a bucket and rejected the fixture's Windows
 filesystem path. The fixture now passes its local `file:///` URI and reports bucket
@@ -423,7 +423,7 @@ header bounds and made the partial-download check require received script bytes
 before asserting that execution never occurred. The private HTTPS fixture uses
 OpenSSL's complete-response mode; the Rust owner stops and reaps the server. Package
 HTTP requests have bounded headers and timeouts. No TLS library enters the game.
-Native hosted verification of this replacement is still pending.
+The completed hosted verification is recorded below.
 
 Further review reproduced duplicate ZIP catalog records being accepted because the
 ZIP library normalizes repeated names. The [archive checker](examples/distribution/archive.rs)
@@ -456,3 +456,22 @@ bundled LibreSSL does not support OpenSSL's binary-mode option. The option is no
 Windows-only; Unix does not translate text-mode file reads. Server stderr remains
 visible so a startup failure keeps its actual diagnostic. Linux fixture checks
 passed again after this adjustment.
+
+The final Rust implementation at
+[`962d7c3`](https://github.com/nuggocto/orifude/commit/962d7c31c238da7c06c5e5064e73e143a1c5a23e)
+passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34011618551)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34011618555)
+without retries. Both macOS installers and Homebrew architectures, Windows installer
+replacement and Scoop, both Linux targets, Arch packaging, and all five extracted
+player journeys passed together. The local publication dry run and the separate
+[publication workflow](https://github.com/nuggocto/orifude/actions/runs/34011974392)
+passed with identical eight-asset proposals. All three package-repository dry runs
+also passed using that exact candidate; no public release or package update was made.
+
+Self-review verdict: PASS, with no confirmed findings remaining in the distribution
+changes. The reproduced ZIP and fixture defects above are fixed and verified. GitHub's
+language API now reports only Rust. The extracted Linux musl executable retains SHA-256
+`ec57fa12e4c9d8809290b3e9578d5b52694b4a578690104caf8060ec3de12600`,
+matching the binary in the [performance record](docs/release-qa.md#packaged-binary-measurements-on-2026-09-06).
+The earlier measurements still describe the delivered executable. Existing minimum-OS,
+terminal-GUI, and live public-release verification limits remain documented there.

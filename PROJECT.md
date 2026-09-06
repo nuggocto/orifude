@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 10, release archives and distribution**
-- Current checklist item: **Verify the Rust distribution tooling on all native
-  targets after removing the Python implementation.**
+- Current phase: **Phase 11, `orifude-front`**
+- Current checklist item: **Confirm the Cloudflare Pages build command, output
+  directory, production branch, domain, and `www` redirect.**
 - Last updated: **2026-09-06**
 
 Checkbox rules:
@@ -1997,16 +1997,16 @@ installers, and the three approved package channels.
 
 Exit gate:
 
-- [ ] One release candidate installs from archives, both classic installers,
+- [x] One release candidate installs from archives, both classic installers,
   Homebrew, Scoop, and `orifude-bin` using the exact artifacts intended for v1.
 
-Previous implementation evidence (Rust replacement verification pending): commit
-[`eebe25b`](https://github.com/nuggocto/orifude/commit/eebe25b1c49df03a26ccdda9f3c9e4431d5d6985)
-passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34008975101)
-and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34008975129).
+Verification of the Rust distribution tooling: commit
+[`962d7c3`](https://github.com/nuggocto/orifude/commit/962d7c31c238da7c06c5e5064e73e143a1c5a23e)
+passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34011618551)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34011618555).
 The same five `1.0.0` archives passed native installer, player, and package checks.
 Local publication, the separate
-[publication workflow dry run](https://github.com/nuggocto/orifude/actions/runs/34009326859),
+[publication workflow dry run](https://github.com/nuggocto/orifude/actions/runs/34011974392),
 and all three package-repository dry runs passed without writing public artifacts
 or package updates. The
 [distribution guide](docs/distribution.md) records the commands and trust boundaries;
