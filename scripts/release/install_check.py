@@ -32,6 +32,21 @@ def execute(
 
 
 class QuietFiles(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path.startswith("/partial-installer"):
+            data = (
+                b"Set-Content -LiteralPath $env:ORIFUDE_DOWNLOAD_SENTINEL -Value executed\n"
+                if self.path.endswith(".ps1")
+                else b'touch "$ORIFUDE_DOWNLOAD_SENTINEL"\n'
+            )
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data) + 100))
+            self.end_headers()
+            self.wfile.write(data)
+            self.close_connection = True
+            return
+        super().do_GET()
+
     def log_message(self, *_args: object) -> None:
         pass
 
@@ -52,7 +67,9 @@ def verify(directory: Path, target: str) -> None:
         existing = destination / release.binary_name(target)
         marker = b"previous executable must survive failure"
         existing.write_bytes(marker)
-        (root / "saved-progress").write_bytes(b"player state")
+        saved = root / "data/orifude/orifude.sqlite3"
+        saved.parent.mkdir(parents=True)
+        saved.write_bytes(b"existing player database")
         certificate = root / "localhost.pem"
         key = root / "localhost.key"
         release.run(
@@ -84,6 +101,11 @@ def verify(directory: Path, target: str) -> None:
         thread.start()
         environment = os.environ.copy()
         environment["CURL_CA_BUNDLE"] = str(certificate)
+        environment["XDG_DATA_HOME"] = str(root / "data")
+        environment["XDG_CONFIG_HOME"] = str(root / "config")
+        environment["XDG_CACHE_HOME"] = str(root / "cache")
+        environment["LOCALAPPDATA"] = str(root / "data")
+        environment["APPDATA"] = str(root / "config")
         environment["TMPDIR"] = str(root)
         environment["TEMP"] = str(root)
         environment["TMP"] = str(root)
@@ -113,25 +135,89 @@ def verify(directory: Path, target: str) -> None:
         )
         trust_script = root / "trust.ps1"
         trust_script.write_text(
-            "param($Certificate, $Thumbprint)\n$ErrorActionPreference = 'Stop'\n"
-            "if ($Certificate) { (Import-Certificate -FilePath $Certificate "
-            "-CertStoreLocation Cert:\\CurrentUser\\Root).Thumbprint }\n"
-            "else { Remove-Item -LiteralPath ('Cert:\\CurrentUser\\Root\\' + $Thumbprint) }\n",
+            r"""param($Certificate, $Thumbprint)
+$ErrorActionPreference = 'Stop'
+$Store = [Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
+$Store.Open('ReadWrite')
+try {
+    if ($Certificate) {
+        $Cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($Certificate)
+        $Store.Add($Cert)
+        Write-Output $Cert.Thumbprint
+    } else {
+        $Matches = $Store.Certificates.Find('FindByThumbprint', $Thumbprint, $false)
+        foreach ($Cert in $Matches) { $Store.Remove($Cert) }
+    }
+} finally { $Store.Close() }
+""",
             encoding="utf-8",
         )
         thumbprint = None
         try:
             if windows:
                 # Windows curl uses Schannel. Trust only this fixture certificate for this test.
+                der_certificate = root / "localhost.cer"
+                release.run(
+                    "openssl",
+                    "x509",
+                    "-in",
+                    str(certificate),
+                    "-outform",
+                    "DER",
+                    "-out",
+                    str(der_certificate),
+                    timeout=30,
+                )
                 thumbprint = release.run(
                     "powershell.exe",
                     "-NoProfile",
                     "-File",
                     str(trust_script),
                     "-Certificate",
-                    str(certificate),
+                    str(der_certificate),
                     timeout=30,
                 )
+            sentinel = root / "executed-partial-installer"
+            environment["ORIFUDE_DOWNLOAD_SENTINEL"] = str(sentinel)
+            partial = root / name.replace("install", "partial")
+            partial_url = (
+                f"https://localhost:{server.server_port}/partial-installer"
+                + (".ps1" if windows else ".sh")
+            )
+            if windows:
+                wrapper = root / "download.ps1"
+                wrapper.write_text(
+                    "param($Destination, $Url)\n$ErrorActionPreference = 'Stop'\n"
+                    "curl.exe --fail --location --proto '=https' --proto-redir '=https' "
+                    "--tlsv1.2 --max-time 10 --output $Destination $Url\n"
+                    "if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }\n"
+                    "& $Destination\n",
+                    encoding="utf-8",
+                )
+                download = [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(wrapper),
+                    str(partial),
+                    partial_url,
+                ]
+            else:
+                download = [
+                    "sh",
+                    "-c",
+                    "curl --fail --location --proto '=https' "
+                    "--proto-redir '=https' --tlsv1.2 --max-time 10 "
+                    '--output "$1" "$2" && sh "$1"',
+                    "download",
+                    str(partial),
+                    partial_url,
+                ]
+            execute(download, environment, success=False)
+            if sentinel.exists() or existing.read_bytes() != marker:
+                raise RuntimeError("a partial installer was executed")
             archive.write_bytes(b"tampered archive")
             output = execute(command, environment, success=False)
             if (
@@ -139,7 +225,7 @@ def verify(directory: Path, target: str) -> None:
                 or existing.read_bytes() != marker
             ):
                 raise RuntimeError(
-                    "tampered archive did not preserve the previous executable"
+                    f"tampered archive did not preserve the previous executable: {output}"
                 )
             archive.unlink()
             output = execute(command, environment, success=False)
@@ -179,7 +265,7 @@ def verify(directory: Path, target: str) -> None:
                 raise RuntimeError("reinstall changed verified bytes")
             existing.unlink()
             execute(command, environment)
-            if (root / "saved-progress").read_bytes() != b"player state":
+            if saved.read_bytes() != b"existing player database":
                 raise RuntimeError("installation changed unrelated saved data")
             if list(destination.glob(".orifude-install-*")) or list(
                 root.glob("orifude-install*")

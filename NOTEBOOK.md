@@ -310,3 +310,12 @@ runner platforms. Review also tightened expanded tar bytes before metadata parsi
 removed inherited release-profile ambiguity, and kept package-file writes inside
 their temporary checkout. A focused compressed-input regression covers the archive
 bound; the original integrity and native Linux checks remain passing.
+
+The hosted matrix built all five archives and assembled one verified release set.
+Both Linux installation journeys and the Apple Silicon Homebrew journey passed.
+Windows stopped in the HTTPS fixture because the child PowerShell session lacked
+the `Cert:` provider. The fixture now owns its temporary certificate through the
+Windows certificate-store API and still verifies TLS. A partial installer-transfer
+case also confirms that the documented download-then-run sequence never executes
+an incomplete script. Publication guard tests reject branch drift, dirty state,
+wrong candidate runs, failed CI, mutable release settings, and unverified tags.
