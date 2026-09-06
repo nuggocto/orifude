@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import release
 
@@ -77,6 +78,14 @@ class ReleaseIntegrity(unittest.TestCase):
                 ):
                     release.check(self.root)
                 path.write_bytes(original)
+
+    def test_compressed_metadata_cannot_expand_without_a_byte_bound(self) -> None:
+        target = "x86_64-unknown-linux-musl"
+        path = self.root / release.archive_name(target)
+        path.write_bytes(gzip.compress(b"\0" * 20000))
+        with patch.object(release, "MAX_BYTES", 1024):
+            with self.assertRaisesRegex(ValueError, "expanded archive exceeds"):
+                release.archive_files(path, target)
 
     def test_wrong_architecture_is_rejected_before_packaging(self) -> None:
         binary = self.root / "wrong-binary"

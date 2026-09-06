@@ -303,3 +303,10 @@ confirmed the official `orifude-bin` remote and the dedicated AUR login. The
 [distribution guide](docs/distribution.md) describes the exact artifact checks,
 publication dry runs, credential scopes, and recovery. Public release attestation
 and final-version artifact evidence still require the real release handoff.
+
+The first hosted candidate run stopped at tool installation because Python and
+Ruff lacked platform entries in `mise.lock`. Those entries now cover all five
+runner platforms. Review also tightened expanded tar bytes before metadata parsing,
+removed inherited release-profile ambiguity, and kept package-file writes inside
+their temporary checkout. A focused compressed-input regression covers the archive
+bound; the original integrity and native Linux checks remain passing.

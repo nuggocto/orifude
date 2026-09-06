@@ -59,6 +59,19 @@ def update(directory: Path, channel: str, push: bool) -> None:
         )
         original = release.run("git", "rev-parse", "HEAD", cwd=checkout)
         changes = {destination: release.bounded_read(directory / source, 1024 * 1024)}
+        names = [destination, ".SRCINFO"] if channel == "aur" else [destination]
+        before = {}
+        for name in names:
+            path = checkout / name
+            if path.is_symlink() or not path.resolve().is_relative_to(
+                checkout.resolve()
+            ):
+                raise ValueError("package destination must stay inside its checkout")
+            before[name] = (
+                release.bounded_read(path, 1024 * 1024).decode()
+                if path.exists()
+                else ""
+            )
         if channel == "aur":
             (checkout / "PKGBUILD").write_bytes(changes["PKGBUILD"])
             changes[".SRCINFO"] = (
@@ -67,15 +80,10 @@ def update(directory: Path, channel: str, push: bool) -> None:
             ).encode()
         for name, data in changes.items():
             path = checkout / name
-            before = (
-                release.run("git", "show", f"HEAD:{name}", cwd=checkout)
-                if path.exists()
-                else ""
-            )
             print(
                 "".join(
                     difflib.unified_diff(
-                        before.splitlines(keepends=True),
+                        before[name].splitlines(keepends=True),
                         data.decode().splitlines(keepends=True),
                         fromfile=name,
                         tofile=name,

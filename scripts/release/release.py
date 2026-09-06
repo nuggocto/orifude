@@ -199,7 +199,11 @@ def archive_files(path: Path, target: str) -> dict[str, bytes]:
                 with archive.open(entry) as stream:
                     result[entry.filename] = stream.read(MAX_BYTES + 1)
     else:
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as stream:
+            expanded = stream.read(MAX_BYTES + 10240 + 1)
+        if len(expanded) > MAX_BYTES + 10240:
+            raise ValueError("expanded archive exceeds release byte limit")
+        with tarfile.open(fileobj=io.BytesIO(expanded), mode="r:") as archive:
             for entry in archive:
                 if (
                     entry.name not in expected
@@ -311,12 +315,27 @@ def smoke(directory: Path, target: str) -> None:
 def build(target: str, output: Path) -> None:
     checked_target(target)
     environment = os.environ.copy()
-    if "linux" in target or "windows" in target:
-        environment["RUSTFLAGS"] = "-C target-feature=+crt-static"
+    if any(key.startswith("CARGO_PROFILE_RELEASE_") for key in environment):
+        raise ValueError("release profile environment overrides are not supported")
+    environment.pop("CARGO_ENCODED_RUSTFLAGS", None)
+    environment["RUSTFLAGS"] = (
+        "-C target-feature=+crt-static"
+        if "linux" in target or "windows" in target
+        else ""
+    )
     if "darwin" in target:
         environment["MACOSX_DEPLOYMENT_TARGET"] = "13.0"
     subprocess.run(
-        ["cargo", "build", "--locked", "--release", "--target", target],
+        [
+            "cargo",
+            "build",
+            "--locked",
+            "--release",
+            "--target",
+            target,
+            "--target-dir",
+            str(ROOT / "target"),
+        ],
         cwd=ROOT,
         env=environment,
         check=True,
