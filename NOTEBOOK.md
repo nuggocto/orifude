@@ -399,3 +399,9 @@ The separate [publication workflow dry run](https://github.com/nuggocto/orifude/
 also passed on that commit using the environment's read-only default token. Its
 archive and installer hashes matched the local proposal. Actual publication remains
 an explicit operation with the signed tag and scoped publication credential.
+
+The README's clean development setup now installs ShellCheck, Python, and Ruff
+explicitly, matching the verified ordinary CI setup. Earlier hosted failures showed
+that relying on the older supported mise version to provision nested task tools
+was insufficient. This keeps new contributors from reaching the same missing-tool
+failure when running the documented repository check.

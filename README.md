@@ -75,13 +75,14 @@ Rust toolchain is declared in `rust-toolchain.toml`. `Cargo.lock` and
 `mise.lock` keep application builds and development tools reproducible.
 
 ```console
-mise install rust github:EmbarkStudios/cargo-deny --locked
+mise install --locked rust github:EmbarkStudios/cargo-deny shellcheck@0.11.0 python@3.14.7 ruff@0.16.4
 mise run check
 mise run test-native
 ```
 
 `mise run check` verifies formatting, Clippy lints, tests, documentation,
-dependency policy, and the release build. `mise run test-native` exercises the
+dependency policy, release-tool integrity, and the release build. Python and Ruff
+are development tools; the shipped game remains a standalone native executable. `mise run test-native` exercises the
 shipped binary in a native pseudoterminal, including the first lesson, a saved
 journey paper, restart, replay, preview, undo, reset, resize recovery, daily
 generation, malformed-pack handling, and terminal restoration.
