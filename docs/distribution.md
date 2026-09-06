@@ -110,8 +110,8 @@ rechecks commit and tag identity, then publishes and verifies the immutable rele
 It refuses a preexisting release so a partial attempt requires inspection instead
 of silently replacing assets. Release immutability must already be enabled.
 
-The separate publication workflow defaults to this dry run. Actual publication
-uses the `release` environment's `RELEASE_TOKEN`: a token restricted to this
+The separate publication workflow defaults to this dry run. Its `release`
+environment permits only `shrek`. Actual publication uses the `release` environment's `RELEASE_TOKEN`: a token restricted to this
 repository, with contents write, actions read, and administration read for checking
 immutability. Do not put a broad personal token in that secret. Local publication
 can instead use the release operator's GitHub CLI session. No publisher credential

@@ -99,7 +99,10 @@ def verify(directory: Path, target: str) -> None:
         server.socket = context.wrap_socket(server.socket, server_side=True)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        environment = os.environ.copy()
+        # Let Windows PowerShell rebuild its own module path after the pwsh/Python hop.
+        environment = {
+            k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"
+        }
         environment["CURL_CA_BUNDLE"] = str(certificate)
         environment["ORIFUDE_FIXTURE_CA"] = str(certificate)
         environment["XDG_DATA_HOME"] = str(root / "data")

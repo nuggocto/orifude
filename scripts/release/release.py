@@ -22,8 +22,20 @@ EPOCH = 315532800  # ZIP's first representable date, shared by all archive forma
 
 
 def run(*args: str, cwd: Path = ROOT, timeout: int = 1200) -> str:
+    environment = os.environ.copy()
+    if args[0].lower() == "powershell.exe":
+        # A Python child of pwsh otherwise passes incompatible PowerShell 7 modules to 5.1.
+        environment = {
+            k: v for k, v in environment.items() if k.upper() != "PSMODULEPATH"
+        }
     return subprocess.run(
-        args, cwd=cwd, check=True, text=True, stdout=subprocess.PIPE, timeout=timeout
+        args,
+        cwd=cwd,
+        env=environment,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        timeout=timeout,
     ).stdout.strip()
 
 

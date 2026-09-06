@@ -279,10 +279,12 @@ compatibility. No job needed a retry.
 
 ## Release tooling on 2026-09-06
 
-[Release tooling](scripts/release/release.py) now builds the declared native targets,
+[Release tooling](scripts/release/release.py) builds the declared native targets,
 packages fixed archive layouts, validates executable architecture, and generates
 installers and package metadata from the completed archive hashes. Release-only
-Python uses the standard library; shipped binaries require no interpreter.
+Python uses the standard library; shipped binaries require no interpreter. Package
+version `1.0.0` lets the candidate exercise the intended public version before a
+tag or GitHub release exists.
 
 ```text
 Cargo platform targets -> native binaries -> five archives -> SHA256SUMS
@@ -290,81 +292,68 @@ SHA256SUMS -> install.sh / install.ps1 / package metadata -> native installation
 Verified candidate run -> draft -> immutable release -> package repository updates
 ```
 
-Local checks exercised the Linux static musl archive, installer hash/download
-failures and replacement, and the extracted binary's play/save/restart/replay
-journey. A linker wrapper initially left a dynamic interpreter in a musl binary;
-the archive check rejected it. Native `cc` links the static Rust output while
-`musl-gcc` supplies SQLite's C headers. The Arch fixture installed, upgraded, and
-removed the x86_64 package and assembled the ARM package. Hosted native verification
-is still pending.
+The extracted default-feature binary reuses the existing first-player and returning
+player [terminal journey](tests/terminal_pty.rs). Archive checks reject wrong
+architectures, dynamic Linux interpreters, missing or extra targets, links,
+traversal, duplicate members, and altered generated files. Repacking identical
+inputs preserves archive bytes; independent compiler reproducibility is not claimed.
 
-Release immutability was enabled through the repository API. Read-only SSH checks
-confirmed the official `orifude-bin` remote and the dedicated AUR login. The
-[distribution guide](docs/distribution.md) describes the exact artifact checks,
-publication dry runs, credential scopes, and recovery. Public release attestation
-and final-version artifact evidence still require the real release handoff.
+The [installer fixture](scripts/release/install_check.py) exercises real local HTTPS
+transfers, embedded hashes, clean installation, replacement, failure preservation,
+destination conflicts, partial transfers, and cleanup. Only its private script copy
+uses the local URL. Windows curl receives the private CA explicitly through
+[`--cacert`](https://curl.se/docs/manpage.html#--cacert), leaving the certificate
+store unchanged. The [package fixtures](scripts/release/channel_check.py) use real
+Homebrew, Scoop, and Arch tools. Package revision upgrades retain the verified binary.
+The x86_64 Arch job assembles ARM packages; the ARM payload runs in native Linux QA.
 
-The first hosted candidate run stopped at tool installation because Python and
-Ruff lacked platform entries in `mise.lock`. Those entries now cover all five
-runner platforms. Review also tightened expanded tar bytes before metadata parsing,
-removed inherited release-profile ambiguity, and kept package-file writes inside
-their temporary checkout. A focused compressed-input regression covers the archive
-bound; the original integrity and native Linux checks remain passing.
+Self-review tightened expanded tar bytes before metadata parsing, removed inherited
+release-profile ambiguity, and kept package-file writes inside their temporary
+checkout. The POSIX installer renames through the chosen parent directory. Windows
+now selects one curl executable when Windows and Git both provide it. Scoop uses
+its supported `XDG_CONFIG_HOME` directory and a fresh update timestamp to preserve
+the pinned tool revision. These changes address concrete failure or ownership paths.
+The extra-archive regression restores a complete matrix before adding an unexpected
+file, so it detects that problem independently of a missing archive.
 
-The hosted matrix built all five archives and assembled one verified release set.
-Both Linux installation journeys and the Apple Silicon Homebrew journey passed.
-Windows stopped in the HTTPS fixture because the child PowerShell session lacked
-the `Cert:` provider. The fixture now owns its temporary certificate through the
-Windows certificate-store API and still verifies TLS. A partial installer-transfer
-case also confirms that the documented download-then-run sequence never executes
-an incomplete script. Publication guard tests reject branch drift, dirty state,
-wrong candidate runs, failed CI, mutable release settings, and unverified tags.
-
-The release candidate now uses package version `1.0.0`, so archive names, binary
-version output, installers, and package definitions can be tested with the intended
-v1 version before publication. This does not create a tag or GitHub release.
-Public immutable-release verification remains at the release handoff described in
-the accepted implementation plan.
-
-The Windows root-store API prompted in the headless fixture and hit its timeout.
-The fixture now uses `certutil -user -f -addstore` and removes the exact certificate
-by fingerprint afterward. Two macOS setup failures killed the runner's `rustup`
-before application compilation; release tool installation is now sequential to
-remove overlapping setup work. Their logs remain failed evidence, not player-test
-failures or successful checks.
-
-Windows certificate-store import also prompted through `certutil`, so the fixture
-now passes its private CA with curl's supported `--cacert` option. This removes
-the certificate-store setup and cleanup entirely. TLS verification remains active;
-only the fixture copy receives its local URL and CA. See the
-[curl certificate option](https://curl.se/docs/manpage.html#--cacert) and
-[installer fixture](scripts/release/install_check.py).
-
-All three package-update dry runs inspected the actual approved remote repositories
-using the hosted `1.0.0` archive set. Homebrew and Scoop showed the new package files;
-AUR showed both `PKGBUILD` and `.SRCINFO`. None pushed. Candidate previews now work
-before a public tag exists, while the write path verifies release and asset
-attestations first. A focused regression confirms that failed attestation stops
-before any package checkout or write. The extra-archive regression now restores
-the complete matrix before adding an unexpected file, so it tests that failure
-independently of a missing archive.
-
-Review of the pinned Scoop source found that `SCOOP_CONFIG` is not a supported
-configuration override, and a fresh checkout normally self-updates on first install.
-The fixture now uses its supported `XDG_CONFIG_HOME` directory and records a fresh
-update time to retain the pinned Scoop commit throughout the short test. This keeps
-configuration inside the disposable root and prevents an unnoticed tool revision
-change during verification.
+Failure evidence remains in the hosted runs. The
+[first candidate run](https://github.com/nuggocto/orifude/actions/runs/34006610997)
+exposed missing Python and Ruff platform locks; all five platform entries are now
+pinned. Later macOS setup runs killed `rustup` before application compilation;
+release tool setup is now sequential. Windows certificate-provider and import
+attempts failed or prompted in the headless account, so that setup was removed.
+The later missing `Get-FileHash` failure came from Python passing PowerShell 7's
+module directories to Windows PowerShell 5.1. The fixture now lets 5.1 reconstruct
+its default module path, as described by
+[Microsoft](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_psmodulepath).
+The [Windows installer run](https://github.com/nuggocto/orifude/actions/runs/34007685513)
+then exposed the multiple-curl invocation bug. Failed runs remain evidence and do
+not count as passing player checks. The artifact actions now use pinned Node 24
+revisions and reject service-reported digest mismatches.
 
 The downloaded Linux musl binary passed the existing performance budgets. Fresh
 startup p95 was 127.060 ms, returning startup 103.916 ms, fold 5.434 ms, and brush
 5.397 ms. Idle CPU was 0.000%, with 6,832 KiB resident memory during ordinary play.
-The [QA measurement record](docs/release-qa.md#packaged-binary-measurements-on-2026-09-06)
-links the hosted commit, binary hash, workloads, and limits. Solver and storage
-microbenchmarks still use local GNU helpers and are labelled accordingly.
+The [QA record](docs/release-qa.md#packaged-binary-measurements-on-2026-09-06) links
+the hosted commit, binary hash, workloads, and limits. Solver and storage
+microbenchmarks use local GNU helpers and are labelled accordingly.
 
-Once the Windows HTTPS fixture could run, it exposed a real installer error on
-hosts with both Windows curl and Git curl in PATH. `Get-Command` returned both
-executables and PowerShell tried to invoke their combined paths. The installer
-now selects the first application match, following normal PATH precedence. The
-native job retains both curl installations, so the same case remains covered.
+All three package-update dry runs inspected the approved remote repositories using
+the hosted `1.0.0` archive set. Homebrew and Scoop showed new package files; AUR
+showed `PKGBUILD` and `.SRCINFO`. None pushed. The AUR registry has no active
+`orifude-bin` entry, although its Git remote retains the retired product's history.
+Read-only SSH checks confirmed the official remote and dedicated AUR login.
+Candidate previews work before public release; failed attestation stops the write
+path before any package checkout or write.
+
+Repository release immutability is enabled. The GitHub `release` environment permits
+only `shrek`, matching the workflow's branch and exact-commit guards. Publication
+also requires successful ordinary and candidate checks, a clean checkout, complete
+archive hashes, and a verified signed tag. The
+[distribution guide](docs/distribution.md) covers credential scopes, dry runs, and
+recovery. No publication token, tag, public release, or package update was created.
+The release operator supplies the documented narrowly scoped credential when
+publication is due, or uses the local GitHub CLI command. Live release attestation
+and public-channel verification remain at the release handoff from the accepted
+implementation plan. Existing minimum-OS and terminal-GUI evidence gaps remain in
+the QA record.
