@@ -1,8 +1,9 @@
 # Building and distributing Orifude
 
-The game needs no network connection or interpreter. Release tooling uses the
-pinned Rust compiler and Python 3.14.7 through mise. Python has no third-party
-runtime dependencies here. The artifact matrix comes from the platform metadata
+The game needs no network connection or interpreter. Release tooling is the Rust
+[distribution example](../examples/distribution.rs), built with the pinned compiler
+through mise. Its archive and JSON dependencies are development-only. Installer QA
+uses OpenSSL for a private loopback HTTPS fixture. The artifact matrix comes from the platform metadata
 in [Cargo.toml](../Cargo.toml).
 
 ## Candidate archives

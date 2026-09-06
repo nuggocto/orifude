@@ -242,3 +242,17 @@ inspection; lifecycle cleanup was checked before success was reported; Docker
 containers used `--rm`; and fuzz and measurement artifacts remained under the
 ignored `target` directories. No ordinary player state or publication system
 was changed.
+
+## Rust distribution tooling replacement
+
+The distribution commands now use the Rust example in
+[`examples/distribution.rs`](../examples/distribution.rs). Python scripts and Ruff
+have been removed from the repository and workflow setup. Earlier hosted results
+above remain evidence for the previous implementation.
+
+Local ordinary and optimized checks passed, including dependency policy and ten
+release-tool tests. Linux musl packaging, the HTTPS installer fixture, the extracted
+player journey, and Arch package install, revision upgrade, removal, and ARM package
+assembly passed. A deliberate bypass of generated-file validation made its tamper
+test fail; the restored implementation passes. Native hosted replacement checks
+are pending, so these local results alone do not close the candidate gate.

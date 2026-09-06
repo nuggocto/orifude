@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 11, `orifude-front`**
-- Current checklist item: **Confirm the Cloudflare Pages build command, output
-  directory, production branch, domain, and `www` redirect.**
+- Current phase: **Phase 10, release archives and distribution**
+- Current checklist item: **Verify the Rust distribution tooling on all native
+  targets after removing the Python implementation.**
 - Last updated: **2026-09-06**
 
 Checkbox rules:
@@ -1997,10 +1997,10 @@ installers, and the three approved package channels.
 
 Exit gate:
 
-- [x] One release candidate installs from archives, both classic installers,
+- [ ] One release candidate installs from archives, both classic installers,
   Homebrew, Scoop, and `orifude-bin` using the exact artifacts intended for v1.
 
-Verification: commit
+Previous implementation evidence (Rust replacement verification pending): commit
 [`eebe25b`](https://github.com/nuggocto/orifude/commit/eebe25b1c49df03a26ccdda9f3c9e4431d5d6985)
 passed all seven [ordinary CI jobs](https://github.com/nuggocto/orifude/actions/runs/34008975101)
 and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34008975129).

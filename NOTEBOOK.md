@@ -279,10 +279,10 @@ compatibility. No job needed a retry.
 
 ## Release tooling on 2026-09-06
 
-[Release tooling](scripts/release/release.py) builds the declared native targets,
+[Release tooling](examples/distribution/archive.rs) builds the declared native targets,
 packages fixed archive layouts, validates executable architecture, and generates
-installers and package metadata from the completed archive hashes. Release-only
-Python uses the standard library; shipped binaries require no interpreter. Package
+installers and package metadata from the completed archive hashes. The developer tool is Rust; its archive and JSON dependencies stay outside the
+shipped binary. Package
 version `1.0.0` lets the candidate exercise the intended public version before a
 tag or GitHub release exists.
 
@@ -298,12 +298,12 @@ architectures, dynamic Linux interpreters, missing or extra targets, links,
 traversal, duplicate members, and altered generated files. Repacking identical
 inputs preserves archive bytes; independent compiler reproducibility is not claimed.
 
-The [installer fixture](scripts/release/install_check.py) exercises real local HTTPS
+The [installer fixture](examples/distribution/install.rs) exercises real local HTTPS
 transfers, embedded hashes, clean installation, replacement, failure preservation,
 destination conflicts, partial transfers, and cleanup. Only its private script copy
 uses the local URL. Windows curl receives the private CA explicitly through
 [`--cacert`](https://curl.se/docs/manpage.html#--cacert), leaving the certificate
-store unchanged. The [package fixtures](scripts/release/channel_check.py) use real
+store unchanged. The [package fixtures](examples/distribution/packages.rs) use real
 Homebrew, Scoop, and Arch tools. Package revision upgrades retain the verified binary.
 The x86_64 Arch job assembles ARM packages; the ARM payload runs in native Linux QA.
 
@@ -321,8 +321,8 @@ file, so it detects that problem independently of a missing archive.
 
 Failure evidence remains in the hosted runs. The
 [first candidate run](https://github.com/nuggocto/orifude/actions/runs/34006610997)
-exposed missing Python and Ruff platform locks; all five platform entries are now
-pinned. Later macOS setup runs killed `rustup` before application compilation;
+exposed missing Python and Ruff platform locks in the earlier implementation.
+Those tools have since been removed. Later macOS setup runs killed `rustup` before application compilation;
 release tool setup is now sequential. Windows certificate-provider and import
 attempts failed or prompted in the headless account, so that setup was removed.
 The later missing `Get-FileHash` failure came from Python passing PowerShell 7's
@@ -400,8 +400,27 @@ also passed on that commit using the environment's read-only default token. Its
 archive and installer hashes matched the local proposal. Actual publication remains
 an explicit operation with the signed tag and scoped publication credential.
 
-The README's clean development setup now installs ShellCheck, Python, and Ruff
-explicitly, matching the verified ordinary CI setup. Earlier hosted failures showed
-that relying on the older supported mise version to provision nested task tools
-was insufficient. This keeps new contributors from reaching the same missing-tool
-failure when running the documented repository check.
+The distribution code was first implemented in Python. The user rejected that
+extra toolchain, so it has been replaced with the [Rust development example](examples/distribution.rs).
+The README and CI setup now require Rust, cargo-deny, and ShellCheck. Python scripts,
+Ruff, their mise locks, and the Python cache exclusion were removed. Existing
+POSIX and PowerShell installers remain required distribution formats;
+[GitHub language attributes](.gitattributes) exclude those templates and shell
+automation from language statistics. Earlier hosted results above describe the
+previous implementation; the replacement is being verified separately.
+
+The Rust replacement passed ordinary and optimized repository checks, dependency
+policy, the Linux musl build and archive smoke check, HTTPS installer failures and
+replacement, the extracted-player journey, and real Arch package installation,
+revision upgrade, removal, and ARM package assembly. Ten focused Rust tooling tests
+cover archive integrity, publication approval fields, and complete fixture transfers.
+Temporarily bypassing generated-file validation made the tamper test fail; restoring
+the guard returned it to passing. The local credential scan passed.
+
+Self-review removed duplicate execution of tooling tests from the aggregate mise
+checks; Cargo's all-target suites already run them. It also tightened ELF program
+header bounds and made the partial-download check require received script bytes
+before asserting that execution never occurred. The private HTTPS fixture uses
+OpenSSL's complete-response mode; the Rust owner stops and reaps the server. Package
+HTTP requests have bounded headers and timeouts. No TLS library enters the game.
+Native hosted verification of this replacement is still pending.

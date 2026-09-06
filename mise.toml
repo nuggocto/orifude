@@ -140,7 +140,6 @@ description = "Run release-profile code, policy, and native terminal checks"
 run = [
     { task = "fmt-check" },
     { task = "shell-check" },
-    { task = "release-tool-test" },
     { task = "audit" },
     { task = "lint" },
     { task = "release-test" },
@@ -153,7 +152,6 @@ description = "Run every ordinary repository check in a safe order"
 run = [
     { task = "fmt-check" },
     { task = "shell-check" },
-    { task = "release-tool-test" },
     { task = "audit" },
     { task = "lint" },
     { task = "test" },
@@ -164,75 +162,43 @@ run = [
 [tasks.release-build]
 description = "Build and package one native release target"
 raw_args = true
-run = "python scripts/release/release.py build"
-
-[tasks.release-build.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- build"
 
 [tasks.release-assemble]
 description = "Generate installers and package metadata from the complete archive set"
 raw_args = true
-run = "python scripts/release/release.py assemble"
-
-[tasks.release-assemble.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- assemble"
 
 [tasks.release-verify]
 description = "Verify archives, hashes, installers, and package metadata"
 raw_args = true
-run = "python scripts/release/release.py check"
-
-[tasks.release-verify.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- check"
 
 [tasks.release-tool-test]
 description = "Test release archive and manifest integrity"
-run = [
-    "ruff check scripts/release --select E4,E7,E9,F",
-    "ruff format --check scripts/release",
-    "python -B -W error -m unittest discover -s scripts/release -p test_*.py",
-]
-
-[tasks.release-tool-test.tools]
-python = "3.14.7"
-ruff = "0.16.4"
+run = "cargo test --locked --example distribution"
 
 [tasks.installer-check]
 description = "Exercise generated installers against a private HTTPS fixture"
 raw_args = true
-run = "python -B scripts/release/install_check.py"
-
-[tasks.installer-check.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- installer-check"
 
 [tasks.release-publish]
 description = "Inspect a verified release proposal; publication requires --publish"
 raw_args = true
-run = "python -B scripts/release/publish.py"
-
-[tasks.release-publish.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- publish"
 
 [tasks.release-channel]
 description = "Inspect a candidate package update; verified external writes require --push"
 raw_args = true
-run = "python -B scripts/release/channels.py"
-
-[tasks.release-channel.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- channel"
 
 [tasks.artifact-check]
 description = "Play, save, restart, and replay using an extracted production archive"
 raw_args = true
-run = "python -B scripts/release/artifact_check.py"
-
-[tasks.artifact-check.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- artifact-check"
 
 [tasks.package-channel-check]
 description = "Install the candidate through its native package channel"
 raw_args = true
-run = "python -B scripts/release/channel_check.py"
-
-[tasks.package-channel-check.tools]
-python = "3.14.7"
+run = "cargo run --quiet --locked --example distribution -- package-check"

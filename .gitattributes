@@ -11,3 +11,11 @@
 *.xz binary
 *.zip binary
 *.zst binary
+
+# Distribution formats and development automation should not skew language statistics.
+*.sh linguist-detectable=false
+*.ps1 linguist-detectable=false
+*.sh.in linguist-detectable=false
+*.ps1.in linguist-detectable=false
+*.rb.in linguist-detectable=false
+PKGBUILD.in linguist-detectable=false
