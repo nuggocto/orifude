@@ -6,8 +6,8 @@ product graph, and the separate fuzz-tool graph as they stand on 2026-09-04.
 It protects files outside Orifude's data root, saved progress, terminal state,
 and contributor machines from malformed or malicious local input.
 
-The static website, future release publication, installers, and package
-repositories are outside this review. They do not run from this repository yet.
+The original review excluded the static website, release publication, installers,
+and package repositories. Their later assessment is recorded below.
 
 A later [code review](https://github.com/nuggocto/orifude/blob/cc4c0654d8993f8f392d7d3c9917c61b689e31cf/docs/code-review-2026-09-04.md) found gaps in ZIP catalog
 validation and event shutdown, plus a puzzle-revision persistence defect.
@@ -69,3 +69,42 @@ confusing presentation rather than code execution, path escape, or lost state.
 
 Within this scope, the trust boundaries are explicit, bounded, and supported by
 tests that reach the actual effects rather than checking configuration alone.
+
+## Distribution and website review on 2026-09-07
+
+Reviewed the [publisher](../examples/distribution/publication.rs),
+[archive validation](../examples/distribution/archive.rs), generated installers,
+package updates, and new [public verification](../examples/distribution/published.rs).
+Publication binds the version, clean commit, signed tag, successful CI, and exact
+candidate before creating the immutable release. Package publication requires
+release and asset attestation verification. External repository updates use fixed
+remotes, reject unexpected state, and never force-push.
+
+Public verification rejects incomplete or oversized assets and checks their
+attestations before using them. Downloaded installers and checksum files must
+match values derived from the verified archives. Homebrew, Scoop, and AUR metadata
+must match the generated files before package execution. The installed executable
+must match the archive bytes before the existing player journey runs. Windows Git
+may convert JSON to CRLF; the Scoop comparison restores LF before hashing, without
+changing the JSON content. Its live public path still needs Windows execution.
+
+The new manual workflow has read-only GitHub permissions, pinned actions,
+disposable hosts, and a twenty-minute job limit. No release credential enters the
+candidate or public installation jobs. The release-tool regression rejects an
+asset one byte over the limit; weakening that bound in an isolated checkout made
+the regression fail. Local dependency and license checks and the tree/history
+credential scan passed, alongside the native candidate checks recorded in
+[release QA](release-qa.md#current-publication-decision-on-2026-09-07).
+
+The frontend accepts only bounded, hash-checked changelog snapshots and reviewed
+release records, derives fixed-repository links, and escapes notes as text. Its
+release tests cover altered hashes, malformed records, hidden unverified channels,
+and injected markup. The static build has no application JavaScript and blocks
+scripts through CSP. Cloudflare still injects a blocked bot-detection script on
+404 responses, and the `www` redirect is missing. The configured Pages credential
+cannot change those zone settings; both relevant APIs returned 403. These hosting
+corrections remain open in the [publication record](../NOTEBOOK.md#website-publication-on-2026-09-06).
+
+Self-review: **PASS: No confirmed findings remain in the reviewed code.** Live
+release attestations and public installation paths are untested until publication.
+This code review does not close the hosting or platform evidence gaps.

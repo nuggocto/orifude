@@ -1,5 +1,80 @@
 # Release-candidate QA
 
+## Current publication decision on 2026-09-07
+
+Release verdict: **BLOCKED**. Recommendation: **hold publication** until the
+minimum-OS and terminal-app checks below and the remaining
+[Cloudflare corrections](../NOTEBOOK.md#website-publication-on-2026-09-06) are
+verified. The candidate passed its available checks; no product defect was
+reproduced. No public puzzle-game release or package update has been created.
+
+Signed commit
+[`8b940fe`](https://github.com/nuggocto/orifude/commit/8b940fec51f60b3492ef1b83e7205f322e316d62)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34067331240)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34067331245)
+without retries. Clean hosted checkouts used locked dependencies and Rust 1.98.1.
+The five native targets and pinned Linux userlands match the matrix recorded
+below. Archive checks, classic installer failure cases, extracted player
+journeys, and Homebrew, Scoop, and Arch package fixtures all passed.
+
+The downloaded candidate passed local `release-verify`, `artifact-check`, and
+`installer-check` again for Linux x86_64. Its archive SHA-256 values are:
+
+| Archive target | SHA-256 |
+| --- | --- |
+| aarch64-apple-darwin | `53ac20742100f78b29bdd0c8734d3807b4aad8ba25c4a7f44a57c0b0c05e69d5` |
+| aarch64-unknown-linux-musl | `3010a16d792c9a41e26a3954e07b9111448a5a7f71e3ae3557914384b375ddaf` |
+| x86_64-apple-darwin | `1ada3cc1fdf0645ab459c0cb037dbe9898da49154639e2caf2ddee5e7ed5de12` |
+| x86_64-pc-windows-msvc | `c9b273a6b3ae2dc95da36b4e67ac17265688dc5d3cbe2148acf30cda741e2fa6` |
+| x86_64-unknown-linux-musl | `c2e1fe770643160369c3427dffa46afaae6e147155d2177b18ebd0ab5a4537fc` |
+
+The complete `SHA256SUMS` file has SHA-256
+`24ead0dc7a38fdf9c0e834680d519d9c4ec7dae0e1ed197b0fb99812e66680af`.
+These are candidate hashes, not published release attestations. The workflow
+retains its artifact for fourteen days; the downloaded set also remains locally
+under ignored `target/public-ready-8b940fe`.
+
+Fresh measurements used that candidate's static Linux executable, whose SHA-256
+remains `ec57fa12e4c9d8809290b3e9578d5b52694b4a578690104caf8060ec3de12600`.
+The host was Linux 7.1.9-arch1-2 x86_64, AMD Ryzen AI MAX+ 395, with tmux 3.7c,
+`xterm-256color`, and a 100-by-30 terminal. No other local build or test ran beside
+the measurement. The working tree contained only an uncommitted correction to
+the public Scoop verifier; it does not enter the measured executable.
+
+| Measurement | Result | Workload |
+| --- | ---: | --- |
+| Fresh / returning startup p95 | 131.243 / 104.438 ms | 25 starts each; 1,024 saved puzzles for returning starts |
+| Help input p95 / p99 | 5.565 / 6.008 ms | 100 inputs |
+| Maximum-board fold / brush p95 | 5.767 / 5.673 ms | 100 actions each |
+| Durable write p95 | 21.495 to 28.501 ms | Five processes, each with 500 fresh and 500 populated writes |
+| Ordinary play / journey solver RSS | 6,832 / 7,340 KiB | Packaged executable |
+| Idle CPU | 0.333% | Three-second observation |
+| Binary / stripped / gzip | 5,736,928 / 4,860,904 / 2,193,284 bytes | Packaged musl executable |
+
+Every measured budget passed. Terminal timing includes tmux observation overhead
+and warm filesystem state. Storage and detailed solver helpers used the local
+GNU target with Rust 1.98.1. The broad solver case retained 26,327,728 accounted
+bytes for 20,000 visited states. Raw samples remain under ignored
+`target/release-measurement-20260906T234558Z`; reproduce with
+[`mise run release-measure`](../scripts/release-measure.sh) and the extracted
+candidate path. The script removed its private player roots and terminal server.
+
+Ordinary and optimized local checks each passed 248 Rust tests and one doctest.
+Property checks, dependency and license policy, and the local credential scan
+passed. Five one-minute AddressSanitizer campaigns with seed 424242 completed
+22,589,373 executions without a crash or timeout. Their per-target counts were
+368,638 domain actions, 1,281,814 puzzle inputs, 1,172,239 metadata inputs,
+1,327,298 replays, and 18,439,384 archives. Raw failure-diagnostic logs remain
+under ignored `target/release-final-*` and `target/fuzz-campaign`.
+
+The new [public-channel verifier](../examples/distribution/published.rs) checks
+attested downloads and reuses the installed player's save/restart journey.
+Its live network paths require the real release and package entries. Candidate
+fixtures cannot substitute for those checks. Minimum-version hosts and macOS
+Terminal / Windows Terminal remain unavailable, as described below.
+
+## Earlier candidate decisions
+
 The original record below covers commit
 [`89077d2`](https://github.com/nuggocto/orifude/commit/89077d2dec2a706668e793b6f14427de26627dab)
 on 2026-09-04. The verdict is **PASS WITH KNOWN ISSUES**. The behavior is

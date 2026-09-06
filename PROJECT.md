@@ -2084,9 +2084,9 @@ the result as a user would receive it.
 - [x] Freeze release scope and stop unrelated refactoring.
 - [x] Set package and binary version to `1.0.0`.
 - [x] Finalize the canonical changelog and release notes.
-- [ ] Confirm dependency, license, security, and known-issue records.
-- [ ] Build the release candidate from a clean locked checkout.
-- [ ] Record artifact hashes and QA environment evidence.
+- [x] Confirm dependency, license, security, and known-issue records.
+- [x] Build the release candidate from a clean locked checkout.
+- [x] Record artifact hashes and QA environment evidence.
 - [ ] Run the complete native end-to-end matrix against the release candidate.
 - [ ] Obtain the final QA verdict and separate ship recommendation.
 - [ ] Create the signed or protected `v1.0.0` tag at the approved commit.

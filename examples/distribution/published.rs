@@ -277,7 +277,13 @@ if ($Mode -eq 'install') {
     & $Scoop bucket add nuggocto https://github.com/nuggocto/scoop-bucket
     if ($LASTEXITCODE -ne 0) { throw 'Public Scoop bucket setup failed.' }
     $Manifest = Join-Path $Root 'buckets/nuggocto/bucket/orifude.json'
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $Manifest).Hash.ToLowerInvariant() -cne $Expected) {
+    # Git may check JSON out with CRLF on Windows; compare its canonical LF text.
+    $Text = [IO.File]::ReadAllText($Manifest).Replace("`r`n", "`n")
+    $Algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        $Hash = [BitConverter]::ToString($Algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))).Replace('-', '').ToLowerInvariant()
+    } finally { $Algorithm.Dispose() }
+    if ($Hash -cne $Expected) {
         throw 'Public Scoop manifest differs from verified metadata.'
     }
     & $Scoop install nuggocto/orifude

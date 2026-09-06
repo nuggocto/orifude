@@ -714,3 +714,45 @@ still checks hidden unverified channels and escaped notes. All eight Chromium
 cases passed, and the two changed journeys passed again after removing a copy
 assertion. The change is committed as
 [`f32f4f6`](https://github.com/nuggocto/orifude-front/commit/f32f4f6).
+
+## Candidate verification on 2026-09-07
+
+Signed preparation commit
+[`8b940fe`](https://github.com/nuggocto/orifude/commit/8b940fec51f60b3492ef1b83e7205f322e316d62)
+passed all seven [ordinary jobs](https://github.com/nuggocto/orifude/actions/runs/34067331240)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34067331245)
+without retries. The [QA record](docs/release-qa.md#current-publication-decision-on-2026-09-07)
+contains the five archive hashes, native environments, repeated Linux archive and
+installer checks, and fresh measurements. Startup p95 was 131.243 ms, input p95
+5.565 ms, and ordinary play RSS 6,832 KiB. Every performance budget passed.
+Five sanitizer campaigns completed 22,589,373 executions without a crash or timeout.
+
+Dry-run pushes from owned temporary clones confirmed write access to the existing
+Homebrew, Scoop, and AUR branches. No package entry changed. The
+[security review](docs/security-review.md#distribution-and-website-review-on-2026-09-07)
+now includes publication, installers, public-channel verification, and the static
+site. Self-review caught a Scoop comparison that could reject normal Windows Git
+CRLF checkouts. It now hashes canonical LF text; formatting and Clippy passed.
+The actual public Scoop installation remains a required runtime check.
+
+The frontend navigation correction passed
+[CI](https://github.com/nuggocto/orifude-front/actions/runs/34067216995), including
+all 19 release tests and 24 browser cases, and deployed through Cloudflare Pages.
+The subsequent [hero change](https://github.com/nuggocto/orifude-front/commit/96fb90a)
+shows a direct installation link when a reviewed release exists. Its local build
+and all eight Chromium cases passed, followed by all 19 release tests and 24
+browser cases in [CI](https://github.com/nuggocto/orifude-front/actions/runs/34068095489).
+An owned temporary preview combined the actual prepared notes with synthetic
+channel verification. All five installation methods opened without JavaScript
+at 1,440, 390, and 320 pixels, with no horizontal page overflow. Desktop and mobile
+captures were inspected; the temporary site was removed afterward. The first
+manual probe expected shorter package labels than the interface uses; correcting
+the probe resolved it without a product change. The production release list
+remains empty; adding a record requires actual public release and channel
+verification.
+
+Publication remains on hold for the missing minimum-platform and terminal-app
+evidence and the two Cloudflare settings. The owner has authorized publication,
+but the required hosts and zone permissions are unavailable. The public
+installation workflow is ready to run after those gaps are resolved and the real
+release exists. No public release, release tag, or package update was created.
