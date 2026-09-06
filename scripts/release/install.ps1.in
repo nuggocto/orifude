@@ -59,7 +59,8 @@ try {
     $Stage = Join-Path $BinDir ('.orifude-install-' + [Guid]::NewGuid().ToString('N') + '.exe')
     [IO.File]::Copy($Binary, $Stage, $false)
     if ([IO.File]::Exists($Destination)) {
-        [IO.File]::Replace($Stage, $Destination, $null)
+        # PowerShell 5.1 converts $null to an invalid empty backup path.
+        [IO.File]::Replace($Stage, $Destination, [NullString]::Value)
     } else {
         [IO.File]::Move($Stage, $Destination)
     }

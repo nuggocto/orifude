@@ -17,7 +17,7 @@ ARCH_IMAGE = "archlinux:base@sha256:82b1b08faae9d61e3e7e13d562f4d09114d939105b0d
 SCOOP_COMMIT = "b588a06e41d920d2123ec70aee682bae14935939"
 
 
-def homebrew(directory: Path, root: Path, base: str) -> None:
+def homebrew(directory: Path, base: str) -> None:
     name = "orifude-fixture/candidate"
     tap = (
         Path(release.run("brew", "--repository"))
@@ -70,16 +70,7 @@ def scoop(directory: Path, root: Path, base: str) -> None:
     path = bucket / "orifude.json"
     path.write_text(json.dumps(manifest), encoding="utf-8")
     release.run("git", "init", "--initial-branch=main", cwd=bucket)
-    release.run(
-        "git",
-        "-c",
-        "user.name=Fixture",
-        "-c",
-        "user.email=fixture@example.invalid",
-        "add",
-        ".",
-        cwd=bucket,
-    )
+    release.run("git", "add", ".", cwd=bucket)
     release.run(
         "git",
         "-c",
@@ -205,7 +196,7 @@ def verify(directory: Path, target: str) -> None:
         try:
             base = f"http://127.0.0.1:{server.server_port}"
             if "darwin" in target:
-                homebrew(directory, root, base)
+                homebrew(directory, base)
             else:
                 scoop(directory, root, base)
         finally:

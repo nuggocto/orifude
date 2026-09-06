@@ -310,7 +310,10 @@ The x86_64 Arch job assembles ARM packages; the ARM payload runs in native Linux
 Self-review tightened expanded tar bytes before metadata parsing, removed inherited
 release-profile ambiguity, and kept package-file writes inside their temporary
 checkout. The POSIX installer renames through the chosen parent directory. Windows
-now selects one curl executable when Windows and Git both provide it. Scoop uses
+now selects one curl executable when Windows and Git both provide it. Its
+replacement path passes `[NullString]::Value` to `File.Replace`; Windows PowerShell
+5.1 otherwise coerces `$null` to an empty backup filename and rejects reinstalls.
+The native fixture reproduced that failure after clean installation passed. Scoop uses
 its supported `XDG_CONFIG_HOME` directory and a fresh update timestamp to preserve
 the pinned tool revision. These changes address concrete failure or ownership paths.
 The extra-archive regression restores a complete matrix before adding an unexpected
@@ -357,3 +360,10 @@ publication is due, or uses the local GitHub CLI command. Live release attestati
 and public-channel verification remain at the release handoff from the accepted
 implementation plan. Existing minimum-OS and terminal-GUI evidence gaps remain in
 the QA record.
+
+Local ordinary and optimized checks passed 236 Rust tests plus the doctest; the
+separate archived-player journey remains explicitly invoked on native hosts.
+Eleven release-integrity and publication-guard tests passed. The local tree and
+Git-history credential scan found no high-confidence credential pattern. Review
+also removed an unused Homebrew fixture argument and redundant Git configuration
+on the fixture's staging command.

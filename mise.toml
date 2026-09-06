@@ -214,7 +214,7 @@ run = "python -B scripts/release/publish.py"
 python = "3.14.7"
 
 [tasks.release-channel]
-description = "Inspect an immutable package update; external writes require --push"
+description = "Inspect a candidate package update; verified external writes require --push"
 raw_args = true
 run = "python -B scripts/release/channels.py"
 
