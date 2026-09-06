@@ -120,8 +120,11 @@ jobs:
         with:
           name: release-set
           path: target/release-dist
-      - run: mise run release-verify -- target/release-dist --target ${{ matrix.target }}
+      - id: archives
+        run: mise run release-verify -- target/release-dist --target ${{ matrix.target }}
       - run: mise run installer-check -- target/release-dist ${{ matrix.target }}
-      - run: mise run artifact-check -- target/release-dist ${{ matrix.target }}
+      - if: ${{ !cancelled() && steps.archives.outcome == 'success' }}
+        run: mise run artifact-check -- target/release-dist ${{ matrix.target }}
       - name: Exercise the native package channel
+        if: ${{ !cancelled() && steps.archives.outcome == 'success' }}
         run: mise run package-channel-check -- target/release-dist ${{ matrix.target }}

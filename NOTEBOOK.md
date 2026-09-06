@@ -367,3 +367,7 @@ Eleven release-integrity and publication-guard tests passed. The local tree and
 Git-history credential scan found no high-confidence credential pattern. Review
 also removed an unused Homebrew fixture argument and redundant Git configuration
 on the fixture's staging command.
+
+Native artifact and package checks run independently after archive verification,
+even if the classic installer check fails. The job still fails, but its report
+now retains all available installation results instead of hiding later failures.
