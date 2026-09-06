@@ -15,9 +15,9 @@ contract, and only phase tracker for Orifude v1.
 ## Current work
 
 - Current phase: **Phase 11, `orifude-front`**
-- Current checklist item: **Confirm the Cloudflare Pages build command, output
-  directory, production branch, domain, and `www` redirect.**
-- Last updated: **2026-09-06**
+- Current checklist item: **Finish the Cloudflare `www` redirect and prevent
+  bot-detection script injection on not-found responses.**
+- Last updated: **2026-09-07**
 
 Checkbox rules:
 
@@ -2025,46 +2025,48 @@ created during candidate verification.
 Goal: replace the holding page with a small static project presentation and a
 release-driven changelog without creating a second application.
 
-- [ ] Confirm the Cloudflare Pages build command, output directory, production
-  branch, domain, and `www` redirect.
-- [ ] Replace the holding-page build with a minimal Astro static project.
-- [ ] Keep `/` and `/changelog/` as the only product routes.
-- [ ] Implement a real static not-found path.
-- [ ] Add the real wordmark, icon, and squirrel-courier artwork from the supplied
+- [x] Confirm the Cloudflare Pages build command, output directory, production
+  branch, and domain.
+- [ ] Configure and verify the `www` redirect, preserving the path and query.
+- [x] Replace the holding-page build with a minimal Astro static project.
+- [x] Keep `/` and `/changelog/` as the only product routes.
+- [x] Implement a real static not-found path.
+- [x] Add the real wordmark, icon, and squirrel-courier artwork from the supplied
   identity source.
-- [ ] Generate responsive optimized assets without changing the identity.
-- [ ] Build the landing hero with a short introduction, TUI description, status,
+- [x] Generate responsive optimized assets without changing the identity.
+- [x] Build the landing hero with a short introduction, TUI description, status,
   and direct GitHub repository link.
-- [ ] Explain the fold, ink, and unfold mechanic with the reviewed static visual
+- [x] Explain the fold, ink, and unfold mechanic with the reviewed static visual
   sequence and plain captions.
-- [ ] Add the reviewed terminal recording or still from the native application.
-- [ ] Add release links only after the corresponding artifacts verify.
-- [ ] Present POSIX, PowerShell, Homebrew, Scoop, and AUR instructions without
+- [x] Add the reviewed terminal recording or still from the native application.
+- [x] Add release links only after the corresponding artifacts verify.
+- [x] Present POSIX, PowerShell, Homebrew, Scoop, and AUR instructions without
   hiding platform constraints.
-- [ ] Document optional GitHub CLI commands for verifying the immutable release
+- [x] Document optional GitHub CLI commands for verifying the immutable release
   and a downloaded release asset.
-- [ ] Add a direct changelog link.
-- [ ] Build the changelog as chronological folded-paper release entries.
-- [ ] Define reviewed structured release data tied to the canonical changelog in
+- [x] Add a direct changelog link.
+- [x] Build the changelog as chronological folded-paper release entries.
+- [x] Define reviewed structured release data tied to the canonical changelog in
   the main repository.
-- [ ] Show version, date, summary, change categories, tag, GitHub release, and
+- [x] Show version, date, summary, change categories, tag, GitHub release, and
   supported install channels for each published release.
-- [ ] Verify that a new release cannot appear without its required changelog
+- [x] Verify that a new release cannot appear without its required changelog
   fields and valid links.
-- [ ] Keep the semantic release structure readable without animation or CSS.
-- [ ] Bundle fonts and remove external script, font, analytics, and tracker
+- [x] Keep the semantic release structure readable without animation or CSS.
+- [x] Bundle fonts and remove external script, font, analytics, and tracker
   dependencies.
-- [ ] Add canonical, description, social, sitemap, robots, favicon, and theme
+- [x] Add canonical, description, social, sitemap, robots, favicon, and theme
   metadata.
-- [ ] Add restrictive Cloudflare static security headers.
-- [ ] Test keyboard focus, reduced motion, zoom, narrow reflow, contrast, and
+- [x] Add restrictive Cloudflare static security headers.
+- [ ] Prevent Cloudflare from injecting bot-detection JavaScript into not-found
+  responses.
+- [x] Test keyboard focus, reduced motion, zoom, narrow reflow, contrast, and
   accessible image text.
-- [ ] Measure static asset size and browser performance before deployment.
-- [ ] Build from a clean checkout with locked frontend dependencies.
-- [ ] Verify preview deployment before promoting production.
-- [ ] Verify `https://orifude.com`, the `www` redirect, changelog route, release
-  links, installer links, GitHub link, headers, and not-found behavior in
-  production.
+- [x] Measure static asset size and browser performance before deployment.
+- [x] Build from a clean checkout with locked frontend dependencies.
+- [x] Verify preview deployment before promoting production.
+- [x] Verify `https://orifude.com`, the changelog route, release and installer
+  link visibility, GitHub link, headers, and not-found behavior in production.
 
 Exit gate:
 
@@ -2079,9 +2081,9 @@ the result as a user would receive it.
 
 - [ ] Complete every earlier exit gate or record an explicit owner-approved
   scope change in this document.
-- [ ] Freeze release scope and stop unrelated refactoring.
+- [x] Freeze release scope and stop unrelated refactoring.
 - [x] Set package and binary version to `1.0.0`.
-- [ ] Finalize the canonical changelog and release notes.
+- [x] Finalize the canonical changelog and release notes.
 - [ ] Confirm dependency, license, security, and known-issue records.
 - [ ] Build the release candidate from a clean locked checkout.
 - [ ] Record artifact hashes and QA environment evidence.

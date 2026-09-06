@@ -1,162 +1,52 @@
 # Changelog
 
-Orifude has not published a puzzle-game release yet. This changelog begins with
-the puzzle-game reboot; history from the retired letter-exchange application is
-intentionally not included.
+This changelog covers the folding-and-ink puzzle game. The retired
+letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.0.0 - 2026-09-07
+
+The first Orifude puzzle release brings folding, brushwork, and a growing branch
+of keepsakes to the terminal. Play at your own pace, keep everything on your
+computer, and return to a paper whenever you like.
+
 ### Added
 
-- Added native release archives for Linux x86_64 and ARM64, Intel and Apple
-  Silicon macOS, and Windows x86_64, with fixed archive contents and SHA-256
-  checksums.
-- Added version-pinned POSIX and PowerShell installers, Homebrew, Scoop, and
-  `orifude-bin` package metadata, and installation checks using the actual
-  archived binaries.
-- Added separate candidate and publication workflows, package-update dry runs,
-  exact-commit release guards, and immutable-release verification before package
-  publication.
-
-- Defined Orifude as a native, keyboard-driven folding-and-ink puzzle that
-  works fully offline and keeps progress on the player's computer.
-- Recorded the canonical paper, fold, ink, target, undo, replay, scoring,
-  storage, puzzle-pack, terminal, platform, security, and release contracts.
-- Established a dependency-free Rust application with a pinned toolchain,
-  locked builds, stable command-line exit statuses, help and version output,
-  typed output errors, and unsafe code denied.
-- Added reproducible mise tasks for formatting, linting, tests, documentation,
-  release builds, dependency policy checks, the paper exercise, and paper-model
-  measurements.
-- Added read-only ordinary CI for pull requests and pushes to the permanent
-  `shrek` branch, with pinned actions, bounded job time, and no publication
-  credentials.
-- Added a bounded dense paper model in which every physical cell keeps a stable
-  identity, coordinate, layer, face, and orientation.
-- Added centered vertical and horizontal fold prototypes in every direction,
-  moved-layer reversal, dot stamping through a stack, exact target comparison,
-  and complete undo snapshots.
-- Added focused tests for construction, fold directions, layer order, empty
-  destinations, ink comparison, failed-action immutability, action budgets,
-  and exact undo restoration.
-- Added six plain-text folding exercises and a release-mode measurement that
-  compares the dense paper model with a coordinate-to-stack map.
-- Added a model-driven walkthrough that shows a crease, the folded stack order,
-  ink passing through both layers, and how to enter the predicted top cell
-  before the player makes a prediction.
-- Added validated puzzle identities, targets, allowed actions, budgets, and par
-  as the construction boundary for playable paper.
-- Added every bounded horizontal and vertical fold, dot and line brushes,
-  atomic action rejection, reset, result scoring, and exact state keys.
-- Added versioned bounded replays that bind to the exact validated gameplay
-  revision, execute on fresh paper, and report failures without exposing
-  partial state.
-- Added exhaustive crease properties, fixed-seed action properties, and a
-  dependency-free bounded domain-action fuzz harness.
-- Added a deterministic solver with exact state keys, fold-first score order,
-  independent visited-state, memory, depth, and cancellation limits, and
-  production replay verification for every reported solution.
-- Added versioned deterministic puzzle generation with injected calendar dates,
-  bounded candidate attempts, validator and solver checks, reproducible failure
-  seeds, and a preserved daily-output golden.
-- Added solver and generator integration tests plus a release measurement for
-  frontier memory, visited lookup cost, path restoration, and representative
-  solved and unsolved puzzles.
-- Added durable local SQLite settings, daily history, attempts, progress,
-  bounded replays, best solutions, installed-pack metadata, and restart-safe
-  migrations behind one process lock.
-- Added versioned TOML pack and puzzle parsing, portable path validation,
-  SHA-256 content fingerprints, bounded directory and ZIP installation,
-  same-filesystem staging, interruption recovery, selected-pack verification,
-  and progress-preserving removal.
-- Added storage and malicious-pack integration tests, four bounded parser
-  harnesses, and a release-mode durable-write measurement.
-- Added concise play instructions to the README.
-- Added a forty-paper handcrafted journey in eight teaching groups, with
-  validator-checked solution witnesses and independently bounded solver paths.
-- Added progressive home-branch states and a squirrel completion delivery when
-  each five-paper group is finished.
-- Added an installable three-paper example pack and a complete author guide for
-  the local TOML format, validation, licensing, and contribution workflow.
-- Added local `verify`, `solve`, and pack management commands with bounded,
-  terminal-safe output and behavior tests through the shipped binary.
-- Added a deterministic first-paper terminal recording for project and release
-  documentation.
-
-### Changed
-
-- Reduced repeated cell scans in search and folded-paper drawing, skipped
-  exhausted solver actions, and shared the validated journey catalog at startup.
-- Expanded performance checks to populated player state, maximum-board fold
-  and brush input, and a bounded 20,000-state search.
-
-- Clarified that a moved stack may become the only stack at an empty destination
-  inside the original bounded working area.
-- Recorded the current direct-push policy for `shrek` while preserving the
-  earlier protected-branch verification as dated history.
-- Chose dense physical-cell storage and complete snapshots after measuring the
-  rejected map-based representation and the maximum paper bounds.
-- Moved the plain-text paper exercise onto the validated production domain API.
-- Reused paper allocations during reset so bounded search can restore parent
-  paths without rebuilding the canonical cell vector each time.
-- Moved the built-in journey onto the same validated pack format used by
-  community papers, keeping one parser and one gameplay boundary.
-- Replaced the stale foundation README with current play, pack, and verification
-  instructions.
-
-### Fixed
-
-- Compared saved scores within the same puzzle revision so solving revised
-  content keeps its completion and best replay after restart.
-- Synchronized event shutdown with queue waiters so a missed notification
-  cannot leave an input thread waiting during exit.
-- Validated ZIP catalogs before dependency parsing, rejected exact duplicate
-  names, and prevented fallback to an unchecked catalog.
-- Updated the pinned and minimum Rust compiler to 1.98.1 for its compiler
-  correctness fix, and advanced the sanitizer nightly to support that minimum.
-- Kept author-command tests inside their injected storage root on every
-  supported operating system.
-- Sanitized and bounded rejected pack paths and nested operational errors
-  before they reach a terminal.
-- Reconciled legacy community packs that claimed built-in identities and bound
-  journey completion to the saved puzzle's exact gameplay definition.
-- Kept older completed papers replayable after catalog growth, removed a stale
-  group-completion card before replay, and made large result rows inspectable.
-- Kept group lessons, branch progress, and compact headings readable at the
-  supported terminal sizes.
-- Aligned tutorial cues, author documentation, example-pack metadata, and the
-  checked-in terminal recording with the shipped behavior.
-- Made oversized paper-exercise input stop the session instead of allowing the
-  unread tail to be interpreted as later commands.
-- Kept deterministic generation trying its remaining bounded candidates after
-  one candidate exhausts the solver.
-- Rejected generator pack IDs and rule lists at configuration construction,
-  before the generator retains or copies them.
-- Removed a redundant invariant scan before in-place paper reset while keeping
-  the rebuilt state checked before reset returns.
-- Preserved protected completion state inside the SQLite reserve while dropping
-  only nonessential replay history when space is tight.
-- Recovered spilled rollback journals before schema checks and kept the original
-  installation timestamp when a pending pack completes after restart.
-- Collected independent puzzle errors in one bounded report without allocating
-  diagnostics beyond the 32-issue limit.
-- Reconciled missing registered pack directories and unknown managed entries so
-  interrupted or platform-created filesystem state cannot block every startup.
-- Kept zero-progress branch copy from claiming the first group gift.
-- Rejected undeclared fields inside nested brush and recorded-solution tables.
+- Fold paper horizontally or vertically, place dots and lines of ink through
+  its layers, and open it to match a pattern exactly.
+- Learn through an interactive first lesson and a replayable explanation of
+  folds, layer order, and brushwork.
+- Play forty handcrafted papers in eight groups, with new keepsakes joining
+  the home branch as you progress.
+- Open a deterministic daily paper or generate another puzzle in the endless
+  garden, with no network connection or timer.
+- Undo, reset, preview an unfolded paper, and inspect missing or extra ink.
+- Save progress, settings, and best solutions locally in SQLite. Replay a saved
+  solution one action at a time after restarting the game.
+- Install and remove local puzzle packs without losing their saved history.
+  An example pack and author guide explain the bounded TOML format.
+- Validate and solve puzzle packs with the `verify` and `solve` commands, and
+  manage installed packs from the command line.
+- Use keyboard controls, remappable bindings, ASCII glyphs, monochrome output,
+  and reduced motion. Small terminals retain the paper while asking for more room.
+- Distribute native archives for Linux x86_64 and ARM64, Intel and Apple Silicon
+  macOS, and Windows x86_64, with SHA-256 checksums.
+- Provide exact-version POSIX and PowerShell installers, a macOS Homebrew
+  formula, a Windows Scoop manifest, and the `orifude-bin` AUR package.
+- Explain the game and publish release notes on a static website with bundled
+  artwork and fonts.
 
 ### Security
 
-- Bounded command-line parsing, diagnostic cause traversal, paper dimensions,
-  physical cells, actions, history, scratch storage, and exercise input.
-- Prevented command-line arguments and paper-exercise input from being echoed
-  into terminal output.
-- Added locked advisory, license, and dependency-source checks to the ordinary
-  repository check.
-- Rejected pack traversal, absolute and reserved paths, links, special files,
-  unsupported compression, terminal controls, invalid SPDX expressions, and
-  every declared file, count, depth, and size excess before installation.
-- Rejected a symlinked managed-pack root before orphan cleanup can touch content
-  outside Orifude's private data directory.
-- Kept SQLite main-file, reserve, replay-history, transient-journal, pack-count,
-  and managed-content growth within explicit hard bounds.
+- Validate puzzle, replay, and pack contents before changing player state.
+  Reject archive path escapes, links, duplicate members, executable content,
+  and oversized inputs.
+- Keep terminal output free of external control sequences and bound paper,
+  search, history, archive, and storage resource use.
+- Save progress transactionally and reconcile interrupted pack installations
+  before managed content becomes playable.
+- Verify installer downloads against embedded archive checksums before replacing
+  an existing executable. Failed downloads preserve the previous installation.
+- Bind release assets and package metadata to exact versions and checksums,
+  with immutable GitHub releases and release verification before package updates.

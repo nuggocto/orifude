@@ -133,12 +133,7 @@ pub fn publish(tag: &str, commit: &str, run: &str, write: bool) -> Result<()> {
         &directory.to_string_lossy(),
     ])?;
     archive::check(directory)?;
-    let mut assets = archive::targets()?
-        .iter()
-        .map(|t| archive::name(t))
-        .collect::<Result<Vec<_>>>()?;
-    assets.extend(["SHA256SUMS", "install.sh", "install.ps1"].map(str::to_owned));
-    assets.sort();
+    let assets = archive::public_assets()?;
     for name in &assets {
         println!(
             "asset={name} sha256={}",

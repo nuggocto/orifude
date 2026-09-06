@@ -9,6 +9,8 @@ mod install;
 mod packages;
 #[path = "distribution/publication.rs"]
 mod publication;
+#[path = "distribution/published.rs"]
+mod published;
 #[path = "distribution/support.rs"]
 mod support;
 #[cfg(test)]
@@ -49,9 +51,10 @@ fn execute() -> Result<()> {
         ["channel", directory, channel, "--push"] => {
             publication::channel(Path::new(directory), channel, true)?;
         }
+        ["published-check", target, channel] => published::verify(target, channel)?,
         _ => require(
             false,
-            "usage: distribution targets | build TARGET DIR | pack TARGET BINARY DIR | assemble DIR | check DIR [--target TARGET] | smoke TARGET DIR | installer-check DIR TARGET | artifact-check DIR TARGET | package-check DIR TARGET | publish TAG COMMIT RUN [--publish] | channel DIR homebrew|scoop|aur [--push]",
+            "usage: distribution targets | build TARGET DIR | pack TARGET BINARY DIR | assemble DIR | check DIR [--target TARGET] | smoke TARGET DIR | installer-check DIR TARGET | artifact-check DIR TARGET | package-check DIR TARGET | publish TAG COMMIT RUN [--publish] | channel DIR homebrew|scoop|aur [--push] | published-check TARGET archives|installer|homebrew|scoop|aur",
         )?,
     }
     Ok(())

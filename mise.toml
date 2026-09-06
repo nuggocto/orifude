@@ -202,3 +202,8 @@ run = "cargo run --quiet --locked --example distribution -- artifact-check"
 description = "Install the candidate through its native package channel"
 raw_args = true
 run = "cargo run --quiet --locked --example distribution -- package-check"
+
+[tasks.published-check]
+description = "Verify public release downloads and an installation channel on a disposable native host"
+raw_args = true
+run = "cargo run --quiet --locked --example distribution -- published-check"

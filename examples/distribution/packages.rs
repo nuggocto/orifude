@@ -4,9 +4,9 @@ use super::{
     support::{self, Result, require},
 };
 use std::{fs, path::Path};
-const ARCH_IMAGE: &str =
+pub const ARCH_IMAGE: &str =
     "archlinux:base@sha256:82b1b08faae9d61e3e7e13d562f4d09114d939105b0d59ff34140f3bd418593a";
-const SCOOP_COMMIT: &str = "b588a06e41d920d2123ec70aee682bae14935939";
+pub const SCOOP_COMMIT: &str = "b588a06e41d920d2123ec70aee682bae14935939";
 
 pub fn verify(directory: &Path, target: &str) -> Result<()> {
     archive::check(directory)?;

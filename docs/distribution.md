@@ -129,6 +129,25 @@ These checks need a real published release attestation. A fixture or draft canno
 establish that evidence. The publisher stops before any package update if release
 verification fails.
 
+The `Published release verification` workflow runs in two parts. Dispatch
+`installers` after GitHub publication and before updating package repositories;
+dispatch `packages` after their updates. It checks the real public URLs and
+repositories, then plays, saves, restarts, and replays using the installed binary.
+Each job verifies release attestations, archive contents, generated metadata, and
+the installed executable's bytes before running the player journey.
+
+On a disposable native host, the same command is:
+
+```sh
+mise run published-check -- x86_64-unknown-linux-musl installer
+```
+
+Use `homebrew`, `scoop`, or `aur` for a supported package channel, or `archives`
+for direct download. Homebrew checks refuse an existing Orifude installation or
+tap. Scoop uses a private directory. AUR installation and removal run in an Arch
+container; its installed executable then runs the player journey on the native
+Linux host. These checks do not establish minimum-OS or terminal-GUI compatibility.
+
 ## Package repository updates
 
 The generated formula, Scoop manifest, and `PKGBUILD` share the archive manifest.

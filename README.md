@@ -23,10 +23,15 @@ player.
 
 ## Play
 
-Install mise and the pinned Rust toolchain, then start the game:
+The [website](https://orifude.com) lists verified installation channels and release
+notes. The [distribution guide](docs/distribution.md#installing-an-exact-published-version)
+explains how to download, inspect, and run an exact-version installer. The game
+works offline after installation.
+
+Start an installed copy with:
 
 ```console
-mise run run
+orifude
 ```
 
 The first launch explains the goal and leads through one real paper. During a
@@ -56,11 +61,11 @@ Orifude accepts bounded pack directories and ZIP archives containing inert
 TOML and optional text notes. It never downloads pack content.
 
 ```console
-mise run run verify puzzles/example-pack
-mise run run solve puzzles/example-pack
-mise run run pack install puzzles/example-pack
-mise run run pack list
-mise run run pack remove paper-garden
+orifude verify puzzles/example-pack
+orifude solve puzzles/example-pack
+orifude pack install puzzles/example-pack
+orifude pack list
+orifude pack remove paper-garden
 ```
 
 The complete format, validation workflow, licensing notes, and contribution
@@ -78,6 +83,7 @@ Rust toolchain is declared in `rust-toolchain.toml`. `Cargo.lock` and
 mise install --locked rust github:EmbarkStudios/cargo-deny shellcheck@0.11.0
 mise run check
 mise run test-native
+mise run run
 ```
 
 `mise run check` verifies formatting, Clippy lints, tests, documentation,
@@ -94,5 +100,4 @@ paper, and storage measurements listed in `mise.toml`.
 The product contract and work queue live in [`PROJECT.md`](PROJECT.md).
 Implementation decisions and verification evidence live in
 [`NOTEBOOK.md`](NOTEBOOK.md). Orifude is open source under the
-[Apache 2.0 license](LICENSE) and has not published its first puzzle-game
-release yet.
+[Apache 2.0 license](LICENSE).

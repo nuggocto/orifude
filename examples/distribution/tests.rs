@@ -1,5 +1,5 @@
 use super::{
-    archive, publication,
+    archive, publication, published,
     support::{self, MAX_BYTES},
 };
 use flate2::{Compression, GzBuilder};
@@ -8,6 +8,36 @@ use std::{
     fs,
     io::{Cursor, Write},
 };
+
+#[test]
+fn public_downloads_require_complete_bounded_immutable_assets() {
+    let names = vec!["archive.tar.gz".to_owned(), "install.sh".to_owned()];
+    let valid = json!({"immutable": true, "draft": false, "assets": [
+        {"name": "install.sh", "state": "uploaded", "size": 1},
+        {"name": "archive.tar.gz", "state": "uploaded", "size": MAX_BYTES},
+    ]});
+    published::validate_assets(&valid, &names).unwrap();
+    let cases = [
+        ("/immutable", json!(false), "immutable"),
+        ("/draft", json!(true), "immutable"),
+        ("/assets/0/size", json!(0), "download limit"),
+        ("/assets/0/size", json!(MAX_BYTES + 1), "download limit"),
+        ("/assets/0/state", json!("new"), "incomplete"),
+        ("/assets/0/name", json!("archive.tar.gz"), "asset names"),
+        ("/assets", json!([]), "asset count"),
+    ];
+    for (pointer, value, reason) in cases {
+        let mut changed = valid.clone();
+        *changed.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            published::validate_assets(&changed, &names)
+                .unwrap_err()
+                .to_string()
+                .contains(reason),
+            "{pointer}"
+        );
+    }
+}
 
 fn fixture_binary(target: &str) -> Vec<u8> {
     let mut data = vec![0; 128];

@@ -518,3 +518,199 @@ Windows, minimum-OS, and terminal-GUI checks were not rerun here; their existing
 [QA evidence and limitations](docs/release-qa.md) still apply. The separate frontend
 was outside this review. Minimum-platform checks and live public-release verification
 remain necessary before publishing the corresponding v1 claims.
+
+## Static website on 2026-09-06
+
+The separate [frontend](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/README.md) now builds a landing page,
+release changelog, and static 404 with Astro. Its design uses the supplied squirrel,
+wordmark, and icon on warm paper, with moss green sections and four main type sizes.
+Fraunces and Source Sans are bundled locally. Monospace appears only in the native
+terminal still and installation commands. The [fold sequence](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/src/components/FoldSequence.astro)
+explains the real first lesson, including the moving half, stack order, ink through
+both layers, and exact unfolded match. The still comes from the reviewed
+[native recording](docs/recordings/journey.cast); no puzzle engine enters the site.
+
+The [release loader](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/src/lib/releases.ts) checks a canonical
+changelog snapshot against its recorded commit and SHA-256. It accepts at most
+512 KiB of notes and 128 reviewed release records, requires dated summaries and
+change bullets, and derives links from the fixed GitHub repository. Notes render
+as escaped text. Release and package verification remains the native operator's
+responsibility, recorded before adding a public entry. The actual release list is
+empty, so the site offers source links and an honest pre-release status.
+
+```mermaid
+flowchart LR
+  C[Canonical CHANGELOG at a commit] --> S[changelog.md snapshot]
+  S --> L[loadReleases]
+  R[releases.json: source hash and reviewed records] --> L
+  L --> A[Astro static pages]
+  A --> D[dist: HTML, CSS, images, fonts]
+  H[security.mjs] --> D
+```
+
+The [built policy](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/scripts/security.mjs) blocks scripts, frames,
+external page dependencies, and browser network connections. There is no client
+JavaScript, tracking, form, or CDN font. Published installer instructions download
+an exact version, ask the reader to inspect it, then create a user-owned destination
+and execute the file separately. Unverified package channels stay hidden.
+
+A clean isolated copy passed the frozen dependency install, Astro checks without
+warnings, all 19 [release tests](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/tests/releases.test.mjs), the static
+build, and the full dependency audit on Node 24.19.0. Removing hash validation in a
+temporary copy made the changed-notes test fail as intended. All 24
+[browser cases](https://github.com/nuggocto/orifude-front/tree/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/tests/browser) passed in Chromium 153, Firefox 155,
+and WebKit 26.6 using the matching Playwright Ubuntu container. The affected release
+cases passed again after clarifying supported platforms. Checks exercised no-script
+navigation, keyboard focus, reflow down to 320 pixels, doubled text, missing CSS,
+reduced motion, real 404 responses, local image loading, HTML escaping, and axe
+accessibility rules. Smooth scrolling interfered with Chromium's no-script
+navigation checks; immediate anchor navigation resolved that failure. Lazy-image
+checks now scroll to the image and wait for loading instead of assuming it loads
+with the initial document.
+
+The frontend workflow also passed actionlint with ShellCheck. Its actions are pinned
+to immutable commits, it retains browser failure evidence, and it has no deployment
+credentials or publication step.
+
+The [local preview](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/scripts/preview.mjs) also applies security
+headers before routing. Astro's static-file header option omitted the not-found
+handler; the no-script browser journey now checks the 404 response policy too.
+
+The [browser measurement script](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/scripts/measure-browser.mjs)
+measured five cold loads each at desktop and mobile sizes with 150 ms latency,
+1.6 Mbit/s download throughput, and fourfold CPU slowdown. Initial response bodies
+totaled 128,391 bytes. Median LCP was 804 ms in both views; the highest observed
+desktop LCP was 856 ms. Layout shift was 0.0035 desktop and 0.0070 mobile. Bundled
+fonts total 69,560 bytes, gzip CSS 3,603 bytes, and application JavaScript zero.
+The measured landing HTML has SHA-256
+`3eab7574bf078677af9c1d7b08c7087f87a750b31486951ec847d3e5ea65e54e`.
+These are local lab results, not deployed performance or field Core Web Vitals.
+
+Initial local QA verdict: pass for visual review. The owner kept the frontend
+uncommitted and unpublished while reviewing the design. Checks of Cloudflare account
+settings, preview deployment, production headers, the apex domain, and the `www`
+redirect were deferred until publication approval, recorded below.
+The [frontend guide](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/README.md#cloudflare-pages) records the expected
+settings. Headless WebKit is not a native Safari or iPhone test, and automated
+accessibility checks do not establish complete WCAG conformance. The native
+application and `PROJECT.md` were left unchanged.
+
+The owner simplified the landing hero: ["long way." now inherits the heading's ink
+colour](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/src/styles/site.css), and [the page](https://github.com/nuggocto/orifude-front/blob/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2/src/pages/index.astro)
+no longer shows "Built in Rust. Played offline." The static build passed, and a
+Chromium preview confirmed both changes. Nothing was committed or published at that
+point.
+
+## Website publication on 2026-09-06
+
+The owner approved publishing the reviewed landing page. Frontend commit
+[`01a6c0c`](https://github.com/nuggocto/orifude-front/commit/01a6c0c464e3ecc31ea08b2ee01e247f9b4c32c2)
+passed a fresh Git checkout, frozen dependency install, Astro checks, all 19 release
+tests, and the static build with Node 24.19.0. Cloudflare's existing Git integration
+uses `pnpm build`, output `dist`, production branch `shrek`, and both Orifude domains.
+Web Analytics is disabled. No Cloudflare account or DNS settings were changed.
+
+The [Pages preview](https://421a2c04.orifude-front.pages.dev/) passed live anonymous
+Chromium checks before that same commit was pushed to `shrek`. The landing page
+and changelog returned 200, an unknown path returned 404, and all three responses
+carried the restrictive security policy. Artwork and fonts loaded from the same
+origin. Navigation worked with JavaScript disabled, the requested heading colour
+and copy corrections were present, and unpublished installers stayed hidden.
+
+The first production check caught Cloudflare injecting its bot-detection script
+into the apex domain, although the Pages preview contained no scripts. The strict
+CSP blocked execution. [The header correction](https://github.com/nuggocto/orifude-front/commit/d51f1970fd9afa798b06ee905e5ce1e544fab3cb)
+adds `no-transform` to the existing cache policy, following
+[Cloudflare's documented opt-out](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/javascript-detections/#if-your-origin-sends-a-no-transform-header).
+The local build passed with the restrictive script policy intact.
+
+The correction passed a [second Pages preview](https://e46d6bf7.orifude-front.pages.dev/)
+before publication. Commit `d51f197` is now pushed to frontend `shrek` and deployed
+at [orifude.com](https://orifude.com/). Its
+[CI run](https://github.com/nuggocto/orifude-front/actions/runs/34054869909)
+passed Astro checks, all 19 release tests, the static build, and all 24 browser
+cases across Chromium, Firefox, and WebKit. The frontend working tree is clean.
+
+Live Chromium checks confirmed the landing page and changelog return 200 without
+script tags, all artwork decodes, and security headers remain restrictive. The
+canonical URL, public metadata assets, full-size terminal capture, font licences,
+and GitHub destination resolve correctly. Navigation through both pages and
+recovery from a real 404 work with JavaScript disabled. Unpublished downloads and
+installer links remain hidden.
+
+Two Cloudflare details remain. `www.orifude.com/changelog/?check=redirect` returns
+200 instead of redirecting to the apex domain; the redirect must retain the path
+and query, as described in [Cloudflare's guide](https://developers.cloudflare.com/pages/how-to/www-redirect/).
+Pages also replaces the custom cache policy with `no-store` on unknown paths, so
+the bot-detection script is still injected into 404 responses. A JavaScript-enabled
+Chromium check confirmed CSP blocks its execution: no challenge request, iframe,
+or cookie appeared. Resolve this hosting setting before treating publication QA as
+complete. No Cloudflare account or DNS settings were changed, and the native
+repository's tracker and notebook edits remain local.
+
+## Release planning on 2026-09-07
+
+Reviewed the [release checklist](PROJECT.md#phase-12-v1-release) against the
+[distribution guide](docs/distribution.md) and [QA record](docs/release-qa.md).
+The existing Rust tooling already builds, checks, and previews publication of the
+candidate. Minimum-OS and native terminal-app evidence, followed by verification
+of public artifacts and installation channels, remain necessary for the final
+support claims. The detailed execution plan was requested in chat; this review
+did not run release commands or change any external service.
+
+## Public installation verification on 2026-09-07
+
+The owner authorized release and package publication, followed by the website
+update. [The changelog](CHANGELOG.md) now contains a player-facing `1.0.0` entry;
+the package version was already correct. The README explains using an installed
+copy and keeps contributor commands in its development section. The frontend
+release loader accepted the prepared dated notes without enabling any download.
+
+[Public verification](examples/distribution/published.rs) downloads the exact
+eight public assets only after checking the immutable release and bounded asset
+metadata. Each asset must pass attestation verification. Downloaded checksums and
+installers are compared with the archive-derived values before package metadata
+is generated. The publisher and verifier share the same public asset list.
+
+```mermaid
+flowchart LR
+  A[Public assets: 8 files, at most 64 MiB each] --> D[published::download]
+  D --> I[Public installer or package channel]
+  I --> P[published::player: exact executable bytes]
+  P --> J[archive::installed_journey]
+  J --> C[Remove owned installation and player state]
+```
+
+The [manual workflow](.github/workflows/published.yml) separates public installer
+checks from package-channel checks, uses disposable hosted runners and read-only
+GitHub credentials, and reuses the existing packaged-player journey. Homebrew
+checks refuse an existing tap or installation. Scoop stays in a private root.
+AUR builds and removes its package in an Arch container, then the installed
+executable runs the player journey on the native Linux host.
+
+The twelve release-tool tests passed. An isolated checkout with a deliberately
+weakened download-size bound failed the new regression as intended. The workflow
+passed actionlint with ShellCheck, using the installed pinned tools. Its public
+installation paths still need a real release and package publication to execute.
+
+The configured Cloudflare credential can manage Pages, but both the zone ruleset
+and bot-management APIs returned 403 after credential refresh. No zone setting
+was changed. GitHub reports no self-hosted runners, this machine has no VM tools,
+and no designated minimum-OS host is configured. The owner was asked for these
+missing capabilities while release preparation continued; the existing
+[platform evidence gaps](docs/release-qa.md) remain open.
+
+The complete ordinary and optimized checks each passed 248 Rust tests and the
+doctest after adding public verification. Deterministic property checks and the
+local tree/history credential scan also passed. Self-review covered the new
+download guards, artifact comparisons, installation ownership, workflow permissions,
+and player-test reuse; no confirmed defect remained in that reviewed scope.
+Public network installation and minimum-platform coverage still need their own
+runtime evidence.
+
+The frontend's general navigation tests now check the changelog destination and
+readable heading without requiring an empty release history. Its release fixture
+still checks hidden unverified channels and escaped notes. All eight Chromium
+cases passed, and the two changed journeys passed again after removing a copy
+assertion. The change is committed as
+[`f32f4f6`](https://github.com/nuggocto/orifude-front/commit/f32f4f6).

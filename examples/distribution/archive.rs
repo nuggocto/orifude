@@ -73,6 +73,16 @@ pub fn name(target: &str) -> Result<String> {
         }
     ))
 }
+
+pub fn public_assets() -> Result<Vec<String>> {
+    let mut names = targets()?
+        .iter()
+        .map(|target| name(target))
+        .collect::<Result<Vec<_>>>()?;
+    names.extend(["SHA256SUMS", "install.sh", "install.ps1"].map(str::to_owned));
+    names.sort();
+    Ok(names)
+}
 pub fn binary_name(target: &str) -> &str {
     if target.contains("windows") {
         "orifude.exe"
@@ -497,6 +507,12 @@ pub fn journey(directory: &Path, target: &str) -> Result<()> {
     let temporary = tempfile::tempdir()?;
     let binary = temporary.path().join(binary_name(target));
     extract(directory, target, &binary)?;
+    installed_journey(&binary)?;
+    println!("artifact_journey=pass target={target}");
+    Ok(())
+}
+
+pub fn installed_journey(binary: &Path) -> Result<()> {
     let out = support::run(
         support::command("cargo")
             .args([
@@ -514,6 +530,6 @@ pub fn journey(directory: &Path, target: &str) -> Result<()> {
             ])
             .env("ORIFUDE_ARTIFACT_BINARY", binary),
     )?;
-    println!("{out}\nartifact_journey=pass target={target}");
+    println!("{out}\ninstalled_player_journey=pass");
     Ok(())
 }
