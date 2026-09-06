@@ -475,3 +475,46 @@ language API now reports only Rust. The extracted Linux musl executable retains 
 matching the binary in the [performance record](docs/release-qa.md#packaged-binary-measurements-on-2026-09-06).
 The earlier measurements still describe the delivered executable. Existing minimum-OS,
 terminal-GUI, and live public-release verification limits remain documented there.
+
+## Whole-repository review on 2026-09-06
+
+Reviewed [`d06c429`](https://github.com/nuggocto/orifude/commit/d06c4298c9f053f1fc206d8b3298ab23b2909762)
+across the domain, solver, generator, content, persistence, pack boundaries, terminal
+player, tests, dependencies, and distribution tooling. Verdict: **PASS: No confirmed
+findings in the reviewed scope.** No corrective refactor, test removal, or performance
+change was justified before starting frontend work. The shared production engine,
+bounded search and event queues, validated content, and transactional storage remain
+consistent with the product contract. Test review found useful behavioral, boundary,
+replay, and recovery coverage rather than a material test-quality problem.
+
+The [ordinary and optimized checks](mise.toml) each passed 247 tests and the doctest.
+Formatting, Clippy, shell checks, dependency advisory and license policy, deterministic
+property checks, and the local credential scan also passed. The complete hosted
+archive set from `962d7c3` passed release verification. Its Linux x86_64 musl binary
+passed the [extracted player journey](tests/terminal_pty.rs) and
+[HTTPS installer failure checks](examples/distribution/install.rs). That candidate
+has the same application and tooling source as the reviewed commit; the intervening
+changes are documentation. A fresh musl build could not run because this machine
+lacks `musl-gcc`.
+
+Fresh [release measurements](scripts/release-measure.sh) used the same packaged
+binary hash, host, and release settings as the
+[earlier performance record](docs/release-qa.md#packaged-binary-measurements-on-2026-09-06),
+with no other review builds or tests running alongside them. All measured budgets
+passed:
+
+| Measurement | Result | Workload |
+| --- | ---: | --- |
+| Fresh / returning startup p95 | 126.243 / 101.605 ms | 25 starts each; returning state has 1,024 saved puzzles |
+| Help input p95 / p99 | 5.698 / 5.997 ms | 100 inputs |
+| Maximum-board fold / brush p95 | 5.584 / 5.438 ms | 100 actions each |
+| Durable write p95 | 22.700 to 28.673 ms | Two processes, each with 500 fresh and 500 populated writes |
+| Ordinary play RSS | 4,788 KiB | Packaged player process |
+| Idle CPU | 0.000% | Three-second observation |
+
+Terminal timing includes tmux observation overhead and warm filesystem state.
+Storage and solver helper measurements use the local GNU build. Native macOS,
+Windows, minimum-OS, and terminal-GUI checks were not rerun here; their existing
+[QA evidence and limitations](docs/release-qa.md) still apply. The separate frontend
+was outside this review. Minimum-platform checks and live public-release verification
+remain necessary before publishing the corresponding v1 claims.
