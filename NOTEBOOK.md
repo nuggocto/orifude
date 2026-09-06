@@ -378,3 +378,8 @@ creates the standard shims and buckets directories before invoking its CLI. It a
 checks an explicit completion result and exact shim version. Homebrew's upgrade
 check now confirms the installed package revision. Installer fixtures copy all five
 real candidate archives instead of generating dummy foreign-platform payloads.
+
+Scoop requires a Git URL when adding a bucket and rejected the fixture's Windows
+filesystem path. The fixture now passes its local `file:///` URI and reports bucket
+setup failure immediately. The package definition and its public HTTPS URL are
+unchanged by this test setup correction.

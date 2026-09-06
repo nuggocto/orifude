@@ -99,6 +99,7 @@ $Scoop = Join-Path $Root 'apps/scoop/current/bin/scoop.ps1'
 & $Scoop config aria2-enabled false
 & $Scoop config last_update ([DateTime]::Now.ToString('o'))
 & $Scoop bucket add fixture $Bucket
+if ($LASTEXITCODE -ne 0) { throw 'Scoop bucket setup failed.' }
 & $Scoop install fixture/orifude
 if ($LASTEXITCODE -ne 0) { throw 'Scoop installation failed.' }
 $Binary = Join-Path $Root 'shims/orifude.exe'
@@ -130,7 +131,7 @@ Write-Output 'scoop_journey=complete'
             "-File",
             str(script),
             str(scoop_root),
-            str(bucket),
+            bucket.as_uri(),
             release.version(),
             timeout=600,
         )
