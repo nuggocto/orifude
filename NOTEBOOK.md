@@ -276,3 +276,30 @@ passed all seven jobs in [hosted CI](https://github.com/nuggocto/orifude/actions
 This includes the repository gate, native Linux x86_64 and ARM64, native macOS
 Intel and Apple Silicon, native Windows x86_64, and Linux distribution
 compatibility. No job needed a retry.
+
+## Release tooling on 2026-09-06
+
+[Release tooling](scripts/release/release.py) now builds the declared native targets,
+packages fixed archive layouts, validates executable architecture, and generates
+installers and package metadata from the completed archive hashes. Release-only
+Python uses the standard library; shipped binaries require no interpreter.
+
+```text
+Cargo platform targets -> native binaries -> five archives -> SHA256SUMS
+SHA256SUMS -> install.sh / install.ps1 / package metadata -> native installation QA
+Verified candidate run -> draft -> immutable release -> package repository updates
+```
+
+Local checks exercised the Linux static musl archive, installer hash/download
+failures and replacement, and the extracted binary's play/save/restart/replay
+journey. A linker wrapper initially left a dynamic interpreter in a musl binary;
+the archive check rejected it. Native `cc` links the static Rust output while
+`musl-gcc` supplies SQLite's C headers. The Arch fixture installed, upgraded, and
+removed the x86_64 package and assembled the ARM package. Hosted native verification
+is still pending.
+
+Release immutability was enabled through the repository API. Read-only SSH checks
+confirmed the official `orifude-bin` remote and the dedicated AUR login. The
+[distribution guide](docs/distribution.md) describes the exact artifact checks,
+publication dry runs, credential scopes, and recovery. Public release attestation
+and final-version artifact evidence still require the real release handoff.

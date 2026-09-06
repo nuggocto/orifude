@@ -1,0 +1,26 @@
+class Orifude < Formula
+  desc "A quiet, offline folding and ink puzzle game for the terminal"
+  homepage "https://orifude.com"
+  version "@VERSION@"
+  license "Apache-2.0"
+  depends_on macos: :ventura
+
+  on_macos do
+    on_intel do
+      url "@BASE_URL@/orifude-@VERSION@-x86_64-apple-darwin.tar.gz"
+      sha256 "@x86_64-apple-darwin@"
+    end
+    on_arm do
+      url "@BASE_URL@/orifude-@VERSION@-aarch64-apple-darwin.tar.gz"
+      sha256 "@aarch64-apple-darwin@"
+    end
+  end
+
+  def install
+    bin.install "orifude"
+  end
+
+  test do
+    assert_equal "orifude #{version}", shell_output("#{bin}/orifude --version").strip
+  end
+end

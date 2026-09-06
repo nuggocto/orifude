@@ -1,0 +1,127 @@
+name: Release candidate
+
+on:
+  push:
+    branches: [shrek]
+  pull_request:
+    branches: [shrek]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: archive (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.8.16
+          install: "true"
+          install_args: "rust python@3.14.7"
+          cache: "false"
+      - name: Install Linux C headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends musl-tools
+          echo "CC_${{ matrix.target }}=musl-gcc" >> "$GITHUB_ENV"
+      - name: Install the declared Rust target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build and smoke-test the native archive
+        run: mise run release-build -- ${{ matrix.target }} target/release-dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: archive-${{ matrix.target }}
+          path: target/release-dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  assemble:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.8.16
+          install_args: "python@3.14.7"
+          cache: "false"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: archive-*
+          merge-multiple: true
+          path: target/release-dist
+      - run: mise run release-tool-test
+      - run: mise run release-assemble -- target/release-dist
+      - run: mise run release-verify -- target/release-dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-set
+          path: target/release-dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  install:
+    name: installation (${{ matrix.target }})
+    needs: assemble
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.8.16
+          install_args: "rust python@3.14.7"
+          cache: "false"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-set
+          path: target/release-dist
+      - run: mise run release-verify -- target/release-dist --target ${{ matrix.target }}
+      - run: mise run installer-check -- target/release-dist ${{ matrix.target }}
+      - run: mise run artifact-check -- target/release-dist ${{ matrix.target }}
+      - name: Exercise the native package channel
+        run: mise run package-channel-check -- target/release-dist ${{ matrix.target }}

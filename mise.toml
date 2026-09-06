@@ -90,6 +90,10 @@ run = "bash scripts/secret-scan.sh"
 [tasks.shell-check]
 description = "Check release shell automation"
 run = [
+    "sh -n scripts/release/install.sh.in",
+    "bash -n scripts/release/PKGBUILD.in",
+    "shellcheck scripts/release/install.sh.in",
+    "shellcheck -s bash -e SC2034 scripts/release/PKGBUILD.in",
     "bash -n scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh",
     "shellcheck scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh",
 ]
@@ -136,6 +140,7 @@ description = "Run release-profile code, policy, and native terminal checks"
 run = [
     { task = "fmt-check" },
     { task = "shell-check" },
+    { task = "release-tool-test" },
     { task = "audit" },
     { task = "lint" },
     { task = "release-test" },
@@ -148,9 +153,86 @@ description = "Run every ordinary repository check in a safe order"
 run = [
     { task = "fmt-check" },
     { task = "shell-check" },
+    { task = "release-tool-test" },
     { task = "audit" },
     { task = "lint" },
     { task = "test" },
     { task = "doctest" },
     { task = "build" },
 ]
+
+[tasks.release-build]
+description = "Build and package one native release target"
+raw_args = true
+run = "python scripts/release/release.py build"
+
+[tasks.release-build.tools]
+python = "3.14.7"
+
+[tasks.release-assemble]
+description = "Generate installers and package metadata from the complete archive set"
+raw_args = true
+run = "python scripts/release/release.py assemble"
+
+[tasks.release-assemble.tools]
+python = "3.14.7"
+
+[tasks.release-verify]
+description = "Verify archives, hashes, installers, and package metadata"
+raw_args = true
+run = "python scripts/release/release.py check"
+
+[tasks.release-verify.tools]
+python = "3.14.7"
+
+[tasks.release-tool-test]
+description = "Test release archive and manifest integrity"
+run = [
+    "ruff check scripts/release --select E4,E7,E9,F",
+    "ruff format --check scripts/release",
+    "python -B -W error -m unittest discover -s scripts/release -p test_*.py",
+]
+
+[tasks.release-tool-test.tools]
+python = "3.14.7"
+ruff = "0.16.4"
+
+[tasks.installer-check]
+description = "Exercise generated installers against a private HTTPS fixture"
+raw_args = true
+run = "python -B scripts/release/install_check.py"
+
+[tasks.installer-check.tools]
+python = "3.14.7"
+
+[tasks.release-publish]
+description = "Inspect a verified release proposal; publication requires --publish"
+raw_args = true
+run = "python -B scripts/release/publish.py"
+
+[tasks.release-publish.tools]
+python = "3.14.7"
+
+[tasks.release-channel]
+description = "Inspect an immutable package update; external writes require --push"
+raw_args = true
+run = "python -B scripts/release/channels.py"
+
+[tasks.release-channel.tools]
+python = "3.14.7"
+
+[tasks.artifact-check]
+description = "Play, save, restart, and replay using an extracted production archive"
+raw_args = true
+run = "python -B scripts/release/artifact_check.py"
+
+[tasks.artifact-check.tools]
+python = "3.14.7"
+
+[tasks.package-channel-check]
+description = "Install the candidate through its native package channel"
+raw_args = true
+run = "python -B scripts/release/channel_check.py"
+
+[tasks.package-channel-check.tools]
+python = "3.14.7"

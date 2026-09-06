@@ -1,0 +1,67 @@
+#!/bin/sh
+# Download this complete file, inspect it, then run it with --bin-dir DIRECTORY.
+set -eu
+umask 077
+version='@VERSION@'
+base_url='@BASE_URL@'
+fail() { printf 'error: %s\n' "$1" >&2; exit 1; }
+if [ "$#" = 1 ] && [ "$1" = --help ]; then
+    printf '%s\n' 'Usage: sh install.sh --bin-dir /existing/directory' \
+        'Installs this exact release without sudo or profile changes.'
+    exit 0
+fi
+[ "$#" = 2 ] && [ "$1" = --bin-dir ] || fail 'expected --bin-dir DIRECTORY'
+bin_dir=$2
+case "$bin_dir" in /*) ;; *) fail 'installation directory must be absolute' ;; esac
+[ "${#bin_dir}" -le 4096 ] || fail 'installation path is too long'
+[ -d "$bin_dir" ] && [ -w "$bin_dir" ] || fail 'installation directory must exist and be writable'
+bin_dir=$(CDPATH='' cd -P "$bin_dir" && pwd)
+destination="$bin_dir/orifude"
+[ ! -L "$destination" ] || fail 'destination must not be a symbolic link'
+if [ -e "$destination" ]; then
+    [ -f "$destination" ] || fail 'destination must be a regular file'
+fi
+case "$(uname -s):$(uname -m)" in
+    Linux:x86_64) target=x86_64-unknown-linux-musl; expected='@x86_64-unknown-linux-musl@' ;;
+    Linux:aarch64|Linux:arm64) target=aarch64-unknown-linux-musl; expected='@aarch64-unknown-linux-musl@' ;;
+    Darwin:x86_64) target=x86_64-apple-darwin; expected='@x86_64-apple-darwin@' ;;
+    Darwin:arm64) target=aarch64-apple-darwin; expected='@aarch64-apple-darwin@' ;;
+    *) fail 'unsupported operating system or architecture' ;;
+esac
+for tool in curl tar mktemp chmod mv; do command -v "$tool" >/dev/null || fail "missing tool: $tool"; done
+if command -v sha256sum >/dev/null; then hash_tool=sha256sum
+elif command -v shasum >/dev/null; then hash_tool=shasum
+else fail 'sha256sum or shasum is required'; fi
+work=$(mktemp -d "${TMPDIR:-/tmp}/orifude-install.XXXXXXXX")
+staging=''
+cleanup() {
+    rm -rf "$work"
+    if [ -n "$staging" ]; then rm -rf "$staging"; fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+archive="orifude-$version-$target.tar.gz"
+curl --fail --silent --show-error --location --max-redirs 5 \
+    --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    --connect-timeout 15 --max-time 120 --max-filesize 67108864 \
+    --output "$work/archive.tar.gz" "$base_url/$archive" || fail 'archive download failed'
+if [ "$hash_tool" = sha256sum ]; then actual=$(sha256sum "$work/archive.tar.gz")
+else actual=$(shasum -a 256 "$work/archive.tar.gz"); fi
+actual=${actual%% *}
+[ "$actual" = "$expected" ] || fail 'archive checksum mismatch'
+folder="orifude-$version-$target"
+listing=$(tar -tzf "$work/archive.tar.gz") || fail 'cannot read archive'
+expected_listing=$(printf '%s\n' "$folder/LICENSE" "$folder/README.txt" "$folder/orifude")
+[ "$listing" = "$expected_listing" ] || fail 'unexpected archive layout'
+tar -xzf "$work/archive.tar.gz" -C "$work" || fail 'archive extraction failed'
+[ -f "$work/$folder/orifude" ] && [ ! -L "$work/$folder/orifude" ] || fail 'missing regular executable'
+chmod 755 "$work/$folder/orifude"
+actual_version=$("$work/$folder/orifude" --version) || fail 'downloaded executable cannot run'
+[ "$actual_version" = "orifude $version" ] || fail 'downloaded executable version mismatch'
+staging=$(mktemp -d "$bin_dir/.orifude-install.XXXXXXXX")
+cp "$work/$folder/orifude" "$staging/orifude"
+chmod 755 "$staging/orifude"
+# Rename within the destination filesystem only after every check succeeds.
+mv -f "$staging/orifude" "$destination"
+printf 'Installed Orifude %s in %s.\nAdd this directory to PATH if needed. Saved progress is unchanged.\n' "$version" "$bin_dir"

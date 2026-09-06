@@ -34,7 +34,68 @@ fn shipped_binary_restores_the_terminal_after_normal_exit() {
 fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
     let _journey = native_journey();
     let state = tempfile::tempdir().expect("isolated player state");
-    let binary = Path::new(env!("CARGO_BIN_EXE_orifude"));
+    let paths = AppPaths::injected(
+        state.path().join("data"),
+        state.path().join("config"),
+        state.path().join("cache"),
+    );
+    player_journey(
+        Path::new(env!("CARGO_BIN_EXE_orifude")),
+        state.path(),
+        &paths,
+    );
+}
+
+struct PlayerRoots(Vec<std::path::PathBuf>);
+impl Drop for PlayerRoots {
+    fn drop(&mut self) {
+        for root in &self.0 {
+            if root.exists() {
+                let _cleanup = fs::remove_dir_all(root);
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an extracted release binary and disposable native host"]
+fn packaged_binary_preserves_the_complete_player_journey() {
+    let _journey = native_journey();
+    let binary = std::env::var_os("ORIFUDE_ARTIFACT_BINARY").expect("explicit release binary");
+    let binary = Path::new(&binary);
+    assert!(binary.is_absolute() && binary.is_file());
+    let state = tempfile::tempdir().expect("isolated terminal state");
+    #[cfg(target_os = "linux")]
+    let paths = AppPaths::injected(
+        state.path().join("data/orifude"),
+        state.path().join("config/orifude"),
+        state.path().join("cache/orifude"),
+    );
+    #[cfg(not(target_os = "linux"))]
+    let paths = AppPaths::platform().expect("native platform directories");
+    // Production platform APIs on macOS and Windows cannot all be redirected.
+    // Refuse existing player state, and own cleanup only for newly created roots.
+    let mut roots = vec![
+        paths.data().to_owned(),
+        paths.config().to_owned(),
+        paths.cache().to_owned(),
+    ];
+    roots.sort();
+    roots.dedup();
+    assert!(
+        roots.iter().all(|root| !root.exists()),
+        "artifact QA needs an unused player account"
+    );
+    let cleanup = PlayerRoots(roots);
+    player_journey(binary, state.path(), &paths);
+    for root in &cleanup.0 {
+        if root.exists() {
+            fs::remove_dir_all(root).expect("artifact player state is removed");
+        }
+    }
+}
+
+fn player_journey(binary: &Path, state: &Path, paths: &AppPaths) {
     let replay_steps = [
         PtyStep {
             input: b"\r\rjll\r\r\r\r\r\rjl\r\rv",
@@ -53,7 +114,7 @@ fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
             wait_for: b"exactly.",
         },
     ];
-    let first = run_in_native_pty_scripted(binary, state.path(), &replay_steps, b"\x1bqy");
+    let first = run_in_native_pty_scripted(binary, state, &replay_steps, b"\x1bqy");
     assert!(first.status_success, "first player journey exits cleanly");
     assert!(
         find(&first.bytes, b"fresh paper").is_some()
@@ -62,11 +123,6 @@ fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
         "the saved paper is replayed from fresh paper through its final comparison"
     );
 
-    let paths = AppPaths::injected(
-        state.path().join("data"),
-        state.path().join("config"),
-        state.path().join("cache"),
-    );
     {
         let storage = Storage::open(paths.clone()).expect("saved player state opens");
         assert!(storage.settings().expect("settings").lesson_complete);
@@ -107,7 +163,7 @@ fn new_player_learns_solves_restarts_and_replays_in_the_shipped_binary() {
             wait_for: b"included.",
         },
     ];
-    let second = run_in_native_pty_scripted(binary, state.path(), &returning_steps, b"\r\x1bqy");
+    let second = run_in_native_pty_scripted(binary, state, &returning_steps, b"\r\x1bqy");
     assert!(
         second.status_success,
         "returning player journey exits cleanly"

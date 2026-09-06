@@ -1,0 +1,71 @@
+# Download this complete file, inspect it, then run it with -BinDir DIRECTORY.
+[CmdletBinding()]
+param([Parameter(Mandatory = $true)][ValidateLength(1, 4096)][string]$BinDir)
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$Version = '@VERSION@'
+$BaseUrl = '@BASE_URL@'
+$Expected = '@x86_64-pc-windows-msvc@'
+if ([Environment]::OSVersion.Platform -ne 'Win32NT' -or
+    [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne [Runtime.InteropServices.Architecture]::X64) {
+    throw 'Only Windows x86_64 is supported.'
+}
+if (-not [IO.Path]::IsPathRooted($BinDir) -or -not (Test-Path -LiteralPath $BinDir -PathType Container)) {
+    throw 'Installation directory must be absolute and already exist.'
+}
+$BinDir = (Get-Item -LiteralPath $BinDir).FullName
+$Destination = Join-Path $BinDir 'orifude.exe'
+if (Test-Path -LiteralPath $Destination) {
+    $Item = Get-Item -Force -LiteralPath $Destination
+    if ($Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Destination must be a regular file.'
+    }
+}
+$Curl = (Get-Command curl.exe -CommandType Application -ErrorAction Stop).Source
+$Work = Join-Path ([IO.Path]::GetTempPath()) ('orifude-install-' + [Guid]::NewGuid().ToString('N'))
+$Stage = $null
+try {
+    [void][IO.Directory]::CreateDirectory($Work)
+    $Archive = Join-Path $Work 'archive.zip'
+    & $Curl --fail --silent --show-error --location --max-redirs 5 `
+        --proto '=https' --proto-redir '=https' --tlsv1.2 `
+        --connect-timeout 15 --max-time 120 --max-filesize 67108864 `
+        --output $Archive "$BaseUrl/orifude-$Version-x86_64-pc-windows-msvc.zip"
+    if ($LASTEXITCODE -ne 0) { throw 'Archive download failed.' }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $Archive).Hash.ToLowerInvariant() -cne $Expected) {
+        throw 'Archive checksum mismatch.'
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $Zip = [IO.Compression.ZipFile]::OpenRead($Archive)
+    try {
+        $Folder = "orifude-$Version-x86_64-pc-windows-msvc"
+        $Names = @("$Folder/LICENSE", "$Folder/README.txt", "$Folder/orifude.exe")
+        if ($Zip.Entries.Count -ne 3) { throw 'Unexpected archive layout.' }
+        $Seen = @{}
+        foreach ($Entry in $Zip.Entries) {
+            if ($Entry.FullName -cnotin $Names -or $Seen.ContainsKey($Entry.FullName) -or
+                $Entry.Length -gt 67108864 -or (($Entry.ExternalAttributes -shr 16) -band 61440) -ne 32768) {
+                throw 'Unexpected archive member.'
+            }
+            $Seen[$Entry.FullName] = $true
+        }
+        $Binary = Join-Path $Work 'orifude.exe'
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($Zip.GetEntry("$Folder/orifude.exe"), $Binary)
+    } finally { $Zip.Dispose() }
+    $ActualVersion = & $Binary --version
+    if ($LASTEXITCODE -ne 0 -or $ActualVersion -cne "orifude $Version") {
+        throw 'Downloaded executable version mismatch or execution failure.'
+    }
+    $Stage = Join-Path $BinDir ('.orifude-install-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    [IO.File]::Copy($Binary, $Stage, $false)
+    if ([IO.File]::Exists($Destination)) {
+        [IO.File]::Replace($Stage, $Destination, $null)
+    } else {
+        [IO.File]::Move($Stage, $Destination)
+    }
+    Write-Output "Installed Orifude $Version in $BinDir."
+    Write-Output 'Add this directory to your user PATH if needed. Saved progress is unchanged.'
+} finally {
+    if ($Stage -and (Test-Path -LiteralPath $Stage)) { Remove-Item -LiteralPath $Stage -Force }
+    if (Test-Path -LiteralPath $Work) { Remove-Item -LiteralPath $Work -Recurse -Force }
+}
