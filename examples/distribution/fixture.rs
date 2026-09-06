@@ -51,23 +51,21 @@ impl Https {
         drop(listener);
         // OpenSSL's -HTTP mode serves complete response files, including deliberately
         // truncated bodies. Certificates and responses belong only to this fixture.
+        let mut server = support::command("openssl");
+        server.arg("s_server");
+        // Unix file reads have no text translation; macOS's LibreSSL lacks this flag.
+        if cfg!(windows) {
+            server.arg("-http_server_binmode");
+        }
         let mut child = OwnedChild(
-            support::command("openssl")
-                .args([
-                    "s_server",
-                    "-quiet",
-                    "-HTTP",
-                    "-http_server_binmode",
-                    "-accept",
-                    &address.to_string(),
-                    "-cert",
-                ])
+            server
+                .args(["-quiet", "-HTTP", "-accept", &address.to_string(), "-cert"])
                 .arg(&certificate)
                 .arg("-key")
                 .arg(key)
                 .current_dir(&directory)
                 .stdout(Stdio::null())
-                .stderr(Stdio::null())
+                .stderr(Stdio::inherit())
                 .spawn()?,
         );
         let deadline = Instant::now() + Duration::from_secs(10);

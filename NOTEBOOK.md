@@ -448,3 +448,11 @@ sets each accepted stream to blocking mode before bounded reads and writes. It a
 reports request errors instead of discarding them. The complete-transfer regression
 uses a 4 MiB body, matching archive-scale traffic. Intel's installer and extracted
 player journey had passed; Homebrew's corrected fixture needs native verification.
+
+The Windows correction passed all native installer, player, and Scoop checks in
+[candidate run 34011165226](https://github.com/nuggocto/orifude/actions/runs/34011165226).
+Its macOS HTTPS fixture exposed a portability mistake in that correction: the
+bundled LibreSSL does not support OpenSSL's binary-mode option. The option is now
+Windows-only; Unix does not translate text-mode file reads. Server stderr remains
+visible so a startup failure keeps its actual diagnostic. Linux fixture checks
+passed again after this adjustment.

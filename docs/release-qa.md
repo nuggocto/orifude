@@ -273,3 +273,9 @@ inherited nonblocking mode on accepted sockets and reports request errors. Its
 complete-transfer test uses a 4 MiB response. Intel's classic installer and archived
 player journey passed before that package failure. Both fixture corrections will be
 verified in the next native candidate.
+
+The corrected Windows fixture passed installer replacement and failure checks,
+alongside the extracted player and Scoop journeys. The binary-mode option is now
+limited to Windows because macOS's bundled LibreSSL does not support it and Unix
+file reads do not need it. Startup stderr is retained for diagnosis. Linux checks
+passed after this portability adjustment; macOS must be rechecked.
