@@ -19,9 +19,7 @@ def preflight(tag: str, commit: str, run_id: str, *, publishing: bool) -> None:
     if tag != f"v{release.version()}":
         raise ValueError("tag does not match package version")
     if publishing and int(release.version().split(".")[0]) < 1:
-        raise ValueError(
-            "the puzzle game's first public release must be v1.0.0 or newer"
-        )
+        raise ValueError("development versions must not be published")
     if release.run("git", "status", "--porcelain"):
         raise ValueError("release checkout must be clean")
     if release.run("git", "rev-parse", "HEAD") != commit:
@@ -124,6 +122,11 @@ def publish(tag: str, commit: str, run_id: str, write: bool) -> None:
         releases = json.loads(
             gh("api", f"repos/{release.REPOSITORY}/releases?per_page=100")
         )
+        if (
+            not any(not item["draft"] for item in releases)
+            and release.version() != "1.0.0"
+        ):
+            raise ValueError("the first public puzzle-game release must be v1.0.0")
         if any(item["tag_name"] == tag for item in releases):
             raise ValueError(
                 "release already exists; inspect its state before resuming publication"

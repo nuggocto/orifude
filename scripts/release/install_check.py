@@ -133,25 +133,6 @@ def verify(directory: Path, target: str) -> None:
             if windows
             else ["sh", str(script), "--bin-dir", str(destination)]
         )
-        trust_script = root / "trust.ps1"
-        trust_script.write_text(
-            r"""param($Certificate, $Thumbprint)
-$ErrorActionPreference = 'Stop'
-$Store = [Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
-$Store.Open('ReadWrite')
-try {
-    if ($Certificate) {
-        $Cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($Certificate)
-        $Store.Add($Cert)
-        Write-Output $Cert.Thumbprint
-    } else {
-        $Matches = $Store.Certificates.Find('FindByThumbprint', $Thumbprint, $false)
-        foreach ($Cert in $Matches) { $Store.Remove($Cert) }
-    }
-} finally { $Store.Close() }
-""",
-            encoding="utf-8",
-        )
         thumbprint = None
         try:
             if windows:
@@ -168,12 +149,26 @@ try {
                     str(der_certificate),
                     timeout=30,
                 )
-                thumbprint = release.run(
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-File",
-                    str(trust_script),
-                    "-Certificate",
+                thumbprint = (
+                    release.run(
+                        "openssl",
+                        "x509",
+                        "-in",
+                        str(certificate),
+                        "-noout",
+                        "-fingerprint",
+                        "-sha1",
+                        timeout=30,
+                    )
+                    .split("=", 1)[1]
+                    .replace(":", "")
+                )
+                release.run(
+                    "certutil.exe",
+                    "-user",
+                    "-f",
+                    "-addstore",
+                    "Root",
                     str(der_certificate),
                     timeout=30,
                 )
@@ -218,6 +213,37 @@ try {
             execute(download, environment, success=False)
             if sentinel.exists() or existing.read_bytes() != marker:
                 raise RuntimeError("a partial installer was executed")
+            if not windows:
+                if os.geteuid() == 0:
+                    raise RuntimeError(
+                        "installer permission checks require an unprivileged account"
+                    )
+                unsupported = root / "unsupported"
+                unsupported.mkdir()
+                uname = unsupported / "uname"
+                uname.write_text(
+                    "#!/bin/sh\nprintf 'Unsupported\\n'\n", encoding="utf-8"
+                )
+                uname.chmod(0o755)
+                unsupported_environment = {
+                    **environment,
+                    "PATH": str(unsupported) + os.pathsep + environment["PATH"],
+                }
+                output = execute(command, unsupported_environment, success=False)
+                if (
+                    "unsupported operating system" not in output
+                    or existing.read_bytes() != marker
+                ):
+                    raise RuntimeError("unsupported platform changed the installation")
+                destination.chmod(0o500)
+                try:
+                    execute(command, environment, success=False)
+                    if existing.read_bytes() != marker:
+                        raise RuntimeError(
+                            "read-only installation changed the executable"
+                        )
+                finally:
+                    destination.chmod(0o700)
             archive.write_bytes(b"tampered archive")
             output = execute(command, environment, success=False)
             if (
@@ -278,13 +304,7 @@ try {
             server.server_close()
             if thumbprint:
                 release.run(
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-File",
-                    str(trust_script),
-                    "-Thumbprint",
-                    thumbprint,
-                    timeout=30,
+                    "certutil.exe", "-user", "-delstore", "Root", thumbprint, timeout=30
                 )
 
 

@@ -319,3 +319,16 @@ Windows certificate-store API and still verifies TLS. A partial installer-transf
 case also confirms that the documented download-then-run sequence never executes
 an incomplete script. Publication guard tests reject branch drift, dirty state,
 wrong candidate runs, failed CI, mutable release settings, and unverified tags.
+
+The release candidate now uses package version `1.0.0`, so archive names, binary
+version output, installers, and package definitions can be tested with the intended
+v1 version before publication. This does not create a tag or GitHub release.
+Public immutable-release verification remains at the release handoff described in
+the accepted implementation plan.
+
+The Windows root-store API prompted in the headless fixture and hit its timeout.
+The fixture now uses `certutil -user -f -addstore` and removes the exact certificate
+by fingerprint afterward. Two macOS setup failures killed the runner's `rustup`
+before application compilation; release tool installation is now sequential to
+remove overlapping setup work. Their logs remain failed evidence, not player-test
+failures or successful checks.

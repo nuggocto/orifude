@@ -63,5 +63,5 @@ staging=$(mktemp -d "$bin_dir/.orifude-install.XXXXXXXX")
 cp "$work/$folder/orifude" "$staging/orifude"
 chmod 755 "$staging/orifude"
 # Rename within the destination filesystem only after every check succeeds.
-mv -f "$staging/orifude" "$destination"
+mv -f "$staging/orifude" "$bin_dir/"
 printf 'Installed Orifude %s in %s.\nAdd this directory to PATH if needed. Saved progress is unchanged.\n' "$version" "$bin_dir"

@@ -165,7 +165,6 @@ orifude --version
 pacman -R --noconfirm orifude-bin
 if test -e /usr/bin/orifude; then exit 1; fi
 # Packaging ARM prebuilt bytes needs no cross compiler. Execute them in native ARM QA.
-runuser -u builder -- env CARCH=aarch64 makepkg --config /etc/makepkg.conf --printsrcinfo > /tmp/arm.SRCINFO
 cp /etc/makepkg.conf /work/arm.conf
 printf '\nCARCH=aarch64\n' >> /work/arm.conf
 runuser -u builder -- makepkg --config /work/arm.conf --noconfirm
