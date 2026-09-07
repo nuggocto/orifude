@@ -805,5 +805,23 @@ The [frontend correction](https://github.com/nuggocto/orifude-front/commit/5798b
 passed its 19 release tests, static build, and two affected Chromium journeys
 locally. Removing the process-policy option in an owned temporary copy failed
 the instruction regression as intended. Rust formatting, Clippy, and the twelve
-release-tool tests passed with the policy-precondition check included. The Windows
-candidate must supply its native runtime result.
+release-tool tests passed with the policy-precondition check included.
+
+Signed native commit
+[`1f7bd08`](https://github.com/nuggocto/orifude/commit/1f7bd086f31b797f96215293bc3826eb892ad290)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34069338694)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34069338690)
+without retries. The Windows fixture confirmed Restricted before its installer,
+failure, player, and Scoop journeys passed. The exact clean commit passed the
+publication dry run and all three package-repository previews. The refreshed
+[QA record](docs/release-qa.md#current-publication-decision-on-2026-09-07) contains
+its candidate hashes. The earlier documentation-only candidate was superseded by
+this correction; its cancellation did not replace a failed installation result.
+
+The frontend correction passed all 19 release tests and 24 browser cases in
+[CI](https://github.com/nuggocto/orifude-front/actions/runs/34069271704), then deployed
+through Cloudflare Pages. The live landing page and changelog matched the local
+HTML exactly. Self-review found no remaining confirmed code defect. Publication
+is still blocked by the unavailable minimum-OS/terminal-app checks and Cloudflare
+zone access. No tag, public release, package entry, or public release record was
+created during this work.

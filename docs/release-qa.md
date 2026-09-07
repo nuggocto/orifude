@@ -5,13 +5,13 @@
 Release verdict: **BLOCKED**. Recommendation: **hold publication** until the
 minimum-OS and terminal-app checks below and the remaining
 [Cloudflare corrections](../NOTEBOOK.md#website-publication-on-2026-09-06) are
-verified. The candidate passed its available checks; no product defect was
-reproduced. No public puzzle-game release or package update has been created.
+verified. The candidate passed its available checks; no confirmed defect remains
+in the reviewed code. No public puzzle-game release or package update has been created.
 
 Signed commit
-[`eb54180`](https://github.com/nuggocto/orifude/commit/eb541803606d7af50cc7281c1c5414453657691b)
-passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34068287642)
-and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34068287673)
+[`1f7bd08`](https://github.com/nuggocto/orifude/commit/1f7bd086f31b797f96215293bc3826eb892ad290)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34069338694)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34069338690)
 without retries. Clean hosted checkouts used locked dependencies and Rust 1.98.1.
 The five native targets and pinned Linux userlands match the matrix recorded
 below. Archive checks, classic installer failure cases, extracted player
@@ -25,20 +25,20 @@ The downloaded candidate passed local `release-verify`, `artifact-check`, and
 | aarch64-apple-darwin | `53ac20742100f78b29bdd0c8734d3807b4aad8ba25c4a7f44a57c0b0c05e69d5` |
 | aarch64-unknown-linux-musl | `3010a16d792c9a41e26a3954e07b9111448a5a7f71e3ae3557914384b375ddaf` |
 | x86_64-apple-darwin | `1ada3cc1fdf0645ab459c0cb037dbe9898da49154639e2caf2ddee5e7ed5de12` |
-| x86_64-pc-windows-msvc | `eb4d8154c2c107d811a9e079fbea162af28a542359b56ce6784e5b908e02e273` |
+| x86_64-pc-windows-msvc | `af2acc6f798d726d924cfc7dfef76bf15b25514756f008b18dbce891a076c523` |
 | x86_64-unknown-linux-musl | `c2e1fe770643160369c3427dffa46afaae6e147155d2177b18ebd0ab5a4537fc` |
 
 The complete `SHA256SUMS` file has SHA-256
-`0d4815787be322918d9a656479107a0416d898bff4aaf0d50a4af4e9c99fac24`.
+`02e5466721ca756b045c96ba85ce081cd443e36add005f9590070d1fcae2bcbe`.
 These are candidate hashes, not published release attestations. The workflow
 retains its artifact for fourteen days; the downloaded set also remains locally
-under ignored `target/public-ready-eb54180`.
+under ignored `target/public-ready-1f7bd08`.
 
 The clean publication dry run passed for this exact commit and candidate run.
 The POSIX installer has SHA-256
 `4ca73514818064b91f1ba363e6ea054f25bf9e18ec71c1e330517d1722d601f4`;
 the PowerShell installer has SHA-256
-`8e1fecbe45ef55aecfb5b50d2c37369091f926c753c6af53218a6f684c569157`.
+`5f7d2a6e252abfc99a0ec5f41745da645ef182e051089f3f23f4f9fdffc38a8f`.
 Package-repository previews also passed with version `1.0.0` and matching hashes.
 
 Fresh measurements used the earlier `8b940fe` candidate's static Linux executable,
@@ -81,11 +81,27 @@ Its live network paths require the real release and package entries. Candidate
 fixtures cannot substitute for those checks. Minimum-version hosts and macOS
 Terminal / Windows Terminal remain unavailable, as described below.
 
-Windows executable bytes differ between these two builds at 24 bytes, all within
-the PE/debug timestamps and CodeView GUID. The other four archives are identical.
+Comparing `8b940fe` and `eb54180` found 24 changed Windows executable bytes, all
+within the PE/debug timestamps and CodeView GUID. The other four archives are
+identical across those candidates and `1f7bd08`.
 No compiler reproducibility claim follows from deterministic archive packing.
 Always generate checksums and package metadata from one candidate set; the new
 Windows archive, PowerShell installer, and Scoop metadata passed together.
+
+The final command review corrected a missing process policy option in the public
+Windows invocation. The [Windows installation job](https://github.com/nuggocto/orifude/actions/runs/34069338690/job/101584345131)
+confirmed that its child process inherited Restricted before running the corrected
+invocation. Installation, replacement and failure cases, archived-player behavior,
+and Scoop then passed. This models the client script policy on Windows Server
+2025; it does not establish Windows 10 or Windows Terminal coverage.
+
+The [frontend correction](https://github.com/nuggocto/orifude-front/commit/5798bb462f05816e7f60d26a44ebc9bf94819930)
+passed all 19 release tests and 24 browser cases in
+[CI](https://github.com/nuggocto/orifude-front/actions/runs/34069271704) and deployed
+through Cloudflare Pages. The live landing page and changelog matched the local
+build byte for byte. Download and package links remain hidden pending actual
+release verification. Self-review: **PASS: No confirmed findings remain in the
+reviewed code.** Publication remains on hold for the missing capabilities above.
 
 ## Earlier candidate decisions
 
