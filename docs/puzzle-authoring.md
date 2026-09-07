@@ -235,3 +235,10 @@ A draft can be removed after inspection; a published immutable release needs a
 new pack version for corrections. Update the website only after verifying the
 public ZIP, checksum, and a local install. Copy its `pack.json` data into the
 reviewed website catalog and record the source commit and release evidence.
+
+Include the full redistribution license and required attribution in the pack,
+using a declared puzzle's `notes/PUZZLE-ID.txt` file. The example's
+`notes/first-seed.txt` shows this. Notes must be valid UTF-8, contain no control
+characters (including newlines or tabs), and fit within 16 KiB each. Keep license
+wording intact while replacing line breaks with spaces. A maintainer must check
+that the included terms cover the pack and preserve any required notices.

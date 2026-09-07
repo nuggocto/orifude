@@ -8,7 +8,8 @@ The [published source](../../community/paper-garden/1.0.0) preserves the
 The pack credits Orifude contributors and declares Apache-2.0. Its puzzles were
 created in this repository; there are no borrowed assets or additional license
 terms. Each puzzle also declares Apache-2.0. The repository's Apache license
-applies to this source. The ZIP contains only declared TOML puzzle data.
+applies to this source. The ZIP contains declared TOML puzzle data and a plain-text note carrying the
+full Apache license and attribution. The example includes the same note.
 
 The progression moves from a single dot to one fold, then a short line. Titles,
 descriptions, and tutorial cues describe those actions in plain text. Every

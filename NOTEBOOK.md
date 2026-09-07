@@ -1060,3 +1060,11 @@ new instructions in the pinned Playwright Linux container, across Chromium,
 Firefox, and WebKit. This is browser-engine evidence, not native Safari or
 mobile-device certification. The site still emits only its existing optional
 installation clipboard script.
+
+Review found that the example declared Apache-2.0 but did not carry the full
+license text in its ZIP. Both the authoring example and publication source now
+include `notes/first-seed.txt` with contributor attribution and the complete
+repository license. Newlines become spaces to respect the existing note format;
+the wording is retained and the note stays below 16 KiB. No parser or game
+update is needed. The earlier ZIP hash above describes the pre-license proposal
+and will not be published. The final proposal is verified separately.
