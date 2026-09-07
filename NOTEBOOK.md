@@ -781,3 +781,29 @@ and missing `www` redirect remain. Public installer links stay hidden. Both
 repositories were committed and pushed to their existing `shrek` branches.
 Before resuming publication, use successful checks for the current clean commit
 and refresh the prepared changelog date if the publication day has changed.
+
+## Windows installation command on 2026-09-07
+
+A final comparison of the public instructions with the candidate fixture found
+that only the fixture supplied `-ExecutionPolicy Bypass`. Microsoft's
+[policy documentation](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1)
+confirms that Windows clients default to Restricted, which rejects scripts before
+the installer can run. The [documented command](docs/distribution.md#installing-an-exact-published-version),
+[public verifier](examples/distribution/published.rs), and frontend instructions
+now use the same noninteractive invocation as the tested fixture.
+
+The option applies only to the inspected installer's PowerShell process and its
+children. It changes no saved user or machine policy and cannot override Group
+Policy. The website explains that scope. Downloads and inspection remain separate
+from execution, and archive verification is unchanged.
+
+The [Windows fixture](examples/distribution/install.rs) now inherits Restricted
+and checks that it took effect before running its existing installation and
+failure journeys. This models the client default without altering the hosted
+machine's policy. Its native execution is part of the candidate workflow.
+The [frontend correction](https://github.com/nuggocto/orifude-front/commit/5798bb462f05816e7f60d26a44ebc9bf94819930)
+passed its 19 release tests, static build, and two affected Chromium journeys
+locally. Removing the process-policy option in an owned temporary copy failed
+the instruction regression as intended. Rust formatting, Clippy, and the twelve
+release-tool tests passed with the policy-precondition check included. The Windows
+candidate must supply its native runtime result.

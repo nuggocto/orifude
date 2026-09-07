@@ -33,6 +33,10 @@ impl Installer {
                 "ORIFUDE_DOWNLOAD_SENTINEL",
                 self.root.join("executed-partial-installer"),
             );
+        if self.windows {
+            // Model the client policy without changing user or machine settings.
+            command.env("PSExecutionPolicyPreference", "Restricted");
+        }
     }
     fn command(&self) -> Command {
         let mut command = if self.windows {
@@ -59,6 +63,23 @@ impl Installer {
     }
     fn execute(&self, success: bool) -> Result<()> {
         expect(&mut self.command(), success)
+    }
+    fn check_execution_policy(&self) -> Result<()> {
+        if !self.windows {
+            return Ok(());
+        }
+        let mut policy = support::command("powershell.exe");
+        policy.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-ExecutionPolicy",
+        ]);
+        self.environment(&mut policy);
+        require(
+            support::run(&mut policy)? == "Restricted",
+            "installer fixture did not inherit the restricted client policy",
+        )
     }
     fn partial_download(&self, server: &Https) -> Result<()> {
         let partial = self.root.join(if self.windows {
@@ -146,6 +167,7 @@ pub fn verify(directory: &Path, target: &str) -> Result<()> {
         certificate: server.certificate.clone(),
         windows,
     };
+    installer.check_execution_policy()?;
     let script_name = if windows { "install.ps1" } else { "install.sh" };
     let mut script =
         support::text(&directory.join(script_name))?.replace(&archive::base_url()?, &server.base);

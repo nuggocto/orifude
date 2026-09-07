@@ -108,3 +108,11 @@ corrections remain open in the [publication record](../NOTEBOOK.md#website-publi
 Self-review: **PASS: No confirmed findings remain in the reviewed code.** Live
 release attestations and public installation paths are untested until publication.
 This code review does not close the hosting or platform evidence gaps.
+
+A subsequent command comparison caught a Windows installation failure: the
+published invocation lacked the process policy option already used by candidate
+tests. Windows clients default to Restricted, which prevents the script starting.
+The correction uses the inspected script's own process and changes no persistent
+policy. [The notebook](../NOTEBOOK.md#windows-installation-command-on-2026-09-07)
+links Microsoft's policy contract and records the regression checks. The fixture
+now verifies an inherited Restricted policy before exercising installation.

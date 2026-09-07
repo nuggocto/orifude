@@ -130,7 +130,13 @@ fn installer(directory: &Path, target: &str, root: &Path) -> Result<()> {
     let mut command = if target.contains("windows") {
         let mut command = support::command("powershell.exe");
         command
-            .args(["-NoProfile", "-NonInteractive", "-File"])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ])
             .arg(directory.join("install.ps1"))
             .arg("-BinDir");
         command

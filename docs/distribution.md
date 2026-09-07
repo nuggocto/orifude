@@ -83,8 +83,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }
 Inspect the completed file before executing it:
 
 ```powershell
-powershell.exe -NoProfile -File .\install.ps1 -BinDir "$env:LOCALAPPDATA\Programs\Orifude"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -BinDir "$env:LOCALAPPDATA\Programs\Orifude"
 ```
+
+The execution policy switch allows the inspected script in this PowerShell process
+without changing saved user or machine policy. Organizational Group Policy still
+applies. [Microsoft documents the scope of this switch](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1#-executionpolicy-executionpolicy).
 
 Create the chosen directory separately if it does not exist. Both installers are
 noninteractive, never invoke sudo, and leave profiles and PATH unchanged. Add the
