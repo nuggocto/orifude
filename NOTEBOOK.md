@@ -1175,10 +1175,9 @@ The audit helper needed a separate JavaScript-enabled browser context for axe;
 the no-script reading and keyboard checks run separately. Captures and results
 are under `../orifude-front/.preview/packs/layout/`.
 
-The unchanged hero's italic heading still exceeds the page at the combined
-320-pixel and 200%-text setting. This is outside the requested pack-section
-redesign. Whole-page reflow passes at normal text size; the stronger combined
-check above applies to the pack section only.
+The pack-section review also found that the hero's italic heading exceeded the
+page at 320 pixels with 200% text. The subsequent hero correction below resolves
+that issue and extends the whole-page reflow check to cover it.
 
 The [preview check](https://github.com/nuggocto/orifude-front/actions/runs/34142123863)
 and [production-branch check](https://github.com/nuggocto/orifude-front/actions/runs/34142414628)
@@ -1192,3 +1191,31 @@ matches the local build with SHA-256
 `07fe868af2af02cde96d98cacf1ae2f89628c902eea1c2c5a36b17b66d3d750c`.
 Live captures are under `../orifude-front/.preview/packs/redesign-production/`.
 QA verdict for the changed section: PASS; release recommendation: ship.
+
+## Hero text reflow (2026-09-07)
+
+The [hero heading correction](https://github.com/nuggocto/orifude-front/commit/2d2a781f751ada5acd96db089cb91326ace518b7)
+lets the italic phrase wrap on narrow screens. A bounded inline box keeps
+"long way" together when it fits and lets enlarged text break between the words
+when it does not. This preserves the usual mobile line break and removes the
+horizontal page overflow without shrinking or clipping text.
+
+The existing [browser reflow test](https://github.com/nuggocto/orifude-front/blob/2d2a781f751ada5acd96db089cb91326ace518b7/tests/browser/site.spec.ts)
+now includes the home page at 320 pixels with 200% text after its fonts load.
+That assertion failed against the old CSS, then passed in Chromium, Firefox,
+and WebKit with the correction. All 21 data checks, 39 browser cases, and the
+static build pass with Node 24.19.0 and the Playwright 1.63.0 Noble image.
+
+No-script visual checks covered 320 pixels at normal and doubled text, 390
+pixels at doubled text, and 1440 pixels at normal text. The full heading fits,
+and page width equals viewport width in each case. Failure evidence, captures,
+and results are under `../orifude-front/.preview/hero-reflow/`.
+
+The [hosted frontend checks](https://github.com/nuggocto/orifude-front/actions/runs/34143924240)
+passed. The [Cloudflare preview](https://bd9a1bc7.orifude-front.pages.dev) and
+[production site](https://orifude.com) passed the same no-script visual checks,
+including the original 320-pixel, 200%-text case. Production HTML matches the
+local build with SHA-256
+`ac183771aa2b34941bc8ba9af3cd159f15ad6016f347dc0c9253abb7e76f093d`.
+QA verdict: PASS; release recommendation: ship. The previously documented hero
+overflow is resolved.
