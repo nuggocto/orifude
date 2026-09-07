@@ -1,0 +1,28 @@
+format_version = 1
+id = "folded-leaves"
+title = "Folded leaves"
+description = "One dot reaches two layers across a centered crease."
+width = 4
+height = 4
+target = [
+  "....",
+  ".##.",
+  "....",
+  "....",
+]
+folds = [{ direction = "left", crease = 2 }]
+brushes = [{ kind = "dot" }]
+fold_budget = 1
+stroke_budget = 1
+par = { folds = 1, strokes = 1 }
+tutorial_cues = [
+  "Fold the right half to the left.",
+  "Place one dot through the paired middle cells.",
+  "Open the paper and look for two leaves.",
+]
+author = "Orifude contributors"
+license = "Apache-2.0"
+solution = [
+  { kind = "fold", direction = "left", crease = 2 },
+  { kind = "dot", row = 1, column = 1 },
+]

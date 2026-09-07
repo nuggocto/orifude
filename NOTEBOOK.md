@@ -992,3 +992,71 @@ installation and package check that the failed download had blocked. One
 failed-job rerun per workflow recovered the incident after the asset URLs were
 reachable again. The original failures remain linked above. Review found no
 application or workflow defect requiring a code change.
+
+## Pack submissions and publication on 2026-09-07
+
+The owner asked for creator pull requests, isolated validation and solving,
+maintainer review, and downloadable packs linked from the landing page. Their
+previous uncommitted notebook edits were discarded before this work began.
+The [authoring guide](docs/puzzle-authoring.md#submit-through-a-pull-request)
+and [submission template](.github/PULL_REQUEST_TEMPLATE/puzzle-pack.md) now give
+creators a concrete path under `community/PACK-ID/VERSION/`.
+
+The [pack builder](examples/pack_release.rs) uses the production parser and
+bounded solver. It writes a deterministic ZIP, SHA256SUMS, and website metadata
+only after solving every puzzle and comparing the ZIP fingerprint with the
+validated source. Versions use three canonical unsigned numbers, with no path
+or shell syntax. The catalog stops at 128 versions; individual game limits
+remain unchanged. Publication proposals own a new output directory.
+
+```mermaid
+flowchart LR
+  PR[Creator pull request] --> Data[community: inert pack files]
+  Base[Trusted base commit] --> Tool[pack_release]
+  Data --> Sandbox[pack-sandbox.sh: no network or credentials]
+  Tool --> Sandbox
+  Sandbox --> Review[Maintainer: puzzles, text, authorship, license]
+  Review --> Publish[pack-release.yml: exact reviewed shrek commit]
+  Publish --> ZIP[Immutable ZIP and SHA256SUMS]
+  ZIP --> Site[orifude-front reviewed catalog]
+  Site --> Player[Explicit download and local install]
+```
+
+[Pack CI](.github/workflows/packs.yml) builds the base commit's tool before
+checking out PR data. The pinned Ubuntu container has a read-only root and
+input, no capabilities or network, 512 MiB memory, two CPUs, 32 processes,
+a 32 MiB scratch directory, and a ten-minute deadline. It receives no tokens.
+The [publication workflow](.github/workflows/pack-release.yml) requires successful
+pack checks for the exact commit, a committed review record, and the maintainer's
+explicit review attestation. The separate write job consumes only that run's
+artifact, checks its hashes, compares draft downloads, and verifies immutable
+release and asset attestations. CODEOWNERS requests review but does not change
+the owner's unprotected `shrek` policy. Maintainers remain responsible for the
+review judgment and for keeping old version directories unchanged.
+
+This follows GitHub's [untrusted-workflow guidance](https://docs.github.com/en/actions/reference/security/secure-use)
+and [immutable-release model](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+The reviewed [Paper garden source](community/paper-garden/1.0.0) copies the existing
+authoring example exactly. Its [review](docs/pack-reviews/paper-garden-1.0.0.md)
+covers one dot, one fold, and one short line. Pack versions and `pack-*` tags
+remain separate from the game. No shipped Rust source, dependency, game version,
+installer, or package-channel metadata changed, so an application `1.0.1`
+release is unnecessary.
+
+Local formatting, shell checks, dependency policy, Clippy, the full ordinary
+suite, and doctest passed. Three new tooling tests protect repeatable ZIP bytes
+and fingerprints, checksum integrity, output conflicts, unsafe versions, and
+unsolvable-pack rejection. The first unsolvable fixture used an invalid zero
+stroke budget; it was corrected to a valid two-dot target with one available
+stroke, so the test now reaches the solver boundary it is meant to check.
+The actual sandbox accepted all three example puzzles and built a ZIP with
+SHA-256 `e100d3d00cb50713a9719ac08f789415ac712da6634baa893b24e36484877126`.
+Hosted publication and live website evidence follow after execution.
+
+Temporarily removing the builder's solver call made the unsolvable-pack
+regression fail because publication incorrectly succeeded. Restoring the guard
+returned the test to passing. All 36 existing browser cases passed against the
+new instructions in the pinned Playwright Linux container, across Chromium,
+Firefox, and WebKit. This is browser-engine evidence, not native Safari or
+mobile-device certification. The site still emits only its existing optional
+installation clipboard script.

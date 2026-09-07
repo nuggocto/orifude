@@ -1,0 +1,124 @@
+name: Publish puzzle pack
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Full shrek commit containing the reviewed pack and review record
+        required: true
+      pack:
+        description: Pack ID under community
+        required: true
+      version:
+        description: Pack version (independent of the game version)
+        required: true
+      review:
+        description: I reviewed every puzzle, the text, authorship, and redistribution license
+        type: boolean
+        default: false
+      publish:
+        description: Publish the checked ZIP as an immutable release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pack-publication
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/shrek' && inputs.commit == github.sha && inputs.review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require passing pack checks and a committed review record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACK_ID: ${{ inputs.pack }}
+          PACK_VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$PACK_ID" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && ${#PACK_ID} -le 64 ]]
+          [[ "$PACK_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ${#PACK_VERSION} -le 32 ]]
+          test -f "docs/pack-reviews/$PACK_ID-$PACK_VERSION.md"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/packs.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=100" \
+            --jq '.workflow_runs | any(.conclusion == "success")' | grep -qx true
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.8.16
+          install_args: "--locked rust"
+          cache: "false"
+      - run: mise run pack-tool-build
+      - name: Rebuild the reviewed source in isolation
+        env:
+          PACK_ID: ${{ inputs.pack }}
+          PACK_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir proposal
+          mise run pack-sandbox -- "$PWD/target/release/examples/pack_release" "$PWD/community" "$PACK_ID" "$PACK_VERSION" "$PWD/proposal"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reviewed-pack
+          path: proposal/pack/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: prepare
+    if: inputs.publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: reviewed-pack
+          path: proposal
+          verify-digest: true
+      - name: Publish without executing pack content
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACK_ID: ${{ inputs.pack }}
+          PACK_VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ inputs.commit }}
+          REVIEWER: ${{ github.actor }}
+        run: |
+          [[ "$PACK_ID" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && ${#PACK_ID} -le 64 ]]
+          [[ "$PACK_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ${#PACK_VERSION} -le 32 ]]
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          tag="pack-$PACK_ID-v$PACK_VERSION"
+          archive="$PACK_ID-$PACK_VERSION.zip"
+          cd proposal
+          test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 3
+          test "$(jq -r .id pack.json)" = "$PACK_ID"
+          test "$(jq -r .version pack.json)" = "$PACK_VERSION"
+          expected=$(jq -er '.sha256 | select(test("^[0-9a-f]{64}$"))' pack.json)
+          printf '%s  %s\n' "$expected" "$archive" > expected-checksums
+          cmp SHA256SUMS expected-checksums
+          sha256sum --check expected-checksums
+          rm expected-checksums
+          printf 'Reviewed by @%s for puzzles, text, authorship, and redistribution license.\n\nSource: https://github.com/%s/tree/%s/community/%s/%s\n\nReview: https://github.com/%s/blob/%s/docs/pack-reviews/%s-%s.md\n\nRequires Orifude 1.0.0 or later. Download the named ZIP, verify SHA256SUMS, then run orifude pack install %s.\n\nThis is a puzzle pack. The native game release remains separate.\n' \
+            "$REVIEWER" "$GITHUB_REPOSITORY" "$SOURCE_COMMIT" "$PACK_ID" "$PACK_VERSION" \
+            "$GITHUB_REPOSITORY" "$SOURCE_COMMIT" "$PACK_ID" "$PACK_VERSION" "$archive" > ../notes.md
+          gh release create "$tag" "$archive" SHA256SUMS pack.json \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --draft --latest=false \
+            --title "$PACK_ID $PACK_VERSION (puzzle pack)" --notes-file ../notes.md
+          mkdir ../downloaded
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir ../downloaded
+          cmp "$archive" "../downloaded/$archive"
+          cmp SHA256SUMS ../downloaded/SHA256SUMS
+          cmp pack.json ../downloaded/pack.json
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .immutable | grep -qx true
+          gh release verify "$tag" --repo "$GITHUB_REPOSITORY"
+          for asset in "$archive" SHA256SUMS pack.json; do
+            gh release verify-asset "$tag" "$asset" --repo "$GITHUB_REPOSITORY"
+          done

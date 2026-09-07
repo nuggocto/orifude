@@ -101,3 +101,11 @@ The product contract and work queue live in [`PROJECT.md`](PROJECT.md).
 Implementation decisions and verification evidence live in
 [`NOTEBOOK.md`](NOTEBOOK.md). Orifude is open source under the
 [Apache 2.0 license](LICENSE).
+
+## Share puzzle packs
+
+Create packs as plain TOML files and submit them through pull requests. Isolated
+CI validates and solves every puzzle; a maintainer reviews the content and
+license before publication. The [pack guide](docs/puzzle-authoring.md#submit-through-a-pull-request)
+explains the source layout, commands, review, versioning, and local installation.
+Reviewed ZIP downloads and checksums appear on [orifude.com](https://orifude.com/#puzzle-packs).

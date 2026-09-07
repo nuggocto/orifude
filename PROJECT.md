@@ -2166,3 +2166,32 @@ Ideas that may be reconsidered only after v1 evidence exists:
 Accounts, telemetry, a browser game, online multiplayer, and required cloud
 services remain outside the product unless this document is deliberately
 rewritten. They must not arrive disguised as a convenient dependency.
+
+## Community pack publication
+
+Creators submit inert source folders through pull requests to `shrek`, under
+`community/PACK-ID/VERSION/`. Pack versions are independent of application
+versions and use canonical `major.minor.patch` numbers. Old version folders
+remain unchanged; corrections get a new pack version. The reviewed catalog
+contains at most 128 versions, each within the existing puzzle and pack limits.
+
+The Puzzle packs workflow builds trusted base-commit validation code and runs
+it against submitted data in a disposable Linux container without network access
+or credentials. Its container ceiling is 512 MiB, two CPUs, 32 processes, 32 MiB
+scratch space, and ten minutes. The solver's independent game limits still
+apply. Any invalid, unsolvable, exhausted, or timed-out pack fails the check.
+
+A maintainer reviews all puzzles, text, authorship, and redistribution terms,
+records the review in `docs/pack-reviews`, and merges the accepted source. The
+manual publication workflow requires that exact current `shrek` commit's
+successful pack check and an explicit review attestation. CODEOWNERS requests
+review but does not add branch protection. The write job never executes pack
+content. It publishes ZIP, SHA256SUMS, and metadata through an immutable GitHub
+release tagged `pack-PACK-ID-vVERSION`, without changing the latest game release.
+
+The landing page explains submission and local installation and links only
+verified published pack artifacts. Its reviewed static catalog records hashes,
+source commits, and verification dates separately from application releases.
+Packs compatible with the existing format work with Orifude 1.0.0; this workflow
+does not require an application patch release. The game's offline and no-plugin
+boundaries remain unchanged. See [the authoring guide](docs/puzzle-authoring.md).

@@ -94,8 +94,8 @@ run = [
     "bash -n scripts/release/PKGBUILD.in",
     "shellcheck scripts/release/install.sh.in",
     "shellcheck -s bash -e SC2034 scripts/release/PKGBUILD.in",
-    "bash -n scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh",
-    "shellcheck scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh",
+    "bash -n scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh scripts/pack-sandbox.sh",
+    "shellcheck scripts/fuzz-campaign.sh scripts/linux-distribution-check.sh scripts/property-check.sh scripts/release-measure.sh scripts/secret-scan.sh scripts/pack-sandbox.sh",
 ]
 
 [tasks.shell-check.tools]
@@ -207,3 +207,22 @@ run = "cargo run --quiet --locked --example distribution -- package-check"
 description = "Verify public release downloads and an installation channel on a disposable native host"
 raw_args = true
 run = "cargo run --quiet --locked --example distribution -- published-check"
+
+[tasks.pack-catalog-check]
+description = "Validate and solve every submitted pack version"
+raw_args = true
+run = "cargo run --quiet --locked --release --example pack_release -- check"
+
+[tasks.pack-release-build]
+description = "Build a deterministic pack ZIP, checksum, and website record"
+raw_args = true
+run = "cargo run --quiet --locked --release --example pack_release -- build"
+
+[tasks.pack-tool-build]
+description = "Build the trusted offline pack checker"
+run = "cargo build --locked --release --example pack_release"
+
+[tasks.pack-sandbox]
+description = "Run trusted pack validation in a bounded offline Linux container"
+raw_args = true
+run = "bash scripts/pack-sandbox.sh"
