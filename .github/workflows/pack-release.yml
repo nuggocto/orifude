@@ -29,6 +29,10 @@ concurrency:
   group: pack-publication
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   prepare:
     if: github.ref == 'refs/heads/shrek' && inputs.review
@@ -121,9 +125,17 @@ jobs:
             "$GITHUB_REPOSITORY" "$SOURCE_COMMIT" "$PACK_ID" "$PACK_VERSION" "$archive" > ../notes.md
           if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > ../existing.json 2> ../lookup-error; then
             test "$(jq -r .target_commitish ../existing.json)" = "$SOURCE_COMMIT"
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)" = "$SOURCE_COMMIT"
             test "$(jq '.assets | length' ../existing.json)" -eq 3
             draft=$(jq -r .draft ../existing.json)
           elif grep -q 'HTTP 404' ../lookup-error; then
+            # An earlier tag must not redirect the approved source commit.
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > /dev/null 2> ../tag-error; then
+              test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)" = "$SOURCE_COMMIT"
+            elif ! grep -q 'HTTP 404' ../tag-error; then
+              cat ../tag-error >&2
+              exit 1
+            fi
             gh release create "$tag" "$archive" SHA256SUMS pack.json \
               --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --draft --latest=false \
               --title "$PACK_ID $PACK_VERSION (puzzle pack)" --notes-file ../notes.md
@@ -141,6 +153,7 @@ jobs:
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
           fi
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .immutable | grep -qx true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)" = "$SOURCE_COMMIT"
           # GitHub creates the attestation asynchronously after publication.
           # Only its observed absence permits waiting; integrity failures stop.
           for attempt in {1..12}; do

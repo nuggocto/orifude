@@ -1083,3 +1083,8 @@ an earlier commit on `shrek`, proved by Git ancestry and its successful pack CI;
 this lets current workflow corrections verify an earlier immutable publication.
 The tool builds from trusted current code, while pack data comes from that exact
 reviewed commit. A changed proposal cannot pass the existing-asset comparison.
+
+The publication source guard also resolves any existing tag to its actual commit,
+not just the release's editable `target_commitish` field. A tag pointing elsewhere
+stops before publication or recovery. Explicit Bash pipe failure handling keeps
+failed API pipelines from being mistaken for successful checks.
