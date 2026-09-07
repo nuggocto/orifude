@@ -2,11 +2,20 @@
 
 ## Current publication decision on 2026-09-07
 
-Release verdict: **BLOCKED**. Recommendation: **hold publication** until the
-minimum-OS and terminal-app checks below and the remaining
-[Cloudflare corrections](../NOTEBOOK.md#website-publication-on-2026-09-06) are
-verified. The candidate passed its available checks; no confirmed defect remains
-in the reviewed code. No public puzzle-game release or package update has been created.
+Release verdict: **PASS WITH KNOWN ISSUES**. Recommendation: **ship**. On
+2026-09-07 the owner approved publication, waived the `www` redirect, and reported
+successful play on their Windows machine and a friend's macOS machine. These are
+owner-reported checks without recorded OS versions, architectures, terminal apps,
+or artifact hashes. Exact Linux 5.10, macOS 13, Windows 10 22H2, macOS Terminal,
+and Windows Terminal coverage remains unverified. The completed hosted native
+matrix supplies the repeatable artifact evidence.
+
+The [approved scope](../PROJECT.md#supported-platforms) carries that evidence
+limitation. The apex site works; its restrictive CSP blocks Cloudflare's injected
+404 script from executing. Removing that injection still requires unavailable
+zone permissions and is an accepted hosting limitation. No confirmed defect
+remains in the reviewed code. Public release and package installation checks
+will run after publication, before the website advertises their channels.
 
 Signed commit
 [`1f7bd08`](https://github.com/nuggocto/orifude/commit/1f7bd086f31b797f96215293bc3826eb892ad290)
@@ -101,7 +110,7 @@ passed all 19 release tests and 24 browser cases in
 through Cloudflare Pages. The live landing page and changelog matched the local
 build byte for byte. Download and package links remain hidden pending actual
 release verification. Self-review: **PASS: No confirmed findings remain in the
-reviewed code.** Publication remains on hold for the missing capabilities above.
+reviewed code.** The owner-approved decision above supersedes the earlier hold.
 
 ## Earlier candidate decisions
 

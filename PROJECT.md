@@ -14,9 +14,9 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 11, `orifude-front`**
-- Current checklist item: **Finish the Cloudflare `www` redirect and prevent
-  bot-detection script injection on not-found responses.**
+- Current phase: **Phase 12, v1 release**
+- Current checklist item: **Publish the approved v1.0.0 candidate and verify its
+  public installation channels.**
 - Last updated: **2026-09-07**
 
 Checkbox rules:
@@ -110,6 +110,14 @@ release target.
 A platform is advertised only after its native release binary completes the
 required end-to-end journey. Cross-compilation proves that an artifact can be
 built, not that the platform works.
+
+The owner approved publication on 2026-09-07 using the completed native hosted
+matrix and reported successful play on their Windows machine and a friend's
+macOS machine. The reports do not identify OS versions, architectures, terminal
+applications, or artifact hashes. They supplement the recorded automated
+journeys; they do not establish the exact minimum-OS or terminal-GUI checks.
+Those designated-host checks remain an accepted evidence limitation, rather
+than a publication gate for v1. See [release QA](docs/release-qa.md).
 
 ## Non-goals for v1
 
@@ -1217,7 +1225,11 @@ data or generated content tied to the canonical main-repository changelog.
   a real 404 path.
 - Set restrictive static security headers suitable for the final assets.
 - Keep Cloudflare Pages as the only hosting dependency.
-- Verify the production domain and `www` redirect after deployment.
+- Verify the production apex domain after deployment. The owner removed the
+  `www` redirect from v1 scope on 2026-09-07.
+- Retain `script-src 'none'` on every response. Cloudflare's injected 404
+  bot-detection script remains blocked; its removal is an accepted hosting
+  limitation while the configured credential cannot change the zone setting.
 
 ## Build plan
 
@@ -2027,7 +2039,7 @@ release-driven changelog without creating a second application.
 
 - [x] Confirm the Cloudflare Pages build command, output directory, production
   branch, and domain.
-- [ ] Configure and verify the `www` redirect, preserving the path and query.
+- [x] Verify the apex domain. The owner waived the `www` redirect on 2026-09-07.
 - [x] Replace the holding-page build with a minimal Astro static project.
 - [x] Keep `/` and `/changelog/` as the only product routes.
 - [x] Implement a real static not-found path.
@@ -2058,8 +2070,8 @@ release-driven changelog without creating a second application.
 - [x] Add canonical, description, social, sitemap, robots, favicon, and theme
   metadata.
 - [x] Add restrictive Cloudflare static security headers.
-- [ ] Prevent Cloudflare from injecting bot-detection JavaScript into not-found
-  responses.
+- [x] Verify that CSP blocks Cloudflare's injected not-found script from running.
+  Its removal remains outside the approved v1 publication gate.
 - [x] Test keyboard focus, reduced motion, zoom, narrow reflow, contrast, and
   accessible image text.
 - [x] Measure static asset size and browser performance before deployment.
@@ -2070,7 +2082,7 @@ release-driven changelog without creating a second application.
 
 Exit gate:
 
-- [ ] The production site presents the native game and every published release
+- [x] The production site presents the native game and every published release
   accurately, without a browser client, required JavaScript, tracking, or dead
   installation links.
 
@@ -2079,7 +2091,7 @@ Exit gate:
 Goal: publish `v1.0.0`, update every approved distribution channel, and verify
 the result as a user would receive it.
 
-- [ ] Complete every earlier exit gate or record an explicit owner-approved
+- [x] Complete every earlier exit gate or record an explicit owner-approved
   scope change in this document.
 - [x] Freeze release scope and stop unrelated refactoring.
 - [x] Set package and binary version to `1.0.0`.
@@ -2087,8 +2099,9 @@ the result as a user would receive it.
 - [x] Confirm dependency, license, security, and known-issue records.
 - [x] Build the release candidate from a clean locked checkout.
 - [x] Record artifact hashes and QA environment evidence.
-- [ ] Run the complete native end-to-end matrix against the release candidate.
-- [ ] Obtain the final QA verdict and separate ship recommendation.
+- [x] Run the native hosted end-to-end matrix against the release candidate;
+  retain the owner-accepted minimum-OS and terminal-GUI evidence limitation.
+- [x] Obtain the final QA verdict and separate ship recommendation.
 - [ ] Create the signed or protected `v1.0.0` tag at the approved commit.
 - [ ] Publish GitHub release archives, checksum file, and installer files.
 - [ ] Confirm that GitHub reports the published release as immutable and that

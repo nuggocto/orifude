@@ -825,3 +825,19 @@ HTML exactly. Self-review found no remaining confirmed code defect. Publication
 is still blocked by the unavailable minimum-OS/terminal-app checks and Cloudflare
 zone access. No tag, public release, package entry, or public release record was
 created during this work.
+
+## Owner release decision on 2026-09-07
+
+The owner asked to publish through every supported channel and activate the
+website. They waived the `www` redirect because the apex is already deployed,
+and reported successful play on their Windows machine and a friend's macOS
+machine. These reports do not identify exact OS versions, architectures,
+terminal applications, or artifact hashes. The [product contract](PROJECT.md#supported-platforms)
+now records the accepted minimum-OS and terminal-GUI evidence limitation.
+
+The [QA verdict](docs/release-qa.md#current-publication-decision-on-2026-09-07) is
+PASS WITH KNOWN ISSUES, with a separate ship recommendation. Cloudflare's
+injected 404 script remains blocked by CSP, and the unavailable zone setting is
+an accepted hosting limitation. Public installer and package checks must still
+pass before their channels appear on the website. Earlier hold records above
+describe the evidence and decision available at that time.

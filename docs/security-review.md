@@ -103,7 +103,10 @@ and injected markup. The static build has no application JavaScript and blocks
 scripts through CSP. Cloudflare still injects a blocked bot-detection script on
 404 responses, and the `www` redirect is missing. The configured Pages credential
 cannot change those zone settings; both relevant APIs returned 403. These hosting
-corrections remain open in the [publication record](../NOTEBOOK.md#website-publication-on-2026-09-06).
+limitations remain recorded in the [publication record](../NOTEBOOK.md#website-publication-on-2026-09-06).
+The owner subsequently waived the redirect and approved proceeding with the
+blocked 404 injection. The restrictive CSP remains unchanged; no execution or
+tracking was observed in the browser check.
 
 Self-review: **PASS: No confirmed findings remain in the reviewed code.** Live
 release attestations and public installation paths are untested until publication.
