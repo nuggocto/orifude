@@ -1,4 +1,4 @@
-# Release-candidate QA
+# Release QA
 
 ## Current publication decision on 2026-09-07
 
@@ -14,40 +14,46 @@ The [approved scope](../PROJECT.md#supported-platforms) carries that evidence
 limitation. The apex site works; its restrictive CSP blocks Cloudflare's injected
 404 script from executing. Removing that injection still requires unavailable
 zone permissions and is an accepted hosting limitation. No confirmed defect
-remains in the reviewed code. Public release and package installation checks
-will run after publication, before the website advertises their channels.
+remains in the reviewed code. Public installer checks run before package updates,
+and public package checks must pass before the website advertises their channels.
+
+[Orifude v1.0.0](https://github.com/nuggocto/orifude/releases/tag/v1.0.0) was
+published at 12:25:57 UTC. GitHub reports the release as immutable and the signed
+annotated tag as verified. The tag points to the commit below. The publisher
+downloaded the draft assets, compared every byte with the candidate, then
+verified the published release attestation and all eight asset attestations.
 
 Signed commit
-[`1f7bd08`](https://github.com/nuggocto/orifude/commit/1f7bd086f31b797f96215293bc3826eb892ad290)
-passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34069338694)
-and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34069338690)
+[`f5db86d`](https://github.com/nuggocto/orifude/commit/f5db86de6407e6da81d3acb53ff0474de048340e)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34120524324)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34120524196)
 without retries. Clean hosted checkouts used locked dependencies and Rust 1.98.1.
 The five native targets and pinned Linux userlands match the matrix recorded
 below. Archive checks, classic installer failure cases, extracted player
 journeys, and Homebrew, Scoop, and Arch package fixtures all passed.
 
-The downloaded candidate passed local `release-verify`, `artifact-check`, and
-`installer-check` again for Linux x86_64. Its archive SHA-256 values are:
+The downloaded candidate also passed local `release-verify`. Its published
+archive SHA-256 values are:
 
 | Archive target | SHA-256 |
 | --- | --- |
 | aarch64-apple-darwin | `53ac20742100f78b29bdd0c8734d3807b4aad8ba25c4a7f44a57c0b0c05e69d5` |
 | aarch64-unknown-linux-musl | `3010a16d792c9a41e26a3954e07b9111448a5a7f71e3ae3557914384b375ddaf` |
 | x86_64-apple-darwin | `1ada3cc1fdf0645ab459c0cb037dbe9898da49154639e2caf2ddee5e7ed5de12` |
-| x86_64-pc-windows-msvc | `af2acc6f798d726d924cfc7dfef76bf15b25514756f008b18dbce891a076c523` |
+| x86_64-pc-windows-msvc | `0029b225ec99877ba86351bbbef4e77b0a446e26465d144137ccc47ef26ab91b` |
 | x86_64-unknown-linux-musl | `c2e1fe770643160369c3427dffa46afaae6e147155d2177b18ebd0ab5a4537fc` |
 
 The complete `SHA256SUMS` file has SHA-256
-`02e5466721ca756b045c96ba85ce081cd443e36add005f9590070d1fcae2bcbe`.
-These are candidate hashes, not published release attestations. The workflow
-retains its artifact for fourteen days; the downloaded set also remains locally
-under ignored `target/public-ready-1f7bd08`.
+`04e6e160c92117576e8c9a8babf97aefaea7f2ea9dd2ecae42b37b7fc7e3383b`.
+These match the immutable release assets. The candidate workflow retains its
+artifact for fourteen days; the downloaded set also remains locally under
+ignored `target/public-ready-f5db86d`.
 
 The clean publication dry run passed for this exact commit and candidate run.
 The POSIX installer has SHA-256
 `4ca73514818064b91f1ba363e6ea054f25bf9e18ec71c1e330517d1722d601f4`;
 the PowerShell installer has SHA-256
-`5f7d2a6e252abfc99a0ec5f41745da645ef182e051089f3f23f4f9fdffc38a8f`.
+`6c9c350f406bd2cc901a84f34130ec324ce6772536038bd581ef57d9c77de4e3`.
 Package-repository previews also passed with version `1.0.0` and matching hashes.
 
 Fresh measurements used the earlier `8b940fe` candidate's static Linux executable,
@@ -86,13 +92,33 @@ under ignored `target/release-final-*` and `target/fuzz-campaign`.
 
 The new [public-channel verifier](../examples/distribution/published.rs) checks
 attested downloads and reuses the installed player's save/restart journey.
-Its live network paths require the real release and package entries. Candidate
-fixtures cannot substitute for those checks. Minimum-version hosts and macOS
-Terminal / Windows Terminal remain unavailable, as described below.
+The [public installer run](https://github.com/nuggocto/orifude/actions/runs/34121865648)
+passed on all five native targets without retries. Each job re-downloaded all
+eight public assets, checked their attestations and generated checksum values,
+ran the fixed public installer, and compared the installed executable with the
+archive. The installed game completed its save, restart, and replay journey.
+The [tag CI run](https://github.com/nuggocto/orifude/actions/runs/34121786499)
+also passed all seven jobs. Exact minimum-version hosts and terminal-GUI coverage
+remain unverified, as described above.
+
+All four [public package jobs](https://github.com/nuggocto/orifude/actions/runs/34122676056)
+passed without retries: Homebrew on Intel and Apple Silicon, Scoop on Windows
+x86_64, and AUR on Linux x86_64. They checked the public package metadata against
+the attested archives before installation, verified the installed bytes and
+version, completed the save/restart/replay journey, and removed the installation.
+AUR package assembly for ARM64 and native ARM64 player execution remain separate
+candidate checks; this does not claim a native public AUR installation on ARM64.
+
+All package metadata uses upstream version `1.0.0`; AUR uses `1.0.0-1`. The AUR
+page and public Git repository reflected the update before its first RPC lookup
+did. A fresh combined lookup, followed by the normal single-package RPC lookup,
+returned the correct version and owner. No package or archive change was needed.
+Every channel was available and verified before website promotion; none is
+deferred from this release.
 
 Comparing `8b940fe` and `eb54180` found 24 changed Windows executable bytes, all
 within the PE/debug timestamps and CodeView GUID. The other four archives are
-identical across those candidates and `1f7bd08`.
+identical across those candidates, `1f7bd08`, and the published `f5db86d` set.
 No compiler reproducibility claim follows from deterministic archive packing.
 Always generate checksums and package metadata from one candidate set; the new
 Windows archive, PowerShell installer, and Scoop metadata passed together.
@@ -104,13 +130,36 @@ invocation. Installation, replacement and failure cases, archived-player behavio
 and Scoop then passed. This models the client script policy on Windows Server
 2025; it does not establish Windows 10 or Windows Terminal coverage.
 
-The [frontend correction](https://github.com/nuggocto/orifude-front/commit/5798bb462f05816e7f60d26a44ebc9bf94819930)
-passed all 19 release tests and 24 browser cases in
-[CI](https://github.com/nuggocto/orifude-front/actions/runs/34069271704) and deployed
-through Cloudflare Pages. The live landing page and changelog matched the local
-build byte for byte. Download and package links remain hidden pending actual
-release verification. Self-review: **PASS: No confirmed findings remain in the
-reviewed code.** The owner-approved decision above supersedes the earlier hold.
+Frontend commit
+[`e27f2bc`](https://github.com/nuggocto/orifude-front/commit/e27f2bca35ab06de6f3af6eeb95e104dd8830be9)
+imports the canonical changelog at the signed release commit and enables all five
+verified channels. Its 19 release-data tests and 24 Chromium, Firefox, and WebKit
+cases passed locally and in [CI](https://github.com/nuggocto/orifude-front/actions/runs/34123639229).
+The [Cloudflare preview](https://b6ddb20f.orifude-front.pages.dev) passed before the
+production push. Both deployed pages matched the built HTML exactly:
+
+| Page | HTML SHA-256 |
+| --- | --- |
+| `/` | `30ea730777c1070da7b847954a75049c31f4a37ce804e99424def8ff89c52f99` |
+| `/changelog/` | `92d2d366b3ad0b3383c83f9072d1ea93b3ff7bc2ec7e06458d8472e98f218940` |
+
+Live Chromium checks at 1,440, 390, and 320 pixels exercised installation
+disclosures by keyboard, the dated release notes, narrow reflow, and real 404
+recovery with JavaScript disabled. A separate JavaScript-enabled 404 check found
+the known injected script, but no challenge request, iframe, or cookie; CSP
+blocked execution. Landing and changelog pages contain no scripts.
+
+The static build emits zero application JavaScript, 3,599 bytes of gzip CSS, and
+69,560 bytes of bundled fonts. Five cold loads per viewport, with 150 ms latency,
+1.6 Mbit/s download and fourfold CPU slowdown, measured LCP between 796 and 848 ms,
+CLS at most 0.0071, and 129,389 initial response-body bytes. These are Chromium
+153.0.8010.12 lab results, not field measurements. Raw samples and reviewed
+desktop/mobile captures remain under the frontend's ignored `.preview/release/`.
+
+Self-review: **PASS: No confirmed findings in the reviewed scope.** The review
+covered release publication, public installer and package execution, version and
+checksum consistency, frontend release data, and deployment. The owner-accepted
+minimum-OS, terminal-app, and hosting limitations above remain explicit.
 
 ## Earlier candidate decisions
 

@@ -119,3 +119,12 @@ The correction uses the inspected script's own process and changes no persistent
 policy. [The notebook](../NOTEBOOK.md#windows-installation-command-on-2026-09-07)
 links Microsoft's policy contract and records the regression checks. The fixture
 now verifies an inherited Restricted policy before exercising installation.
+
+Publication on 2026-09-07 closed the pending live-path verification: the release
+and all eight assets passed attestation checks, all five public installer targets
+passed, and both Homebrew architectures, Scoop, and AUR completed their public
+installation journeys. The website's release manifest was activated only after
+those checks. Its deployed HTML matches the reviewed static output. The live 404
+probe confirmed that CSP blocks the injected script, with no challenge request,
+iframe, or cookie. [Release QA](release-qa.md#current-publication-decision-on-2026-09-07)
+records the immutable commits, workflow evidence, and accepted limits.

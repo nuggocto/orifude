@@ -841,3 +841,72 @@ injected 404 script remains blocked by CSP, and the unavailable zone setting is
 an accepted hosting limitation. Public installer and package checks must still
 pass before their channels appear on the website. Earlier hold records above
 describe the evidence and decision available at that time.
+
+## Public release on 2026-09-07
+
+The approved commit
+[`f5db86d`](https://github.com/nuggocto/orifude/commit/f5db86de6407e6da81d3acb53ff0474de048340e)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34120524324)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34120524196).
+The clean publication dry run and all three package previews passed. The Linux
+executable still matches the binary used for the recorded performance checks.
+
+The signed annotated `v1.0.0` tag points to that commit. GitHub verified its
+signature and published the [immutable release](https://github.com/nuggocto/orifude/releases/tag/v1.0.0)
+at 12:25:57 UTC with five native archives, `SHA256SUMS`, and both installer files.
+The publisher re-downloaded the draft, compared its bytes with the candidate,
+and verified the release and all eight asset attestations after publication.
+The [QA record](docs/release-qa.md#current-publication-decision-on-2026-09-07)
+contains the final hashes. All five targets passed the
+[public installer workflow](https://github.com/nuggocto/orifude/actions/runs/34121865648)
+without retries. Each re-downloaded and verified the full public asset set,
+installed from the fixed release URL, checked the executable's bytes and version,
+then played, saved, restarted, and replayed. The
+[tag CI run](https://github.com/nuggocto/orifude/actions/runs/34121786499) also passed.
+
+The package publisher verified the release attestations again before pushing
+[Homebrew](https://github.com/nuggocto/homebrew-tap/commit/a1d2d267ceda3ab35b0ec1529d8d3ccb420e6063),
+[Scoop](https://github.com/nuggocto/scoop-bucket/commit/415a83e1e419f19341d2a1acd9bd2404ac18c5bd),
+and [AUR](https://aur.archlinux.org/cgit/aur.git/commit/?h=orifude-bin&id=bf2878595331f5da1451b48168c1c5003fb1ba0e).
+Every package uses upstream version `1.0.0` and the published archive hashes;
+AUR has package revision `1`. Only `orifude-bin` was published to AUR. The
+[Homebrew README](https://github.com/nuggocto/homebrew-tap/blob/9de4ba92c055d246e63c25f6ca264029bfb7c7e2/README.md)
+and [Scoop README](https://github.com/nuggocto/scoop-bucket/blob/669ad0ebcea7172aaa37a82f308db959123a82af/README.md)
+now list Orifude and its installation command.
+
+All four [public package checks](https://github.com/nuggocto/orifude/actions/runs/34122676056)
+passed without retries: both macOS Homebrew architectures, Windows Scoop, and
+Linux x86_64 AUR. Each installed executable matched its attested archive and
+completed the save/restart/replay journey. AUR's public package page and Git
+repository reflected `1.0.0-1` before its first RPC response did. A fresh combined
+query and then the normal single-package query returned the correct version and
+owner. No package change was needed. The ARM64 AUR package has candidate assembly
+and a native ARM64 binary journey, rather than a native public AUR install check.
+
+The website update at
+[`e27f2bc`](https://github.com/nuggocto/orifude-front/commit/e27f2bca35ab06de6f3af6eeb95e104dd8830be9)
+imports the signed release's canonical notes and enables all five verified
+installation methods. All 19 release-data tests and 24 browser cases passed
+locally and in [CI](https://github.com/nuggocto/orifude-front/actions/runs/34123639229).
+The [Cloudflare preview](https://b6ddb20f.orifude-front.pages.dev) passed before
+the production push. Both live pages match the local HTML exactly.
+
+Desktop, mobile, and 320-pixel production checks exercised keyboard disclosures,
+release navigation, reflow, and 404 recovery without JavaScript. A separate
+enabled-JavaScript check confirmed that the known injected 404 script makes no
+challenge request and creates no iframe or cookie. CSP remains restrictive.
+The static build contains no application JavaScript. Five cold loads at each
+viewport, under 150 ms latency, 1.6 Mbit/s download and fourfold CPU slowdown,
+measured LCP between 796 and 848 ms and CLS at most 0.0071. The
+[QA record](docs/release-qa.md#current-publication-decision-on-2026-09-07) contains
+the HTML hashes, lab limits, and local evidence paths.
+
+Self-review found no confirmed defect in publication, the public installation
+paths, version consistency, or the website update. Every advertised channel was
+verified before website promotion; none is deferred. The remaining minimum-OS,
+terminal-app, and hosting limits are the owner-accepted ones recorded above.
+
+The GitHub release notes link to the installation section, canonical changelog,
+public installation workflows, and current QA record. Release attestation
+verification passed again after updating those notes; its signed tag and eight
+asset hashes are unchanged.

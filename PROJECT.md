@@ -14,9 +14,8 @@ contract, and only phase tracker for Orifude v1.
 
 ## Current work
 
-- Current phase: **Phase 12, v1 release**
-- Current checklist item: **Publish the approved v1.0.0 candidate and verify its
-  public installation channels.**
+- Current phase: **Phase 12, v1 release, complete**
+- Current checklist item: **None; the v1 release checklist is complete.**
 - Last updated: **2026-09-07**
 
 Checkbox rules:
@@ -2102,34 +2101,43 @@ the result as a user would receive it.
 - [x] Run the native hosted end-to-end matrix against the release candidate;
   retain the owner-accepted minimum-OS and terminal-GUI evidence limitation.
 - [x] Obtain the final QA verdict and separate ship recommendation.
-- [ ] Create the signed or protected `v1.0.0` tag at the approved commit.
-- [ ] Publish GitHub release archives, checksum file, and installer files.
-- [ ] Confirm that GitHub reports the published release as immutable and that
+- [x] Create the signed or protected `v1.0.0` tag at the approved commit.
+- [x] Publish GitHub release archives, checksum file, and installer files.
+- [x] Confirm that GitHub reports the published release as immutable and that
   release verification succeeds.
-- [ ] Re-download every published artifact and verify it against the published
+- [x] Re-download every published artifact and verify it against the published
   checksum file, embedded installer value, and release attestation.
-- [ ] Publish the macOS-only Homebrew formula to `homebrew-tap`.
-- [ ] Publish the Windows Scoop manifest to `scoop-bucket`.
-- [ ] Publish only `orifude-bin` to AUR with the dedicated SSH identity.
-- [ ] Run clean public installation journeys through POSIX, PowerShell,
+- [x] Publish the macOS-only Homebrew formula to `homebrew-tap`.
+- [x] Publish the Windows Scoop manifest to `scoop-bucket`.
+- [x] Publish only `orifude-bin` to AUR with the dedicated SSH identity.
+- [x] Run clean public installation journeys through POSIX, PowerShell,
   Homebrew, Scoop, and AUR.
-- [ ] Publish the v1 changelog entry and verified installation links on
+- [x] Publish the v1 changelog entry and verified installation links on
   `orifude-front`.
-- [ ] Verify the production landing page and changelog after Cloudflare Pages
+- [x] Verify the production landing page and changelog after Cloudflare Pages
   deployment.
-- [ ] Confirm that installers and package manifests resolve only immutable v1
+- [x] Confirm that installers and package manifests resolve only immutable v1
   artifacts and exact checksums.
-- [ ] Preserve failure evidence and hold publication if any release channel is
+- [x] Preserve failure evidence and hold publication if any release channel is
   intermittent or inconsistent.
-- [ ] Document any package channel delayed after the canonical GitHub release.
-- [ ] Publish the final supported-platform and known-issue statement.
-- [ ] Mark v1 complete only after public artifacts and links pass verification.
+- [x] Document any package channel delayed after the canonical GitHub release.
+- [x] Publish the final supported-platform and known-issue statement.
+- [x] Mark v1 complete only after public artifacts and links pass verification.
 
 Exit gate:
 
-- [ ] A new user can discover Orifude, install it through every advertised
+- [x] A new user can discover Orifude, install it through every advertised
   channel, complete and save a puzzle offline, read the v1 changelog, and verify
   the downloaded artifact.
+
+Verification record (2026-09-07): `v1.0.0` is an immutable GitHub release at
+signed commit `f5db86d`. All five public installer targets and all four public
+package jobs passed without retries. Homebrew and Scoop publish `1.0.0`; AUR
+publishes `orifude-bin 1.0.0-1`. Frontend commit `e27f2bc` passed its preview,
+CI, and production checks with the canonical notes and every verified channel.
+No channel is deferred. The [release QA record](docs/release-qa.md#current-publication-decision-on-2026-09-07)
+contains the exact hashes, workflow links, and owner-accepted evidence and
+hosting limitations. Subsequent work starts from released v1 behavior.
 
 ## After v1
 
