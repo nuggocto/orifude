@@ -1,111 +1,107 @@
 # Orifude
 
-Orifude is a quiet, offline puzzle game for the terminal. Fold a small sheet,
-place ink through its layers, then open it and match the target exactly. The
-name is coined from the ideas of folding and brushwork.
+Orifude is a quiet puzzle game for your terminal. Fold a small sheet of paper,
+brush ink through its layers, then open it to match a pattern.
 
-The game is written in Rust, uses only the keyboard, and keeps progress on the
-player's computer. It has an interactive first lesson, a handcrafted journey,
-a deterministic daily paper, an endless local generator, keepsakes, and local
-community packs.
+Play at your own pace. There is no timer, and you can undo a move or start over
+whenever you need to. The game works entirely offline and keeps your progress
+on your computer, with no account to create.
 
-```text
-Pattern to match   Folded paper           Stack, bottom to top
-. # # .            0 0 @ 0                0: cell 6
-                                           1: cell 5
+[Install Orifude](https://orifude.com/install/) ·
+[Visit the website](https://orifude.com) ·
+[Release notes](https://orifude.com/changelog/)
 
-One fold lets one dot pass through both layers.
-```
+![Orifude's first lesson after one fold and one brush stroke, with two inked layers ready to unfold.](https://orifude.com/terminal.png)
 
-A deterministic [first-paper terminal recording](docs/recordings/journey.cast)
-is checked in for documentation. It can be replayed with any asciicast v2
-player.
+## Start playing
 
-## Play
-
-The [website](https://orifude.com) lists verified installation channels and release
-notes. The [distribution guide](docs/distribution.md#installing-an-exact-published-version)
-explains how to download, inspect, and run an exact-version installer. The game
-works offline after installation.
-
-Start an installed copy with:
+Orifude is available for Linux, macOS, and Windows. Follow the
+[installation guide](https://orifude.com/install/) for your computer, then run:
 
 ```console
 orifude
 ```
 
-The first launch explains the goal and leads through one real paper. During a
-puzzle:
+Your first visit begins with a short, playable lesson. It walks you through a
+fold, a brush stroke, and opening the paper. A terminal at least 80 columns wide
+and 24 rows tall gives everything room; the minimum is 60 by 20.
 
-- An available fold or brush is ready as soon as the paper opens. `Enter` uses it.
-- Arrow keys or `h`, `j`, `k`, `l` change a ready fold or move the brush cursor.
-- Filled `●` marks placed ink; `◉` means the cursor is resting on ink. In ASCII
-  mode, `*` is placed ink, `@` is the dry cursor, and `&` is the cursor on ink.
-- `Tab` moves through folds, brushes, and Open paper. `f` and `b` jump straight
-  to the fold and brush tools. `Esc` cancels a tool and readies Open paper.
-- Opening compares every cell. `?` marks missing ink and `!` marks extra ink.
-  The reference is the expected fold and stroke count, not a requirement for
-  solving the paper.
-- `v` replays a saved solution from fresh paper. `Enter` or Right advances one
-  action, Left rewinds, and one final step opens the paper for comparison.
-- `Space` previews the ink on the unfolded sheet.
-- `u` undoes, `r` resets, `?` opens a short tool guide, and `q` leaves.
+## How a paper works
 
-Bindings, color use, glyph mode, and motion can be changed inside terminal
-settings. The minimum interactive terminal is 60 columns by 20 rows. Smaller
-windows keep the current state and ask to be resized.
+Each puzzle gives you a blank sheet, a target pattern, and a few tools.
 
-## Local puzzle packs
+1. Choose a crease and fold the paper. Cells that were far apart can now sit
+   on top of one another.
+2. Place ink on the folded sheet. A brush stroke reaches every layer beneath it,
+   so one mark can become several when the paper opens.
+3. Open the paper and compare it with the target. Every inked and blank cell
+   must match exactly.
 
-Orifude accepts bounded pack directories and ZIP archives containing inert
-TOML and optional text notes. It never downloads pack content.
+You can preview the unfolded ink before committing to an answer. If a mark lands
+in the wrong place, undo it and try another fold. The reference fold and stroke
+counts give you something to aim for, but matching the pattern is what solves
+the puzzle.
+
+## At the keyboard
+
+A tool is ready when you open a puzzle. Press `Enter` to use it, or `Tab` to
+choose another. These are the default controls:
+
+| Key | Action |
+| --- | --- |
+| Arrow keys or `h` `j` `k` `l` | Choose a fold or move the brush |
+| `Enter` | Use the ready tool or open the paper |
+| `Tab` / `Shift` + `Tab` | Cycle through folds, brushes, and Open paper |
+| `f` / `b` | Choose the fold or brush tool |
+| `Space` | Preview the unfolded ink |
+| `u` | Undo the last move |
+| `r` | Restart the paper after confirmation |
+| `Esc` | Cancel the current tool or go back |
+| `?` | Read the tool guide |
+| `q` | Leave the game |
+
+The tool guide explains the marks on the paper and the controls for the current
+screen. You can change key bindings, colors, glyphs, and motion in Settings.
+
+## Find your next paper
+
+The journey has forty handcrafted puzzles, starting with simple marks and
+building toward more layered folds. Solved papers become keepsakes: revisit one
+and press `v` to replay your solution, one move at a time.
+
+There is also a daily paper based on your computer's date and an endless garden
+of generated puzzles. Both work offline. Completed papers and keepsakes are
+saved between visits; an unfinished attempt starts fresh when you leave it.
+
+## Play and share puzzle packs
+
+[Community packs](https://orifude.com/#puzzle-packs) add more papers to solve.
+Download a reviewed ZIP and its checksum file, then
+[check the download](docs/puzzle-authoring.md#download-and-install-a-published-pack)
+and install it locally:
 
 ```console
-orifude verify puzzles/example-pack
-orifude solve puzzles/example-pack
-orifude pack install puzzles/example-pack
-orifude pack list
-orifude pack remove paper-garden
+orifude pack install FILENAME.zip
 ```
 
-The complete format, validation workflow, licensing notes, and contribution
-checklist are in [Writing puzzle packs](docs/puzzle-authoring.md). The
-[`paper-garden`](puzzles/example-pack/pack.toml) directory is a working example.
+Open the game and choose **Puzzle packs**. Orifude never downloads packs for you.
+To update a pack, remove its installed version before installing the new ZIP;
+your saved progress and keepsakes remain.
 
-## Development
+To make your own, start with the [example pack](puzzles/example-pack). Puzzles
+are plain-text files you can edit and play on your computer. The
+[authoring guide](docs/puzzle-authoring.md) explains the format, how to check and
+solve your puzzles, and how to submit them through a pull request. Automated
+checks validate each submission, and a maintainer reviews the puzzles, writing,
+and license before publishing a ZIP and checksum on the website.
 
-Install [rustup](https://rustup.rs/) and
-[mise](https://mise.jdx.dev/getting-started.html) 2026.8.14 or newer. The exact
-Rust toolchain is declared in `rust-toolchain.toml`. `Cargo.lock` and
-`mise.lock` keep application builds and development tools reproducible.
+## About the project
 
-```console
-mise install --locked rust github:EmbarkStudios/cargo-deny shellcheck@0.11.0
-mise run check
-mise run test-native
-mise run run
-```
+Orifude is a coined name inspired by folding and brushwork. The project is open
+source under the [Apache 2.0 license](LICENSE).
 
-`mise run check` verifies formatting, Clippy lints, tests, documentation,
-dependency policy, release-tool integrity, and the release build. The distribution
-tool is a Rust development example. `mise run test-native` exercises the
-shipped binary in a native pseudoterminal, including the first lesson, a saved
-journey paper, restart, replay, preview, undo, reset, resize recovery, daily
-generation, malformed-pack handling, and terminal restoration.
-
-Focused tasks include `mise run run`, `mise run test`, `mise run lint`,
-`mise run build`, the bounded parser and domain harnesses, and the solver,
-paper, and storage measurements listed in `mise.toml`.
-
-The product contract and work queue live in [`PROJECT.md`](PROJECT.md).
-Implementation decisions and verification evidence live in
-[`NOTEBOOK.md`](NOTEBOOK.md). Orifude is open source under the
-[Apache 2.0 license](LICENSE).
-
-## Share puzzle packs
-
-Create packs as plain TOML files and submit them through pull requests. Isolated
-CI validates and solves every puzzle; a maintainer reviews the content and
-license before publication. The [pack guide](docs/puzzle-authoring.md#submit-through-a-pull-request)
-explains the source layout, commands, review, versioning, and local installation.
-Reviewed ZIP downloads and checksums appear on [orifude.com](https://orifude.com/#puzzle-packs).
+For contributors, [PROJECT.md](PROJECT.md) describes the game, its architecture,
+and the development workflow. [NOTEBOOK.md](NOTEBOOK.md) records implementation
+decisions and verification results. A
+[terminal recording of the first paper](docs/recordings/journey.cast) is also
+available to replay with an asciicast v2 player.

@@ -1140,3 +1140,55 @@ Review verdict: PASS, with no confirmed finding remaining in the changed code,
 publication workflow, or website. QA recommendation: ship. The existing
 minimum-OS, terminal-GUI, and blocked Cloudflare 404-script limitations are
 unchanged. No new application release or package-channel update is required.
+
+## Pack layout and player README (2026-09-07)
+
+The [landing-page pack section](https://github.com/nuggocto/orifude-front/commit/4bd433f0d1df9c1f32279a63b858c0c35eb426ff)
+now puts a short creator introduction beside the reviewed download. The paper
+panel uses the site's existing palette, heading style, and folded corner.
+Native HTML disclosures hold the submission steps and installation details;
+ZIP and checksum links stay visible. The PR path, isolated checks, maintainer
+review, license requirement, and exact published download remain available.
+The surrounding sections and catalog data did not change.
+
+[README.md](README.md) now explains the game for a new player: installation,
+folding and ink, default controls, play modes, saved progress, and local packs.
+It uses the existing real terminal capture and links contributors to the
+project and authoring guides. The controls were checked against
+[session input](src/tui/session.rs) and [application navigation](src/tui/app.rs);
+local links and the public image resolve. This changes presentation and
+documentation, so the application version remains `1.0.0`.
+
+Local validation passed with Node 24.19.0, the static build, 21 data checks, and
+39 browser cases in Chromium, Firefox, and WebKit using the Playwright 1.63.0
+Noble image. The [pack journey test](https://github.com/nuggocto/orifude-front/blob/4bd433f0d1df9c1f32279a63b858c0c35eb426ff/tests/browser/packs.spec.ts)
+opens both disclosures by keyboard with JavaScript disabled, then checks the
+submission commands and exact reviewed download links. Existing escaping and
+script restrictions still pass.
+
+Visual checks covered 1440, 768, 390, and 320 pixels with both disclosures open
+and closed. The desktop section is about 690 pixels tall. Enlarged-text QA found
+the download button exceeding its panel at 320 pixels and 200% text; bounding
+the button and allowing its label to wrap fixed that. The section now fits at
+all four widths with 200% text, and the expanded content passes axe checks.
+The audit helper needed a separate JavaScript-enabled browser context for axe;
+the no-script reading and keyboard checks run separately. Captures and results
+are under `../orifude-front/.preview/packs/layout/`.
+
+The unchanged hero's italic heading still exceeds the page at the combined
+320-pixel and 200%-text setting. This is outside the requested pack-section
+redesign. Whole-page reflow passes at normal text size; the stronger combined
+check above applies to the pack section only.
+
+The [preview check](https://github.com/nuggocto/orifude-front/actions/runs/34142123863)
+and [production-branch check](https://github.com/nuggocto/orifude-front/actions/runs/34142414628)
+passed before this record was committed. The
+[Cloudflare preview](https://33c68366.orifude-front.pages.dev) and
+[production site](https://orifude.com/#puzzle-packs) passed live keyboard,
+disclosure, reflow, link, and response-header checks at 1440, 390, and 320 pixels.
+Both browser downloads matched the published Paper garden SHA-256. Install and
+changelog returned 200; the missing-path probe returned 404. Production HTML
+matches the local build with SHA-256
+`07fe868af2af02cde96d98cacf1ae2f89628c902eea1c2c5a36b17b66d3d750c`.
+Live captures are under `../orifude-front/.preview/packs/redesign-production/`.
+QA verdict for the changed section: PASS; release recommendation: ship.
