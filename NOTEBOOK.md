@@ -964,3 +964,31 @@ confirmed navigation, keyboard focus, and a native paste of `yay -S orifude-bin`
 The known injected 404 script remains blocked, with no challenge request,
 iframe, or cookie. This website correction does not change the release's
 accepted native-platform evidence limits.
+
+## Build-tool download recovery on 2026-09-07
+
+The documentation commit
+[`068861d`](https://github.com/nuggocto/orifude/commit/068861dd14b0aea38691b80ca82d3a3500088127)
+had two failed tool downloads before compilation. The macOS Intel native-player
+job exhausted mise-action's five download retries in
+[CI attempt 1](https://github.com/nuggocto/orifude/actions/runs/34131255541/attempts/1).
+The Linux ARM64 archive job received HTTP 504 while fetching the pinned mise
+2026.8.16 asset in
+[candidate attempt 1](https://github.com/nuggocto/orifude/actions/runs/34131255553/attempts/1).
+That failure prevented assembly and installation checks from starting.
+
+Both asset URLs subsequently returned HTTP 200. Failed-job reruns on the same
+commit then completed the previously failing tool installation steps. No native
+code, workflow gate, tool version, or published release was changed to get past
+the download failure. The earlier website verification covered the frontend;
+the main repository's workflows also needed to finish before reporting that
+all checks were green.
+
+The [CI rerun](https://github.com/nuggocto/orifude/actions/runs/34131255541/attempts/2)
+finished with all seven jobs successful. The
+[candidate rerun](https://github.com/nuggocto/orifude/actions/runs/34131255553/attempts/2)
+finished with all eleven jobs successful, including assembly and every native
+installation and package check that the failed download had blocked. One
+failed-job rerun per workflow recovered the incident after the asset URLs were
+reachable again. The original failures remain linked above. Review found no
+application or workflow defect requiring a code change.
