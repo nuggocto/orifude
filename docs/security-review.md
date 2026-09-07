@@ -128,3 +128,34 @@ those checks. Its deployed HTML matches the reviewed static output. The live 404
 probe confirmed that CSP blocks the injected script, with no challenge request,
 iframe, or cookie. [Release QA](release-qa.md#current-publication-decision-on-2026-09-07)
 records the immutable commits, workflow evidence, and accepted limits.
+
+## Community pack publication on 2026-09-07
+
+Reviewed the creator data path, catalog and archive builder, container isolation,
+manual publication and recovery, and static website catalog. The authorized
+scope includes the two Orifude repositories, their workflows, the new pack
+release, and read-only verification of its downloads and website.
+
+The [pack workflow](../.github/workflows/packs.yml) uses trusted base code and
+passes only data into a bounded container without network access or credentials.
+The [publisher](../.github/workflows/pack-release.yml) requires merged source,
+its successful validation run, a review record, and explicit maintainer
+attestation. Its separate write job checks source and tag identity, artifact
+bytes, immutable publication, and release attestations. Existing releases cannot
+be replaced during recovery. The website escapes pack text and derives URLs from
+validated IDs and versions; it accepts no contributor-supplied download URL.
+
+Review corrected missing license text in the example ZIP and the live
+attestation-availability failure. Recovery now waits only on the observed missing
+attestation condition and rejects mismatched source or bytes. The
+[successful recovery run](https://github.com/nuggocto/orifude/actions/runs/34139078008)
+verified the actual published release without modifying it. Dependency policy,
+shell and workflow lint, the credential scan, and behavioral regression checks
+passed. Details and the preserved first failure are in the
+[notebook](../NOTEBOOK.md#pack-submissions-and-publication-on-2026-09-07).
+
+Verdict: PASS, with no confirmed finding remaining in this scope. Maintainer
+judgment still governs authorship, license rights, and puzzle quality. Repository
+administrators and the underlying hosted runner remain trusted. This review does
+not claim that a validator can prove artistic quality, license ownership, or
+protection against a compromised maintainer or hosting provider.

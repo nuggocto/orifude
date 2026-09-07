@@ -456,3 +456,50 @@ evidence gaps remain; live attestation and public-channel checks belong to the p
 release handoff. No public release or package update was created. The final Linux
 musl executable's SHA-256 matches the earlier measured binary exactly, so its
 recorded startup, interaction, memory, idle CPU, and size results still apply.
+
+## Pack publication verification on 2026-09-07
+
+Pack source: [`54a7f7d`](https://github.com/nuggocto/orifude/commit/54a7f7d2ccd2c292c73f5425b8fc4c8d87fd90e5).
+Publication tooling: [`72f58c1`](https://github.com/nuggocto/orifude/commit/72f58c1fc800f393287e07d00fed2d1b7a8c8a7b).
+Website: [`e794bdb`](https://github.com/nuggocto/orifude-front/commit/e794bdb).
+
+The immutable [Paper garden release](https://github.com/nuggocto/orifude/releases/tag/pack-paper-garden-v1.0.0)
+contains a 5,752-byte ZIP, SHA256SUMS, and pack.json. The ZIP SHA-256 is
+`bdce44bad07e92faf4bc1d564b14b913e1e90a6b9581c4ad9f3633984eeef2e6`.
+All three public assets matched the inspected proposal and their GitHub
+attestations. The license and contributor credit travel inside the ZIP as a
+permitted note. The application, installers, and package channels stay at 1.0.0;
+GitHub still marks `v1.0.0` as the latest game release.
+
+The downloaded public Linux x86_64 musl game archive passed its attestation.
+On the local Arch Linux x86_64 host, in a 100-by-30 tmux terminal with
+`TERM=xterm-256color` and isolated XDG directories, its binary verified and solved
+the pack, installed it, and saved all three puzzles. First seed used zero folds
+and one stroke, Folded leaves one fold and one stroke, and Garden path zero
+folds and one line stroke. Each opened comparison had no missing or extra ink.
+Removing the first proposal and installing the licensed public ZIP preserved
+all three replay payloads byte for byte. Restarting and replaying Garden path
+again produced an exact match. The existing packaged-player journey also passed.
+
+`mise run check` passed 251 tests and the doctest, formatting, Clippy, shell and
+dependency checks, and the release build. The three new tooling tests include a
+mutation check proving that bypassing the solver would publish an unsolvable
+pack. The website passed 21 data tests, Astro checks, its static build, dependency
+audit, and all 39 browser cases in the pinned Playwright Linux container.
+Disabling catalog validation made the malformed-download test fail as intended.
+The preview passed real keyboard and no-script reading checks at 1440, 390, and
+320 pixels; a browser download matched the ZIP's attested hash.
+
+The first publication run stopped because GitHub had not yet exposed its new
+attestation. The [corrected workflow](https://github.com/nuggocto/orifude/actions/runs/34139078008)
+completed the source, download, and attestation checks against the existing
+immutable release. It did not replace an asset or manufacture a new pack version.
+Local captures and command evidence are under `target/pack-qa/` and the
+frontend's `.preview/packs/`; the notebook links hosted evidence and records
+production verification and cleanup.
+
+Verdict: PASS for the pack and website changes; recommendation: ship. Native
+pack play was exercised on Linux. Existing hosted native-player coverage and
+the owner-accepted minimum-OS, terminal-GUI, and Cloudflare 404 limitations remain
+as documented above. No broader native-platform or accessibility certification
+is inferred from the browser or local pack checks.

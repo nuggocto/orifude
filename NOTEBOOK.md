@@ -1088,3 +1088,55 @@ The publication source guard also resolves any existing tag to its actual commit
 not just the release's editable `target_commitish` field. A tag pointing elsewhere
 stops before publication or recovery. Explicit Bash pipe failure handling keeps
 failed API pipelines from being mistaken for successful checks.
+
+The final [Paper garden 1.0.0 release](https://github.com/nuggocto/orifude/releases/tag/pack-paper-garden-v1.0.0)
+is immutable at source commit
+[`54a7f7d`](https://github.com/nuggocto/orifude/commit/54a7f7d2ccd2c292c73f5425b8fc4c8d87fd90e5).
+Its 5,752-byte ZIP has SHA-256
+`bdce44bad07e92faf4bc1d564b14b913e1e90a6b9581c4ad9f3633984eeef2e6`.
+The [dry run](https://github.com/nuggocto/orifude/actions/runs/34138439184)
+matched local deterministic output. The
+[corrected publication run](https://github.com/nuggocto/orifude/actions/runs/34139078008)
+passed both jobs and verified the existing release, source tag, and all three
+asset attestations without changing any published bytes. The pack's
+[source validation](https://github.com/nuggocto/orifude/actions/runs/34138254786)
+and the corrected tooling's
+[pack CI](https://github.com/nuggocto/orifude/actions/runs/34139079278) and
+[ordinary native CI](https://github.com/nuggocto/orifude/actions/runs/34139079307)
+passed. GitHub's latest game release remains `v1.0.0`.
+
+The downloaded public Linux musl game archive passed its attestation, then its
+`1.0.0` binary verified, solved, and installed the pack. In a private 100-by-30
+tmux terminal on Arch Linux x86_64, every puzzle completed with no missing or
+extra ink and saved the expected score: First seed 0 folds/1 stroke, Folded
+leaves 1/1, Garden path 0/1. Removing and reinstalling the licensed public ZIP
+preserved all three saved replay payloads byte for byte. A fresh process replayed
+Garden path to an exact match. The existing packaged-player test also passed.
+All application state was confined to disposable XDG directories, and the
+owned terminal process and player directories were removed after verification.
+The [QA record](docs/release-qa.md#pack-publication-verification-on-2026-09-07)
+keeps the environment, commands, outcomes, and coverage limits.
+
+Frontend commit
+[`e794bdb`](https://github.com/nuggocto/orifude-front/commit/e794bdb)
+adds submission instructions and the verified pack catalog to the landing page.
+All 21 data tests and 39 Chromium, Firefox, and WebKit cases passed locally and
+in the [preview check](https://github.com/nuggocto/orifude-front/actions/runs/34139223154)
+and [production-branch check](https://github.com/nuggocto/orifude-front/actions/runs/34139446096).
+The [Cloudflare preview](https://186778b6.orifude-front.pages.dev) passed before
+promotion to `shrek`. Production HTML matches the local build exactly, with
+SHA-256 `78ae73f09d4a832a8cc08cbc03c99aa844ae5b7eb6dc7172605fc394cfe9227b`.
+
+Live checks at 1440, 390, and 320 pixels confirmed keyboard focus, no-script
+reading, no horizontal page overflow, the submission link, source link, ZIP,
+and checksum link. A browser download from both preview and production matched
+the attested pack hash. Install and changelog pages returned 200, and a missing
+path returned 404 with the restrictive policy. The preview probe initially
+mistook a same-document navigation for a new HTTP response; starting each
+viewport check from a blank page corrected the probe without changing the site.
+Captures and results live under `../orifude-front/.preview/packs/`.
+
+Review verdict: PASS, with no confirmed finding remaining in the changed code,
+publication workflow, or website. QA recommendation: ship. The existing
+minimum-OS, terminal-GUI, and blocked Cloudflare 404-script limitations are
+unchanged. No new application release or package-channel update is required.
