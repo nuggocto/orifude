@@ -910,3 +910,57 @@ The GitHub release notes link to the installation section, canonical changelog,
 public installation workflows, and current QA record. Release attestation
 verification passed again after updating those notes; its signed tag and eight
 asset hashes are unchanged.
+
+## Dedicated installation page on 2026-09-07
+
+The owner wanted an Install link in the top navigation, with commands and Copy
+buttons on the website. The [frontend change](https://github.com/nuggocto/orifude-front/commit/d20fc6582b76261fe2d517b76237e61ff6f2bb2b)
+puts all verified methods on `/install/`. The landing page links there, and its
+old `#get-orifude` anchor still reaches an installation link. Arch Linux now
+shows `yay -S orifude-bin`; `yay -Si orifude-bin` resolved the public `1.0.0-1`
+package. The package itself and all native release versions remain unchanged.
+
+[Command.astro](https://github.com/nuggocto/orifude-front/blob/d20fc6582b76261fe2d517b76237e61ff6f2bb2b/src/components/Command.astro)
+renders each command as selectable text. The optional clipboard helper copies
+that exact text after pointer or keyboard activation and announces success or
+failure. It never reads the clipboard or sends a network request. Self-review
+changed the busy state to preserve keyboard focus while preventing concurrent
+copies from the same button.
+
+```mermaid
+flowchart LR
+    Install[Install.astro] --> Command[Command.astro: visible command]
+    Command -->|Copy activation| Copy[copy-command.js]
+    Copy -->|writeText only| Clipboard[System clipboard]
+    Copy -->|Copied or manual-copy guidance| Status[Command.astro: status]
+```
+
+The helper is 382 bytes gzipped. CSP and the script integrity attribute permit
+only its exact SHA-256; other inline and same-origin scripts remain blocked.
+This replaces the earlier blanket script prohibition to support the owner's
+Copy-button request. The helper loads only on the installation page. The
+[build check](https://github.com/nuggocto/orifude-front/blob/d20fc6582b76261fe2d517b76237e61ff6f2bb2b/scripts/check-build.mjs)
+rejects other scripts and checks all four documents, including the real 404.
+
+Astro checks, all 19 release-data tests, and all 36 browser cases passed locally.
+The [clipboard tests](https://github.com/nuggocto/orifude-front/blob/d20fc6582b76261fe2d517b76237e61ff6f2bb2b/tests/browser/install.spec.ts)
+paste every displayed command through native browser editing in Chromium,
+Firefox, and WebKit. Chromium's automated context needed an explicit clipboard
+write permission; denied permission and absent API have separate fallback
+checks. Navigation, no-JavaScript reading, missing styles, 320-pixel reflow,
+enlarged text, accessibility, and blocked unapproved scripts also passed.
+
+The [Cloudflare preview](https://6223dab2.orifude-front.pages.dev) matched the
+local HTML and clipboard script exactly. Desktop and mobile review exercised
+navigation, keyboard copying, and real 404 responses. Screenshots and the
+deployment check live under `../orifude-front/.preview/install-page/` as local,
+ignored QA evidence. Self-review found no remaining confirmed defect.
+
+The [frontend CI run](https://github.com/nuggocto/orifude-front/actions/runs/34131026090)
+passed all checks without retries, and Cloudflare deployed the same commit.
+The production landing page, installation page, changelog, and clipboard helper
+match the local build byte for byte. Live checks at 1440, 390, and 320 pixels
+confirmed navigation, keyboard focus, and a native paste of `yay -S orifude-bin`.
+The known injected 404 script remains blocked, with no challenge request,
+iframe, or cookie. This website correction does not change the release's
+accepted native-platform evidence limits.

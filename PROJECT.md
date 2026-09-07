@@ -1165,6 +1165,7 @@ It presents Orifude but never runs the puzzle engine.
 The public site remains deliberately small:
 
 - `/` is the landing page.
+- `/install/` presents the verified installation methods with copyable commands.
 - `/changelog/` is the styled release changelog.
 - Unknown paths return a real not-found response or static not-found page.
 
@@ -1193,6 +1194,14 @@ unfolded comparison. Short captions explain the crease, moving side, stack
 order, and exact-match rule. The sequence must remain understandable without
 animation, JavaScript, color, or physical-cell IDs. It explains the native game
 but does not imitate an interactive terminal.
+
+### Installation page
+
+The top navigation and landing-page installation links open `/install/`.
+Show every verified installation method directly on the page. Each command
+has a Copy button with success and failure feedback, and remains selectable
+without JavaScript. Keep installer downloads separate from execution. The Arch
+Linux command is `yay -S orifude-bin`, with yay already installed.
 
 ### Changelog page
 
@@ -1226,9 +1235,11 @@ data or generated content tied to the canonical main-repository changelog.
 - Keep Cloudflare Pages as the only hosting dependency.
 - Verify the production apex domain after deployment. The owner removed the
   `www` redirect from v1 scope on 2026-09-07.
-- Retain `script-src 'none'` on every response. Cloudflare's injected 404
-  bot-detection script remains blocked; its removal is an accepted hosting
-  limitation while the configured credential cannot change the zone setting.
+- Allow only the exact clipboard helper through a SHA-256 CSP source and matching
+  script integrity attribute. Load it only on `/install/`; do not permit other
+  scripts or all same-origin scripts. Cloudflare's injected 404 bot-detection
+  script remains blocked; its removal is an accepted hosting limitation while
+  the configured credential cannot change the zone setting.
 
 ## Build plan
 
@@ -2040,7 +2051,7 @@ release-driven changelog without creating a second application.
   branch, and domain.
 - [x] Verify the apex domain. The owner waived the `www` redirect on 2026-09-07.
 - [x] Replace the holding-page build with a minimal Astro static project.
-- [x] Keep `/` and `/changelog/` as the only product routes.
+- [x] Keep `/`, `/install/`, and `/changelog/` as the only product routes.
 - [x] Implement a real static not-found path.
 - [x] Add the real wordmark, icon, and squirrel-courier artwork from the supplied
   identity source.
