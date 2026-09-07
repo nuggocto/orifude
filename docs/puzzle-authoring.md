@@ -222,7 +222,7 @@ solves every puzzle before writing the proposal. The catalog accepts at most
 128 versions; each pack retains the game's existing limits.
 
 After the merged commit's Puzzle packs workflow passes, run Publish puzzle pack
-on `shrek` with that full commit, pack ID, and version. Confirm the review only
+on `shrek` with that full reviewed commit, pack ID, and version. Confirm the review only
 after completing and recording it. Leave Publish disabled to inspect the
 proposal artifact first. Enable it to publish; the write job receives only
 prepared data and never executes pack content. It creates a draft, compares
@@ -242,3 +242,11 @@ using a declared puzzle's `notes/PUZZLE-ID.txt` file. The example's
 characters (including newlines or tabs), and fit within 16 KiB each. Keep license
 wording intact while replacing line breaks with spaces. A maintainer must check
 that the included terms cover the pack and preserve any required notices.
+
+If GitHub has published the assets but has not exposed their attestation yet,
+the workflow waits up to 55 seconds for that specific condition. Other integrity
+failures stop immediately. To resume verification, dispatch the workflow again
+with the original reviewed source commit, pack ID, and version. The commit must
+still belong to `shrek` and have passing pack CI. Existing assets must match the
+rebuilt proposal exactly; the workflow never replaces them or changes a published
+release. An incomplete draft still needs maintainer inspection.

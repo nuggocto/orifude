@@ -2183,7 +2183,7 @@ apply. Any invalid, unsolvable, exhausted, or timed-out pack fails the check.
 
 A maintainer reviews all puzzles, text, authorship, and redistribution terms,
 records the review in `docs/pack-reviews`, and merges the accepted source. The
-manual publication workflow requires that exact current `shrek` commit's
+manual publication workflow requires that exact reviewed `shrek` commit's
 successful pack check and an explicit review attestation. CODEOWNERS requests
 review but does not add branch protection. The write job never executes pack
 content. It publishes ZIP, SHA256SUMS, and metadata through an immutable GitHub

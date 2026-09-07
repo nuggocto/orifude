@@ -31,23 +31,27 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.ref == 'refs/heads/shrek' && inputs.commit == github.sha && inputs.review
+    if: github.ref == 'refs/heads/shrek' && inputs.review
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Require passing pack checks and a committed review record
         env:
           GH_TOKEN: ${{ github.token }}
           PACK_ID: ${{ inputs.pack }}
           PACK_VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ inputs.commit }}
         run: |
           [[ "$PACK_ID" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && ${#PACK_ID} -le 64 ]]
           [[ "$PACK_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ${#PACK_VERSION} -le 32 ]]
-          test -f "docs/pack-reviews/$PACK_ID-$PACK_VERSION.md"
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/packs.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=100" \
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
+          git cat-file -e "$SOURCE_COMMIT:docs/pack-reviews/$PACK_ID-$PACK_VERSION.md"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/packs.yml/runs?head_sha=$SOURCE_COMMIT&event=push&per_page=100" \
             --jq '.workflow_runs | any(.conclusion == "success")' | grep -qx true
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
@@ -55,13 +59,20 @@ jobs:
           install_args: "--locked rust"
           cache: "false"
       - run: mise run pack-tool-build
+      - name: Check out the exact reviewed pack data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          path: reviewed
+          sparse-checkout: community
       - name: Rebuild the reviewed source in isolation
         env:
           PACK_ID: ${{ inputs.pack }}
           PACK_VERSION: ${{ inputs.version }}
         run: |
           mkdir proposal
-          mise run pack-sandbox -- "$PWD/target/release/examples/pack_release" "$PWD/community" "$PACK_ID" "$PACK_VERSION" "$PWD/proposal"
+          mise run pack-sandbox -- "$PWD/target/release/examples/pack_release" "$PWD/reviewed/community" "$PACK_ID" "$PACK_VERSION" "$PWD/proposal"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reviewed-pack
@@ -108,17 +119,41 @@ jobs:
           printf 'Reviewed by @%s for puzzles, text, authorship, and redistribution license.\n\nSource: https://github.com/%s/tree/%s/community/%s/%s\n\nReview: https://github.com/%s/blob/%s/docs/pack-reviews/%s-%s.md\n\nRequires Orifude 1.0.0 or later. Download the named ZIP, verify SHA256SUMS, then run orifude pack install %s.\n\nThis is a puzzle pack. The native game release remains separate.\n' \
             "$REVIEWER" "$GITHUB_REPOSITORY" "$SOURCE_COMMIT" "$PACK_ID" "$PACK_VERSION" \
             "$GITHUB_REPOSITORY" "$SOURCE_COMMIT" "$PACK_ID" "$PACK_VERSION" "$archive" > ../notes.md
-          gh release create "$tag" "$archive" SHA256SUMS pack.json \
-            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --draft --latest=false \
-            --title "$PACK_ID $PACK_VERSION (puzzle pack)" --notes-file ../notes.md
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > ../existing.json 2> ../lookup-error; then
+            test "$(jq -r .target_commitish ../existing.json)" = "$SOURCE_COMMIT"
+            test "$(jq '.assets | length' ../existing.json)" -eq 3
+            draft=$(jq -r .draft ../existing.json)
+          elif grep -q 'HTTP 404' ../lookup-error; then
+            gh release create "$tag" "$archive" SHA256SUMS pack.json \
+              --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --draft --latest=false \
+              --title "$PACK_ID $PACK_VERSION (puzzle pack)" --notes-file ../notes.md
+            draft=true
+          else
+            cat ../lookup-error >&2
+            exit 1
+          fi
           mkdir ../downloaded
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir ../downloaded
           cmp "$archive" "../downloaded/$archive"
           cmp SHA256SUMS ../downloaded/SHA256SUMS
           cmp pack.json ../downloaded/pack.json
-          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          if [[ "$draft" == true ]]; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          fi
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .immutable | grep -qx true
-          gh release verify "$tag" --repo "$GITHUB_REPOSITORY"
+          # GitHub creates the attestation asynchronously after publication.
+          # Only its observed absence permits waiting; integrity failures stop.
+          for attempt in {1..12}; do
+            if gh release verify "$tag" --repo "$GITHUB_REPOSITORY" > ../verification.log 2>&1; then
+              cat ../verification.log
+              break
+            fi
+            if [[ "$attempt" == 12 ]] || ! grep -q '^no attestations for tag ' ../verification.log; then
+              cat ../verification.log >&2
+              exit 1
+            fi
+            sleep 5
+          done
           for asset in "$archive" SHA256SUMS pack.json; do
             gh release verify-asset "$tag" "$asset" --repo "$GITHUB_REPOSITORY"
           done

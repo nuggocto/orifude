@@ -1068,3 +1068,18 @@ repository license. Newlines become spaces to respect the existing note format;
 the wording is retained and the note stays below 16 KiB. No parser or game
 update is needed. The earlier ZIP hash above describes the pre-license proposal
 and will not be published. The final proposal is verified separately.
+
+The first live [publication run](https://github.com/nuggocto/orifude/actions/runs/34138593980)
+published the complete immutable pack but checked its attestation less than one
+second later. GitHub returned `no attestations for tag`; a subsequent read-only
+verification loaded and verified the attestation with unchanged asset hashes.
+The workflow now waits only for that observed absence, at most twelve checks
+five seconds apart. Integrity failures still stop immediately.
+
+Publication can also resume an existing release without replacing it. It checks
+the exact source commit, complete asset count, and re-downloaded bytes first.
+A published release is never edited during recovery. The reviewed source may be
+an earlier commit on `shrek`, proved by Git ancestry and its successful pack CI;
+this lets current workflow corrections verify an earlier immutable publication.
+The tool builds from trusted current code, while pack data comes from that exact
+reviewed commit. A changed proposal cannot pass the existing-asset comparison.
