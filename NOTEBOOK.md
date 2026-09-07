@@ -756,3 +756,28 @@ evidence and the two Cloudflare settings. The owner has authorized publication,
 but the required hosts and zone permissions are unavailable. The public
 installation workflow is ready to run after those gaps are resolved and the real
 release exists. No public release, release tag, or package update was created.
+
+The Scoop correction at signed commit
+[`eb54180`](https://github.com/nuggocto/orifude/commit/eb541803606d7af50cc7281c1c5414453657691b)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34068287642)
+and all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34068287673)
+without retries. A clean publication dry run checked that exact commit and run;
+its eight proposed hashes matched the downloaded set. The
+[QA record](docs/release-qa.md#current-publication-decision-on-2026-09-07) now records
+those hashes. Homebrew, Scoop, and AUR repository previews passed with `1.0.0`.
+The AUR RPC returned no active package; its Git repository retains the retired
+metadata that the eventual publication will replace.
+
+Comparing candidates found identical Linux and macOS archives. Windows differed
+only in 24 bytes belonging to PE/debug timestamps and the CodeView GUID. The
+regenerated checksum file, PowerShell installer, and Scoop proposal use the new
+Windows archive hash. This is why package publication must consume one verified
+candidate instead of carrying hashes over from an earlier build.
+
+Frontend commit `96fb90a` passed Cloudflare deployment. Live no-script Chromium
+checks returned 200 for the landing and changelog pages and a real 404 for a
+missing path. The first two pages contain no scripts; the blocked script on 404
+and missing `www` redirect remain. Public installer links stay hidden. Both
+repositories were committed and pushed to their existing `shrek` branches.
+Before resuming publication, use successful checks for the current clean commit
+and refresh the prepared changelog date if the publication day has changed.
