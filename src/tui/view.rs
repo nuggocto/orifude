@@ -340,8 +340,8 @@ fn render_loading(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StylePr
             Line::styled("Folding a new paper...", profile.title()),
             Line::from(""),
             Line::from(format!("Local date: {}", app.local_date())),
-            Line::from("The bounded generator and solver are working offline."),
-            Line::from("Esc cancels and joins the worker."),
+            Line::from("Your paper is being prepared on this computer."),
+            Line::from("Esc cancels."),
         ])
         .block(Paper::block("Preparing paper", profile))
         .wrap(Wrap { trim: true }),

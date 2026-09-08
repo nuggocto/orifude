@@ -3,8 +3,10 @@ name: Puzzle packs
 on:
   pull_request:
     branches: [shrek]
+    paths-ignore: ['docs/**', 'NOTEBOOK.md', 'PROJECT.md', 'AGENTS.md']
   push:
     branches: [shrek]
+    paths-ignore: ['docs/**', 'NOTEBOOK.md', 'PROJECT.md', 'AGENTS.md']
   workflow_dispatch:
 
 permissions:

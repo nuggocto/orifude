@@ -1529,3 +1529,39 @@ injected 404 markup remains blocked by CSP, with no challenge request, iframe,
 or cookie observed. Native Windows WebKit is not claimed as fixed; its full
 browser assertions run on Linux instead. Existing minimum-OS, terminal-GUI,
 and custom shared-TEMP limitations remain unchanged.
+
+## Simpler installation and release cleanup (2026-09-08)
+
+The [installer templates](scripts/release/) now create their default user-owned
+directories after validating the archive. Explicit destinations remain supported.
+Windows saves the user PATH without expanding existing entries or changing the
+registry value type, avoids duplicate entries, and broadcasts the change.
+`-NoPath` leaves it alone. POSIX keeps shell profiles untouched and prints the
+full executable path when PATH needs attention. Archive checks, transfer bounds,
+private temporary files, and replacement after verification remain in place.
+
+The website's shorter default command trusts the exact immutable GitHub release
+over HTTPS. Script inspection and attestation checks stay available separately;
+we no longer require a second script hash in the visible launcher. This deliberate
+bootstrap policy change is recorded in [PROJECT.md](PROJECT.md#installer-trust).
+Changed release assets require 1.0.1; the published 1.0.0 assets remain immutable.
+
+Generated-paper messages now explain play and cancellation in ordinary language.
+Two tests that measured decoration or repeated Rust's ownership checks were
+removed, along with exact-centering assertions. Viewport bounds and the behavioral
+engine tests remain. [Installer QA](examples/distribution/install.rs) now exercises
+missing custom directories, default destinations, PATH opt-out, persistence, and
+reinstall without duplication. The Windows PATH fixture restores the account's
+original registry value in finally and belongs on a disposable native QA host.
+
+Documentation-only updates skip expensive builds; source, README, changelog, and
+workflow changes still run the complete matrix. Manual dispatch preserves the
+publisher's requirement for successful checks of the exact release commit.
+Verification and publication results follow after the checks complete.
+
+Local Rust formatting, shell lint, both dependency audits, warning-denied Clippy,
+all applicable tests, the doctest, and the optimized build passed. The version
+bump updates both application and fuzz lockfiles without changing dependencies.
+Public installer QA uses -NoPath for its disposable custom destination; candidate
+QA separately checks saved PATH and restores it. Windows change notification
+follows [Microsoft's documented broadcast](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-settingchange).

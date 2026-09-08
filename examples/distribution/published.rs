@@ -138,6 +138,7 @@ fn installer(directory: &Path, target: &str, root: &Path) -> Result<()> {
                 "-File",
             ])
             .arg(directory.join("install.ps1"))
+            .arg("-NoPath")
             .arg("-BinDir");
         command
     } else {

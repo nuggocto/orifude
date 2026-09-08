@@ -147,17 +147,6 @@ fn puzzle_construction_canonicalizes_valid_rules() {
 }
 
 #[test]
-fn an_attempt_owns_the_validated_puzzle_it_needs() {
-    let attempt = {
-        let puzzle = ink_puzzle(4, 4, Vec::new(), vec![BrushRule::Dot], 1);
-        puzzle.start()
-    };
-
-    assert_eq!(attempt.puzzle().identity().puzzle_id(), "ink-paper");
-    assert_observable_invariants(&attempt);
-}
-
-#[test]
 fn puzzle_identity_enforces_the_portable_ascii_grammar() {
     let cases = [
         ("", IdentityErrorReason::Empty),

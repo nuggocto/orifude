@@ -1,21 +1,26 @@
 #!/bin/sh
-# Download this complete file, inspect it, then run it with --bin-dir DIRECTORY.
+# Download this complete file before running it. Use --bin-dir to choose a directory.
 set -eu
 umask 077
 version='@VERSION@'
 base_url='@BASE_URL@'
 fail() { printf 'error: %s\n' "$1" >&2; exit 1; }
 if [ "$#" = 1 ] && [ "$1" = --help ]; then
-    printf '%s\n' 'Usage: sh install.sh --bin-dir /existing/directory' \
+    printf '%s\n' 'Usage: sh install.sh [--bin-dir /directory]' \
+        'Default: .local/bin under your home directory (created if needed).' \
         'Installs this exact release without sudo or profile changes.'
     exit 0
 fi
-[ "$#" = 2 ] && [ "$1" = --bin-dir ] || fail 'expected --bin-dir DIRECTORY'
-bin_dir=$2
+case "$#" in
+    0) [ -n "${HOME:-}" ] || fail 'HOME is not set'; bin_dir="$HOME/.local/bin" ;;
+    2) [ "$1" = --bin-dir ] || fail 'expected --bin-dir DIRECTORY'; bin_dir=$2 ;;
+    *) fail 'expected no arguments or --bin-dir DIRECTORY' ;;
+esac
 case "$bin_dir" in /*) ;; *) fail 'installation directory must be absolute' ;; esac
 [ "${#bin_dir}" -le 4096 ] || fail 'installation path is too long'
-[ -d "$bin_dir" ] && [ -w "$bin_dir" ] || fail 'installation directory must exist and be writable'
-bin_dir=$(CDPATH='' cd -P "$bin_dir" && pwd)
+if [ -e "$bin_dir" ]; then
+    [ -d "$bin_dir" ] && [ -w "$bin_dir" ] || fail 'installation directory must be writable'
+fi
 destination="$bin_dir/orifude"
 [ ! -L "$destination" ] || fail 'destination must not be a symbolic link'
 if [ -e "$destination" ]; then
@@ -59,9 +64,15 @@ tar -xzf "$work/archive.tar.gz" -C "$work" || fail 'archive extraction failed'
 chmod 755 "$work/$folder/orifude"
 actual_version=$("$work/$folder/orifude" --version) || fail 'downloaded executable cannot run'
 [ "$actual_version" = "orifude $version" ] || fail 'downloaded executable version mismatch'
+mkdir -p "$bin_dir" || fail 'cannot create installation directory'
+bin_dir=$(CDPATH='' cd -P "$bin_dir" && pwd)
 staging=$(mktemp -d "$bin_dir/.orifude-install.XXXXXXXX")
 cp "$work/$folder/orifude" "$staging/orifude"
 chmod 755 "$staging/orifude"
 # Rename within the destination filesystem only after every check succeeds.
 mv -f "$staging/orifude" "$bin_dir/"
-printf 'Installed Orifude %s in %s.\nAdd this directory to PATH if needed. Saved progress is unchanged.\n' "$version" "$bin_dir"
+printf 'Installed Orifude %s in %s.\n' "$version" "$bin_dir"
+case ":${PATH:-}:" in
+    *":$bin_dir:"*) printf '%s\n' 'Run orifude to play.' ;;
+    *) printf 'Run %s/orifude to play, or add %s to PATH in your shell settings.\n' "$bin_dir" "$bin_dir" ;;
+esac

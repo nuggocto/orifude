@@ -499,8 +499,8 @@ impl App {
                 self.session = Some(PlaySession::new(
                     &generated,
                     title,
-                    "A deterministic paper made entirely on this device.",
-                    vec!["Use the target, then work through the production paper engine.".into()],
+                    "A fresh paper, made on your computer.",
+                    vec!["Fold and ink the paper to match the target.".into()],
                     source,
                 ));
                 self.screen = Screen::Play;
@@ -509,7 +509,7 @@ impl App {
             }
             GenerationOutcome::Exhausted { .. } => {
                 self.show_error(
-                    &"The bounded generator exhausted its search. Try another endless paper.",
+                    &"This paper could not be prepared. Choose another paper from the branch.",
                 );
                 self.screen = Screen::Branch;
                 None

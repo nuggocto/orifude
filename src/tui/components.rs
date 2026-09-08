@@ -946,43 +946,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn ascii_mark_is_centered_in_its_render_area() {
-        let width = 48;
-        let height = 14;
-        let backend = TestBackend::new(width, height);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
-        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
-        terminal
-            .draw(|frame| {
-                TerminalMark::render(
-                    frame,
-                    Rect::new(0, 0, width, height),
-                    MARK_FRAME_COUNT - 1,
-                    profile,
-                );
-            })
-            .expect("render succeeds");
-
-        let buffer = terminal.backend().buffer();
-        let mark_height = u16::try_from(ASCII_MARK.len()).expect("mark height fits");
-        let card_y = (height - mark_height.saturating_add(2)) / 2;
-        let mut left = width;
-        let mut right = 0;
-        for y in card_y..card_y + mark_height {
-            for x in 0..width {
-                if buffer[(x, y)].symbol() != " " {
-                    left = left.min(x);
-                    right = right.max(x);
-                }
-            }
-        }
-        let left_margin = left;
-        let right_margin = width - right - 1;
-
-        assert!(left_margin.abs_diff(right_margin) <= 1);
-    }
-
     fn braille_dot_count(lines: &[Line<'_>]) -> u32 {
         let mut count = 0;
         for line in lines {

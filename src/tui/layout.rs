@@ -173,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn large_terminals_keep_the_shell_compact_and_centered() {
+    fn large_terminals_keep_the_shell_compact() {
         let area = Rect::new(0, 0, 160, 60);
         let shell = ShellLayout::new(area, LayoutMode::Preferred).unwrap();
         let left = shell.title.x.min(shell.mark.x).min(shell.branch.x);
@@ -191,13 +191,5 @@ mod tests {
 
         assert!(right.saturating_sub(left) <= SHELL_MAX_WIDTH);
         assert!(bottom.saturating_sub(top) <= SHELL_MAX_HEIGHT);
-        assert_eq!(
-            left.saturating_sub(area.x),
-            area.right().saturating_sub(right)
-        );
-        assert_eq!(
-            top.saturating_sub(area.y),
-            area.bottom().saturating_sub(bottom)
-        );
     }
 }

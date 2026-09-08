@@ -57,74 +57,47 @@ executable has its own native Linux player journey.
 These commands apply after the named release exists. The first puzzle-game public
 release is `v1.0.0`; development fixture versions are not public upgrade sources.
 
-POSIX, with an existing destination directory:
+Use the copyable commands on [the installation page](https://orifude.com/install/).
+They download the complete exact-version script over HTTPS before executing it.
+For separate inspection, download the release's `install.sh` or `install.ps1`,
+read it, and verify it with `gh release verify-asset` as shown below.
+
+With version 1.0.1 and later, run the downloaded POSIX script with:
 
 ```sh
-curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
-  --output install.sh \
-  https://github.com/nuggocto/orifude/releases/download/v1.0.0/install.sh
+sh install.sh
 ```
 
-After the download succeeds, inspect `install.sh`. Then run:
+It creates `$HOME/.local/bin`. Use `--bin-dir /absolute/directory` to choose another
+location. Profiles stay unchanged. If the directory is absent from PATH, the
+installer prints the executable's full path; add the directory through your usual
+shell settings to run `orifude` by name.
 
-```sh
-sh install.sh --bin-dir "$HOME/.local/bin"
-```
-
-For a one-line Windows installation, use the [website command](https://orifude.com/install/#powershell).
-It downloads the exact release installer to a private temporary directory, checks
-its reviewed SHA-256, and runs it only after those checks pass. It then makes
-`orifude` available in the same PowerShell window. It leaves saved PATH and
-execution policy unchanged and cleans the temporary script on success and failure.
-
-To inspect the script before installing, follow these PowerShell steps in the
-same working directory. First download it:
+On Windows, run the downloaded script with:
 
 ```powershell
-curl.exe --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 `
-  --output install.ps1 `
-  https://github.com/nuggocto/orifude/releases/download/v1.0.0/install.ps1
-if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Inspect the completed file:
+It creates `%LOCALAPPDATA%\Programs\Orifude` and adds that directory to the saved
+user PATH. Close and reopen your terminal application, then run `orifude`.
+Use `-BinDir C:\your\directory` for another destination, or `-NoPath` to leave
+PATH unchanged. The command's execution-policy option applies only to its child
+process; it changes no saved policy or profile and requires no administrator.
 
-```powershell
-Get-Content -LiteralPath .\install.ps1
-```
+Version 1.0.0 keeps its original interface: create the destination first and pass
+`--bin-dir` or `-BinDir` explicitly. Its installers do not update saved PATH.
 
-After inspection, create the user-owned destination and install:
-
-```powershell
-New-Item -ItemType Directory -Force -ErrorAction Stop -Path "$env:LOCALAPPDATA\Programs\Orifude"
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -BinDir "$env:LOCALAPPDATA\Programs\Orifude"
-if ($LASTEXITCODE -ne 0) { throw 'Installation failed.' }
-& "$env:LOCALAPPDATA\Programs\Orifude\orifude.exe" --version
-```
-
-The execution policy switch allows the inspected script in this PowerShell process
-without changing saved user or machine policy. Organizational Group Policy still
-applies. [Microsoft documents the scope of this switch](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1#-executionpolicy-executionpolicy).
-
-Both installer scripts are noninteractive, never invoke sudo, and leave profiles
-and PATH unchanged. The website's Windows command additionally updates the calling
-window's PATH. In any new PowerShell window, the full path works without PATH setup:
-
-```powershell
-& "$env:LOCALAPPDATA\Programs\Orifude\orifude.exe"
-```
-
-To make the shorter `orifude` command available in future Windows terminals:
-
-1. Search Start for **Edit environment variables for your account**.
-2. Under **User variables**, select **Path**, choose **Edit**, then **New**, and
-   add `%LOCALAPPDATA%\Programs\Orifude`. Keep the existing entries.
-3. Confirm the dialogs, then close and reopen your terminal application.
-
-A failed archive download or verification leaves the existing executable intact.
-Removing the executable preserves saved progress.
+Failed archive checks preserve the existing executable. Removing the executable
+preserves saved progress.
 
 ## Publication
+
+Documentation-only changes to docs/, NOTEBOOK.md, PROJECT.md, and AGENTS.md skip
+the ordinary CI, candidate, and pack workflows. README and changelog changes still
+run them because they affect release assets. If releasing a documentation-only
+commit, dispatch CI and Release candidate manually for that exact commit. The
+publisher still requires both successful runs.
 
 Before creating a public release, approve the exact clean `shrek` commit, its
 successful ordinary CI run, and its successful candidate run. The version must

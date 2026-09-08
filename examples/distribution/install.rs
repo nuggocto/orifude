@@ -26,6 +26,7 @@ impl Installer {
             .env("XDG_CACHE_HOME", self.root.join("cache"))
             .env("LOCALAPPDATA", self.root.join("data"))
             .env("APPDATA", self.root.join("config"))
+            .env("HOME", self.root.join("home"))
             .env("TMPDIR", &self.root)
             .env("TEMP", &self.root)
             .env("TMP", &self.root)
@@ -50,6 +51,7 @@ impl Installer {
                     "-File",
                 ])
                 .arg(&self.script)
+                .arg("-NoPath")
                 .arg("-BinDir");
             command
         } else {
@@ -228,6 +230,7 @@ pub fn verify(directory: &Path, target: &str) -> Result<()> {
     )?;
     fs::remove_file(&existing)?;
     installer.execute(true)?;
+    new_destinations(&installer, target, &before)?;
     require(
         support::read(&saved, MAX_BYTES)? == b"existing player database",
         "installation changed unrelated saved data",
@@ -244,6 +247,102 @@ pub fn verify(directory: &Path, target: &str) -> Result<()> {
     }
     println!("installer_check=pass target={target}");
     Ok(())
+}
+
+fn new_destinations(installer: &Installer, target: &str, before: &[u8]) -> Result<()> {
+    let root = &installer.root;
+    let windows = installer.windows;
+    let existing = installer.destination.join(archive::binary_name(target));
+    // A first install must create its directory, including the default location.
+    fs::remove_file(&existing)?;
+    fs::remove_dir(&installer.destination)?;
+    installer.execute(true)?;
+    let default_destination = if windows {
+        root.join("data/Programs/Orifude")
+    } else {
+        root.join("home/.local/bin")
+    };
+    let mut default_command = if windows {
+        let mut command = support::command("powershell.exe");
+        command
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ])
+            .arg(&installer.script)
+            .arg("-NoPath");
+        command
+    } else {
+        let mut command = support::command("sh");
+        command.arg(&installer.script);
+        command
+    };
+    installer.environment(&mut default_command);
+    expect(&mut default_command, true)?;
+    require(
+        support::read(
+            &default_destination.join(archive::binary_name(target)),
+            MAX_BYTES,
+        )? == before,
+        "default installation differs from the verified executable",
+    )?;
+    if windows {
+        windows_path(installer)?;
+    }
+    Ok(())
+}
+
+fn windows_path(installer: &Installer) -> Result<()> {
+    let wrapper = installer.root.join("path-check.ps1");
+    fs::write(
+        &wrapper,
+        r#"
+param($Installer, $BinDir)
+$ErrorActionPreference = 'Stop'
+$Key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+$Present = $Key.GetValueNames() -contains 'Path'
+$Original = $Key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$Kind = if ($Present) { $Key.GetValueKind('Path') } else { [Microsoft.Win32.RegistryValueKind]::ExpandString }
+try {
+    $FixturePath = '%SystemRoot%\System32;C:\unrelated path'
+    $Key.SetValue('Path', $FixturePath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+    & $Installer -BinDir $BinDir -NoPath
+    if ($Key.GetValue('Path', '', 1) -cne $FixturePath) { throw 'NoPath changed saved PATH.' }
+    & $Installer -BinDir $BinDir
+    $Expected = "$BinDir;$FixturePath"
+    if ($Key.GetValue('Path', '', 1) -cne $Expected) { throw 'User PATH lost existing entries.' }
+    if ($Key.GetValueKind('Path') -ne 'ExpandString') { throw 'User PATH lost its registry type.' }
+    & $Installer -BinDir $BinDir
+    if ($Key.GetValue('Path', '', 1) -cne $Expected) { throw 'Reinstall duplicated user PATH.' }
+    $Key.SetValue('Path', "$($BinDir.ToUpperInvariant())\;$FixturePath", [Microsoft.Win32.RegistryValueKind]::String)
+    & $Installer -BinDir $BinDir
+    if ($Key.GetValue('Path', '', 1) -cne "$($BinDir.ToUpperInvariant())\;$FixturePath") {
+        throw 'An equivalent PATH entry was duplicated.'
+    }
+    if ($Key.GetValueKind('Path') -ne 'String') { throw 'String PATH changed type.' }
+} finally {
+    if ($Present) { $Key.SetValue('Path', $Original, $Kind) } else { $Key.DeleteValue('Path', $false) }
+    $Key.Dispose()
+}
+"#,
+    )?;
+    let mut command = support::command("powershell.exe");
+    command
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
+        .arg(wrapper)
+        .arg(&installer.script)
+        .arg(&installer.destination);
+    installer.environment(&mut command);
+    expect(&mut command, true)
 }
 #[cfg(unix)]
 fn unix_failures(installer: &Installer, existing: &Path) -> Result<()> {

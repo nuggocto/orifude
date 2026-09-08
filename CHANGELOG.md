@@ -5,6 +5,16 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.0.1 - 2026-09-08
+
+Install Orifude with fewer steps and clearer instructions.
+
+### Changed
+
+- Installers create a user-owned destination automatically and still accept a custom directory.
+- Windows installation adds Orifude to the user PATH, with a `-NoPath` option for custom setups.
+- Generated papers use plain instructions for playing and cancelling.
+
 ## 1.0.0 - 2026-09-07
 
 The first Orifude puzzle release brings folding, brushwork, and a growing branch

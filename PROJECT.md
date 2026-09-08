@@ -1074,17 +1074,20 @@ the installer attached to an exact immutable GitHub release. The release
 attestation gives users with GitHub CLI a separate way to verify the release and
 downloaded asset.
 
-The website keeps an inspect-first installation path. At the owner's request,
-Windows also offers one copyable line that downloads the complete installer to
-a private temporary directory, checks its SHA-256 against the reviewed release
-record, and only then creates the destination and invokes the installer. The
-website record must take that hash from the verified immutable release asset.
-The command removes temporary content on success and failure. It adds the binary
-directory to the current window's PATH only after successful installation and
-leaves saved PATH, profiles, and execution policy unchanged. POSIX retains separate
-download and execution commands. Neither path may stream network output into a
-shell or `Invoke-Expression`. A failed transfer never runs the downloaded script
-or changes the installation destination.
+The website offers one copyable download-and-run block per platform and keeps
+script inspection and attestation verification available separately. The default
+command trusts the exact immutable GitHub release over HTTPS; it does not claim
+an independent bootstrap checksum check. It finishes a bounded transfer into a
+private temporary directory before execution and removes that directory on exit.
+Neither path streams code into a shell or Invoke-Expression. A failed transfer
+never runs the script. The installer still verifies its embedded archive hash.
+
+Installers create a user-owned destination after the archive verifies: $HOME/.local/bin
+on POSIX and %LOCALAPPDATA%\Programs\Orifude on Windows. Both accept an explicit
+absolute directory. POSIX leaves profiles unchanged and explains PATH when needed.
+Windows adds the directory to the saved user PATH after installation, preserving
+existing entries and their registry type. -NoPath opts out. Machine PATH, profiles,
+and saved execution policy remain unchanged.
 
 ### Classic POSIX installer
 
@@ -1106,7 +1109,7 @@ The POSIX installer must:
 - Use a private temporary directory and clean it on every exit.
 - Refuse unknown operating systems and architectures.
 - Never run `sudo` without an explicit user choice.
-- Install into an explicit destination and explain PATH changes.
+- Offer a default user-owned destination, an explicit override, and explain PATH changes.
 - Preserve an existing binary until the new binary verifies.
 - Provide a documented noninteractive mode with bounded inputs.
 

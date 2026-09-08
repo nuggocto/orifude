@@ -1,6 +1,9 @@
-# Download this complete file, inspect it, then run it with -BinDir DIRECTORY.
+# Download this complete file before running it. Use -BinDir to choose a directory.
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)][ValidateLength(1, 4096)][string]$BinDir)
+param(
+    [ValidateLength(1, 4096)][string]$BinDir = (Join-Path $env:LOCALAPPDATA 'Programs\Orifude'),
+    [switch]$NoPath
+)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Version = '@VERSION@'
@@ -10,10 +13,11 @@ if ([Environment]::OSVersion.Platform -ne 'Win32NT' -or
     [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne [Runtime.InteropServices.Architecture]::X64) {
     throw 'Only Windows x86_64 is supported.'
 }
-if (-not [IO.Path]::IsPathRooted($BinDir) -or -not (Test-Path -LiteralPath $BinDir -PathType Container)) {
-    throw 'Installation directory must be absolute and already exist.'
+if ($BinDir -notmatch '^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+\\)' -or $BinDir.Contains(';')) {
+    throw 'Installation directory must be absolute and contain no semicolon.'
 }
-$BinDir = (Get-Item -LiteralPath $BinDir).FullName
+$BinDir = [IO.Path]::GetFullPath($BinDir)
+if ($BinDir.Length -gt [IO.Path]::GetPathRoot($BinDir).Length) { $BinDir = $BinDir.TrimEnd('\', '/') }
 $Destination = Join-Path $BinDir 'orifude.exe'
 if (Test-Path -LiteralPath $Destination) {
     $Item = Get-Item -Force -LiteralPath $Destination
@@ -56,6 +60,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or $ActualVersion -cne "orifude $Version") {
         throw 'Downloaded executable version mismatch or execution failure.'
     }
+    [void][IO.Directory]::CreateDirectory($BinDir)
     $Stage = Join-Path $BinDir ('.orifude-install-' + [Guid]::NewGuid().ToString('N') + '.exe')
     [IO.File]::Copy($Binary, $Stage, $false)
     if ([IO.File]::Exists($Destination)) {
@@ -65,7 +70,39 @@ try {
         [IO.File]::Move($Stage, $Destination)
     }
     Write-Output "Installed Orifude $Version in $BinDir."
-    Write-Output 'Add this directory to your user PATH if needed. Saved progress is unchanged.'
+    if (-not $NoPath) {
+        # Preserve expandable entries and the registry value type; never rewrite machine PATH.
+        $EnvironmentKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+        try {
+            $UserPath = [string]$EnvironmentKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            $Entries = @($UserPath -split ';' | Where-Object {
+                [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\', '/') -ieq $BinDir
+            })
+            if ($Entries.Count -eq 0) {
+                $Kind = if ($EnvironmentKey.GetValueNames() -contains 'Path') {
+                    $EnvironmentKey.GetValueKind('Path')
+                } else { [Microsoft.Win32.RegistryValueKind]::ExpandString }
+                $NewPath = if ($UserPath) { "$BinDir;$UserPath" } else { $BinDir }
+                $EnvironmentKey.SetValue('Path', $NewPath, $Kind)
+                if (-not ('OrifudeEnvironment' -as [type])) { Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class OrifudeEnvironment {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr window, uint message,
+        UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
+}
+'@
+                }
+                $Result = [UIntPtr]::Zero
+                [void][OrifudeEnvironment]::SendMessageTimeout([IntPtr]0xffff, 0x001a,
+                    [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$Result)
+            }
+        } finally { $EnvironmentKey.Dispose() }
+        Write-Output 'Close and reopen your terminal, then run orifude to play.'
+    } else {
+        Write-Output "Run $Destination to play. PATH was left unchanged."
+    }
 } finally {
     if ($Stage -and (Test-Path -LiteralPath $Stage)) { Remove-Item -LiteralPath $Stage -Force }
     if (Test-Path -LiteralPath $Work) { Remove-Item -LiteralPath $Work -Recurse -Force }
