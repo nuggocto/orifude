@@ -19,6 +19,10 @@ isolated-test-paths = []
 name = "orifude"
 path = "src/main.rs"
 
+[[test]]
+name = "cli"
+required-features = ["isolated-test-paths"]
+
 [package.metadata.orifude.platforms.linux]
 minimum-kernel = "5.10"
 targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]

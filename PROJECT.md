@@ -1074,10 +1074,17 @@ the installer attached to an exact immutable GitHub release. The release
 attestation gives users with GitHub CLI a separate way to verify the release and
 downloaded asset.
 
-The website presents separate commands to download the installer to a named
-file, inspect it, and run it only after the transfer succeeds. It must not
-publish pipe-to-shell or pipe-to-`Invoke-Expression` commands. A failed transfer
-never invokes an interpreter or changes the installation destination.
+The website keeps an inspect-first installation path. At the owner's request,
+Windows also offers one copyable line that downloads the complete installer to
+a private temporary directory, checks its SHA-256 against the reviewed release
+record, and only then creates the destination and invokes the installer. The
+website record must take that hash from the verified immutable release asset.
+The command removes temporary content on success and failure. It adds the binary
+directory to the current window's PATH only after successful installation and
+leaves saved PATH, profiles, and execution policy unchanged. POSIX retains separate
+download and execution commands. Neither path may stream network output into a
+shell or `Invoke-Expression`. A failed transfer never runs the downloaded script
+or changes the installation destination.
 
 ### Classic POSIX installer
 
@@ -1200,8 +1207,10 @@ but does not imitate an interactive terminal.
 The top navigation and landing-page installation links open `/install/`.
 Show every verified installation method directly on the page. Each command
 has a Copy button with success and failure feedback, and remains selectable
-without JavaScript. Keep installer downloads separate from execution. The Arch
-Linux command is `yay -S orifude-bin`, with yay already installed.
+without JavaScript. The Windows one-line command must finish downloading and
+verify the installer before execution, as defined in Installer trust. Keep an
+inspect-first alternative available. The Arch Linux command is
+`yay -S orifude-bin`, with yay already installed.
 
 ### Changelog page
 

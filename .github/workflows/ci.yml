@@ -78,6 +78,12 @@ jobs:
           install_args: "--locked rust"
           cache: "false"
 
+      - name: Check Windows lint policy
+        if: runner.os == 'Windows'
+        env:
+          MISE_GITHUB_TOKEN: ""
+        run: mise run lint
+
       - name: Exercise the complete player journey
         env:
           MISE_GITHUB_TOKEN: ""

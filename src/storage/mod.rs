@@ -2001,6 +2001,13 @@ fn create_managed_directory(path: &Path) -> Result<(), StorageError> {
     create_private_directory(path)
 }
 
+#[cfg_attr(
+    not(unix),
+    expect(
+        clippy::unnecessary_wraps,
+        reason = "The shared interface is fallible when setting Unix permissions."
+    )
+)]
 fn set_private_file(file: &File) -> Result<(), StorageError> {
     #[cfg(unix)]
     {
@@ -2012,6 +2019,13 @@ fn set_private_file(file: &File) -> Result<(), StorageError> {
     Ok(())
 }
 
+#[cfg_attr(
+    not(unix),
+    expect(
+        clippy::unnecessary_wraps,
+        reason = "The shared interface is fallible when synchronizing Unix directories."
+    )
+)]
 fn sync_directory(path: &Path) -> Result<(), StorageError> {
     #[cfg(unix)]
     File::open(path)?.sync_all()?;

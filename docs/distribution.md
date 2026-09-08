@@ -71,7 +71,14 @@ After the download succeeds, inspect `install.sh`. Then run:
 sh install.sh --bin-dir "$HOME/.local/bin"
 ```
 
-PowerShell, with an existing user-owned destination directory:
+For a one-line Windows installation, use the [website command](https://orifude.com/install/#powershell).
+It downloads the exact release installer to a private temporary directory, checks
+its reviewed SHA-256, and runs it only after those checks pass. It then makes
+`orifude` available in the same PowerShell window. It leaves saved PATH and
+execution policy unchanged and cleans the temporary script on success and failure.
+
+To inspect the script before installing, follow these PowerShell steps in the
+same working directory. First download it:
 
 ```powershell
 curl.exe --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 `
@@ -80,19 +87,40 @@ curl.exe --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 `
 if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }
 ```
 
-Inspect the completed file before executing it:
+Inspect the completed file:
 
 ```powershell
+Get-Content -LiteralPath .\install.ps1
+```
+
+After inspection, create the user-owned destination and install:
+
+```powershell
+New-Item -ItemType Directory -Force -ErrorAction Stop -Path "$env:LOCALAPPDATA\Programs\Orifude"
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -BinDir "$env:LOCALAPPDATA\Programs\Orifude"
+if ($LASTEXITCODE -ne 0) { throw 'Installation failed.' }
+& "$env:LOCALAPPDATA\Programs\Orifude\orifude.exe" --version
 ```
 
 The execution policy switch allows the inspected script in this PowerShell process
 without changing saved user or machine policy. Organizational Group Policy still
 applies. [Microsoft documents the scope of this switch](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1#-executionpolicy-executionpolicy).
 
-Create the chosen directory separately if it does not exist. Both installers are
-noninteractive, never invoke sudo, and leave profiles and PATH unchanged. Add the
-directory to your user PATH through your normal shell or operating-system settings.
+Both installer scripts are noninteractive, never invoke sudo, and leave profiles
+and PATH unchanged. The website's Windows command additionally updates the calling
+window's PATH. In any new PowerShell window, the full path works without PATH setup:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Orifude\orifude.exe"
+```
+
+To make the shorter `orifude` command available in future Windows terminals:
+
+1. Search Start for **Edit environment variables for your account**.
+2. Under **User variables**, select **Path**, choose **Edit**, then **New**, and
+   add `%LOCALAPPDATA%\Programs\Orifude`. Keep the existing entries.
+3. Confirm the dialogs, then close and reopen your terminal application.
+
 A failed archive download or verification leaves the existing executable intact.
 Removing the executable preserves saved progress.
 

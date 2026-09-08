@@ -1219,3 +1219,251 @@ local build with SHA-256
 `ac183771aa2b34941bc8ba9af3cd159f15ad6016f347dc0c9253abb7e76f093d`.
 QA verdict: PASS; release recommendation: ship. The previously documented hero
 overflow is resolved.
+
+## Windows installation review (2026-09-08)
+
+Reviewed native commit
+[`cd06897`](https://github.com/nuggocto/orifude/commit/cd068971af8af5632ef962596b20cae91432d086),
+frontend commit
+[`2d2a781`](https://github.com/nuggocto/orifude-front/commit/2d2a781f751ada5acd96db089cb91326ace518b7),
+the [live installation page](https://orifude.com/install/), and the actual immutable
+`v1.0.0` installer. Both worktrees were clean before review. The host was Windows
+11 Home x64, build 26200, with Windows PowerShell 5.1.26100.9278 and Rust 1.98.1.
+The review changed no application, installer, website, or release code.
+
+The reported transcript contains two successful 3,836-byte script downloads, not
+an installer invocation. PowerShell's `>>` is a continuation prompt, and the
+`$LASTEXITCODE` guard prints nothing after success. The normal website destination
+had no `orifude.exe`, and command lookup found no `orifude`. This supports a missed
+execution step, not a broken archive or an execution-policy failure.
+
+The website's [instruction presentation](https://github.com/nuggocto/orifude-front/blob/2d2a781f751ada5acd96db089cb91326ace518b7/src/components/Install.astro#L31-L50)
+has two practical gaps. Its introduction says the next command creates the
+destination, but that first block only downloads. Inspection has no concrete
+command, and the two Copy buttons do not visibly name Download versus Install.
+The page also leaves user-PATH setup unspecified and gives no full-path launch
+alternative. [The installer](scripts/release/install.ps1.in#L67-L68) deliberately
+leaves PATH unchanged, so a successful installation does not by itself make the
+bare `orifude` command available. Recommended corrections are explicit Download,
+Inspect, Install, and Verify/Open steps, followed by concrete optional user-PATH
+instructions. These are review findings, not implemented changes.
+
+Release and installer attestation verification passed with `gh release verify`
+and `gh release verify-asset`. Installer SHA-256 was
+`6c9c350f406bd2cc901a84f34130ec324ce6772536038bd581ef57d9c77de4e3`;
+its embedded Windows archive hash was
+`0029b225ec99877ba86351bbbef4e77b0a446e26465d144137ccc47ef26ab91b`.
+The unchanged public script ran with the [documented process-policy invocation](docs/distribution.md#installing-an-exact-published-version)
+and an owned temporary destination containing spaces. A child process first
+confirmed inherited Restricted policy; the installer process used Bypass without
+changing saved policy. Clean installation and reinstallation passed, producing
+`orifude 1.0.0` and identical executable SHA-256
+`03621d0e36333ff26adc1fd586b0dac21ee1ddcad9aee63cc215bccf57fa9f50`.
+
+Missing destination and directory-as-executable conflicts returned their intended
+errors. A private script copy with an intentionally wrong expected archive hash
+rejected the genuine download and preserved the installed executable byte for
+byte. The public script itself was not modified. Installer staging and owned test
+installations were removed, and process, user, and machine PATH remained unchanged.
+The host's saved CurrentUser policy remained RemoteSigned. The published binary
+passed help, version, verification and solving of all three
+[example puzzles](puzzles/example-pack), and clean noninteractive startup rejection.
+These commands do not open player storage.
+
+Mise was unavailable on this host, so verification used the Cargo commands from
+its [task definitions](mise.toml) directly:
+
+- `cargo test --locked --test terminal_pty --features isolated-test-paths`: seven
+  native ConPTY journeys passed; the disposable-host packaged journey remained
+  ignored. This was a local debug build, not the downloaded executable.
+- `cargo test --locked --test cli --example distribution --features isolated-test-paths`:
+  all eleven CLI tests and twelve release-tool tests passed.
+
+Source review found a separate developer-test safety issue:
+[CLI tests](tests/cli.rs#L20-L35) inject `ORIFUDE_TEST_ROOT` without requiring the
+feature that makes [runtime path resolution](src/storage/paths.rs#L22-L36) honor
+it. Running the default-feature CLI suite on Windows can therefore install or
+remove example packs in real player storage. This is a high-confidence source
+finding, not a destructive reproduction and not the cause of the reported
+download behavior. Require `isolated-test-paths` for storage-mutating CLI tests;
+the documented mise tasks already enable it.
+
+QA verdict: PASS WITH KNOWN ISSUES for the tested installation path; no new release
+recommendation. No installer defect was reproduced. Browser clipboard tests prove
+[copy fidelity](https://github.com/nuggocto/orifude-front/blob/2d2a781f751ada5acd96db089cb91326ace518b7/tests/browser/install.spec.ts),
+not execution of the rendered blocks in Windows PowerShell. That integrated
+clipboard journey was not rerun. The downloaded game's full interactive journey
+was not run under the owner's real profile; Windows platform directories cannot
+be safely redirected by environment variables alone. Existing
+[hosted public-player evidence and minimum-platform limits](docs/release-qa.md)
+still apply. This review does not establish Windows 10 minimum-version support,
+terminal-GUI behavior, or a fresh Scoop installation.
+
+## One-line Windows installation (2026-09-08)
+
+The owner requested one copy-and-paste Windows installation command. The local
+[frontend generator](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/src/lib/releases.ts) now returns one line
+instead of separate download and execution blocks. This changes website guidance,
+not the immutable `v1.0.0` installer or game. The
+[installer trust contract](PROJECT.md#installer-trust) records the new flow, and
+the [distribution guide](docs/distribution.md#installing-an-exact-published-version)
+keeps an explicit inspect-first alternative, full-path launch, and optional
+Windows user-PATH instructions.
+
+```text
+releases.json: powershellSha256 -> installationInstructions -> Copy
+Copy -> curl.exe (HTTPS, 1 MiB, 120 seconds) -> Get-FileHash
+Get-FileHash -> powershell.exe -File -> process PATH -> ready message
+download, verification, or execution failure -> finally cleanup
+```
+
+The command scopes ordinary variables and error preferences with `& { ... }`.
+It downloads into a fresh temporary directory, checks the script against its
+reviewed SHA-256 before creating the destination, and runs the downloaded file
+with process-scoped Bypass. It never streams network bytes into an interpreter.
+Successful installation moves the destination to the front of the calling
+window's PATH without duplicate entries. Saved PATH, profiles, and execution
+policy remain unchanged. Both success and failure remove the temporary script.
+Like the existing installer, this assumes an account-owned temporary directory;
+it does not establish fresh ACLs for a custom shared TEMP location.
+
+[Release metadata](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/src/content/releases.json) now requires an
+installer hash whenever PowerShell is advertised. Release attestation verification
+again confirmed `6c9c350f406bd2cc901a84f34130ec324ce6772536038bd581ef57d9c77de4e3`
+for the unchanged script. Missing or malformed hashes fail the site build.
+[The page](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/src/components/Install.astro) explains that the command
+installs immediately, needs no administrator window, and makes `orifude` available
+in that window. It links the exact script and inspect-first guide. Linux and
+macOS instructions retain their existing installation flow.
+
+The [Windows execution tests](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/tests/windows-install.test.mjs)
+run the generated text in real PowerShell 5.1, replacing only the transfer with
+a local fixture. They cover installation, replacement, PATH precedence, a failed
+transfer containing complete executable bytes, changed script bytes, and a
+nonzero installer exit. Each uses owned paths containing spaces and an apostrophe
+and checks unchanged saved settings. A bounded process owner terminates the whole
+fixture process tree; its stalled-descendant regression proves the exclusive file
+lock is released before cleanup. All six tests passed twice after that correction.
+The [new Windows CI job](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/.github/workflows/check.yml) runs these
+tests and the static build. It has not been dispatched from this local work.
+
+The initial one-command regression failed against the old two-block generator.
+Removing the download-exit and script-hash guards then made the corresponding
+failure tests fail. Restoring both guards returned them to passing. Review also
+caught an existing destination left behind competing PATH entries; its new
+regression failed before the command was changed to move the destination first.
+This avoids reporting success while a bare command still selects an older copy.
+
+On Windows 11 Home x64 build 26200, PowerShell 5.1.26100.9278, Node 24.19.0, and
+pnpm 11.3.0, all 30 data and execution tests passed, including the process-lifetime
+regression. Final Astro checks reported no errors, warnings, or hints.
+The static build and its script-integrity policy passed. Chromium copied the
+actual rendered 1,236-character command through native paste, and that exact text
+installed and reinstalled the public release under an isolated destination.
+Bare `orifude --version` resolved to that installation and returned `orifude 1.0.0`;
+executable SHA-256 remained
+`03621d0e36333ff26adc1fd586b0dac21ee1ddcad9aee63cc215bccf57fa9f50`.
+Temporary installations and processes were removed. No interactive game was
+opened and no player data was changed.
+
+Native Windows frontend QA exposed two existing portability problems. Git had
+converted the hashed changelog snapshot to CRLF; a targeted
+[Git attribute](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/.gitattributes) now preserves its exact LF bytes.
+Re-importing the same canonical commit restored the existing hash without changing
+the notes. The browser fixture's directory symlink also required Windows privileges;
+it now uses an unprivileged junction on Windows. Neither correction weakens a
+verification check. Reflow testing then caught the newly displayed Windows path
+overflowing on narrow screens; allowing inline installation code to wrap fixed it.
+Desktop, 390-pixel, and 320-pixel captures were inspected.
+
+The final browser run passed 37 of 39 cases, including every Chromium and Firefox
+case and reflow in all three engines. Two unchanged tests still fail in the Windows
+WebKit port: native paste reads the previous clipboard despite `writeText` resolving,
+and Tab skips the initial link. Both fail before reaching the changed command.
+Source review found matching port behavior in the
+[Playwright 1.63.0 clipboard patch](https://github.com/microsoft/playwright/blob/v1.63.0/browser_patches/webkit/patches/bootstrap.diff#L6677-L6696)
+and WebKit's
+[Windows link-focus default](https://github.com/WebKit/WebKit/blob/4d05d732e5a84f32675bef4cc135a2e7a9269a87/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml#L8238-L8248).
+No assertions were removed or skipped to conceal those results. Screenshots,
+the first browser-failure evidence, and the public-install result are under
+`../orifude-front/.preview/windows-one-line/`; the final failures remain in
+`../orifude-front/test-results/`.
+
+QA verdict: PASS WITH KNOWN ISSUES for the Windows command; no release recommendation
+until normal hosted frontend checks run. The Windows WebKit findings do not establish
+a Safari regression. Shared-TEMP ACLs, Group Policy restrictions, forced interruption
+of the real installer, and minimum Windows versions were not exercised. Production
+deployment, published assets, and package channels were left unchanged. The separate
+native CLI-test isolation issue from the preceding review is outside this change.
+
+## Windows verification and publication (2026-09-08)
+
+The owner authorized fixing the remaining review issues, committing both
+repositories, and publishing the website change. The frontend now has an explicit
+browser-host matrix: Windows runs all Chromium and Firefox cases, while Linux CI
+retains all Chromium, Firefox, and WebKit cases. No browser assertions or test
+cases were removed. Native Windows WebKit is excluded as an automation target,
+not represented as fixed or passing.
+
+Controlled probes corrected the earlier clipboard hypothesis. Headless Windows
+WebKit can read its new clipboard value through the API while native paste still
+uses the external clipboard. Its unchanged Copy test passed twice in headed mode,
+but the keyboard test still failed because ordinary links are not tab stops in
+that port's default configuration. Playwright 1.63.0 exposes no Windows launch
+option to change that preference. This is why the verified WebKit host remains
+Linux instead of adding test-directed tabindex attributes or weakening paste
+assertions. The [frontend guide](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/README.md#checks) states that
+limitation explicitly.
+
+The investigation also found that Windows killed the external preview process
+without running its signal cleanup. [Global setup](https://github.com/nuggocto/orifude-front/blob/963f7dbe68b6ff4a53d3773328a8b4c3391f08a6/tests/preview.mjs)
+now owns both servers and returns teardown to Playwright. It unlinks the shared
+dependency junction before deleting its own release fixture. Two default Windows
+browser runs passed all 26 cases with three workers and no retries. Separate
+occupied-port checks for 4331 and 4332 failed as intended; all four runs removed
+their fixtures, released their ports, and retained the real dependency directory.
+An abrupt kill of the test runner or host can still bypass in-process teardown.
+
+The native [CLI test target](Cargo.toml) now requires `isolated-test-paths`.
+An explicit no-feature invocation is refused by Cargo before a test or child game
+starts; the feature-enabled suite still runs all eleven cases. This closes the
+earlier test-isolation finding without changing runtime path selection or adding
+a production environment override.
+
+Native Windows Clippy also found two intentional fallible interfaces whose work
+exists only on Unix. [The storage helpers](src/storage/mod.rs) now carry targeted
+non-Unix lint expectations explaining that contract. They preserve the same
+runtime behavior and error propagation on every platform. The
+[Windows native job](.github/workflows/ci.yml) now runs the lint task as well as
+its existing player journey, so Windows-only diagnostics cannot remain hidden
+behind Linux lint coverage.
+
+Local Windows verification passed Rust formatting, warning-denied all-target
+Clippy, all 245 platform-applicable Rust tests, and the doctest. The explicitly
+disposable-host packaged journey remains excluded from an ordinary player account.
+Frontend checks passed all 30 data and PowerShell execution tests, zero Astro
+diagnostics, the static build, and the dependency audit. The native application,
+release version, installer scripts, and published archive bytes have no functional
+change. Hosted and live publication evidence is recorded after those operations
+finish below.
+
+The [first frontend preview check](https://github.com/nuggocto/orifude-front/actions/runs/34239519460)
+passed all 39 Linux browser cases but rejected the Windows installer fixture's
+temporary path. An owned short-path reproduction showed Node retaining an 8.3
+alias while .NET expanded it to the long directory name. The
+[fixture correction](https://github.com/nuggocto/orifude-front/commit/42c1041)
+canonicalizes the newly created root before deriving child paths. All six tests
+then passed twice under a real short-path TEMP. Separate inside, outside-sibling,
+and parent-traversal probes confirmed that the containment guard remains strict.
+The original failure remains evidence; it was not retried without a correction.
+
+The [Cloudflare preview](https://b7d53319.orifude-front.pages.dev) passed live
+Chromium checks at 1440, 390, and 320 pixels. Native paste matched the generated
+one-line command exactly, with SHA-256
+`e708394a8c6d030475e227a157589bc36aa2ba91a0387f5256a6e9a8c25aa155`.
+Those copied bytes installed and reinstalled the public game under owned paths,
+and bare version output and executable bytes matched the earlier artifact record.
+CSP and SRI matched the canonical Git bytes of the clipboard script, not a Windows
+checkout's converted line endings. All four routes had the expected status and
+policy, and no test installation or process remained. Production promotion waits
+for the corrected hosted Windows check.
