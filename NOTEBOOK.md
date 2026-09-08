@@ -1467,3 +1467,65 @@ CSP and SRI matched the canonical Git bytes of the clipboard script, not a Windo
 checkout's converted line endings. All four routes had the expected status and
 policy, and no test installation or process remained. Production promotion waits
 for the corrected hosted Windows check.
+
+## Windows production verification (2026-09-08)
+
+The [next hosted check](https://github.com/nuggocto/orifude-front/actions/runs/34248449542)
+passed the installer tests but exposed another short-path fixture problem:
+Astro omitted the release fixture's stylesheet when its directory used an 8.3
+alias. The [browser fixture correction](https://github.com/nuggocto/orifude-front/commit/10dc2da)
+resolves the owned directory before building. The four failing release cases were
+reproduced locally without changing their assertions, then passed after the fix.
+Two full Windows browser runs under short-path TEMP also passed all 26 cases and
+cleaned their fixtures. The [final cleanup correction](https://github.com/nuggocto/orifude-front/commit/649176b)
+registers installer-fixture cleanup before fallible path resolution.
+
+Native commit
+[`38dc571`](https://github.com/nuggocto/orifude/commit/38dc571846b1be39901f111dc44828a02ba10491)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34248590445),
+all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34248590446),
+and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34248590412).
+This includes Windows lint, all five native player targets, candidate installer
+and package checks, and the Linux distribution checks. The native changes are
+test isolation, lint annotations, CI, and documentation, not new game behavior
+or replacement release assets.
+
+Frontend commit
+[`649176b`](https://github.com/nuggocto/orifude-front/commit/649176ba31fdf34b7d02b0befc9dc9a739259cbe)
+passed both jobs in the [preview check](https://github.com/nuggocto/orifude-front/actions/runs/34250419875)
+and again in the [production-branch check](https://github.com/nuggocto/orifude-front/actions/runs/34250940521).
+The matrix runs 39 Linux browser cases, 26 Windows browser cases, and the six
+native PowerShell fixture cases alongside the data and build checks. The
+[final preview](https://827a9ca0.orifude-front.pages.dev) was verified before that
+same commit was promoted to `shrek`.
+
+[Production](https://orifude.com/install/#powershell) now serves the one-line
+Windows command from [deployment 1f53637a](https://1f53637a.orifude-front.pages.dev).
+Live Chromium verification checked the landing page, installation page,
+changelog, real 404, images, CSP, SRI, and reflow at 1440, 390, and 320 pixels.
+Native Copy/paste produced exactly 1,236 characters matching the reviewed command
+hash `e708394a8c6d030475e227a157589bc36aa2ba91a0387f5256a6e9a8c25aa155` before execution.
+Those production-copied bytes installed and reinstalled public `1.0.0` using
+PowerShell 5.1 with a Restricted parent and isolated installation directories.
+Bare `orifude --version` selected that installation and returned `orifude 1.0.0`
+both times. The installer and executable hashes match the earlier reviewed
+artifacts. Test installations and processes were removed; saved PATH, policy,
+clipboard, and player data were preserved. Evidence is retained under
+`../orifude-front/.preview/windows-publication/orifude.com-6rms3W/`.
+
+An initial production-status wait followed a superseded Cloudflare building
+check. Refreshing the commit's current check results found the separate successful
+deployment check. That was a verification mistake, not a stalled deployment.
+The subsequent production journey above ran against the successful deployment.
+
+The temporary `windows-install-review` branch was removed only after confirming
+it pointed to the same commit as frontend `shrek`. Both repositories now have
+only `shrek` locally and on GitHub, with no open PRs. No PR was created during
+this work. Release tags, immutable assets, and package channels were left intact.
+
+QA verdict: PASS WITH KNOWN ISSUES; recommendation: ship. There are no outstanding
+blockers in the checked installation and publication scope. Cloudflare's known
+injected 404 markup remains blocked by CSP, with no challenge request, iframe,
+or cookie observed. Native Windows WebKit is not claimed as fixed; its full
+browser assertions run on Linux instead. Existing minimum-OS, terminal-GUI,
+and custom shared-TEMP limitations remain unchanged.
