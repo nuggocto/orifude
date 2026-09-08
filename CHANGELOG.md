@@ -12,7 +12,7 @@ Install Orifude with fewer steps and clearer instructions.
 ### Changed
 
 - Installers create a user-owned destination automatically and still accept a custom directory.
-- Windows installation adds Orifude to the user PATH, with a `-NoPath` option for custom setups.
+- Windows installation adds Orifude to the user PATH, with a -NoPath option for custom setups.
 - Generated papers use plain instructions for playing and cancelling.
 
 ## 1.0.0 - 2026-09-07

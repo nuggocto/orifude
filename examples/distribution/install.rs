@@ -302,10 +302,13 @@ fn windows_path(installer: &Installer) -> Result<()> {
         r#"
 param($Installer, $BinDir)
 $ErrorActionPreference = 'Stop'
+# .NET expands Windows TEMP's 8.3 alias when the installer resolves its destination.
+$BinDir = [IO.Path]::GetFullPath($BinDir)
 $Key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
 $Present = $Key.GetValueNames() -contains 'Path'
 $Original = $Key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 $Kind = if ($Present) { $Key.GetValueKind('Path') } else { [Microsoft.Win32.RegistryValueKind]::ExpandString }
+$ProcessPath = $env:PATH
 try {
     $FixturePath = '%SystemRoot%\System32;C:\unrelated path'
     $Key.SetValue('Path', $FixturePath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
@@ -313,8 +316,13 @@ try {
     if ($Key.GetValue('Path', '', 1) -cne $FixturePath) { throw 'NoPath changed saved PATH.' }
     & $Installer -BinDir $BinDir
     $Expected = "$BinDir;$FixturePath"
-    if ($Key.GetValue('Path', '', 1) -cne $Expected) { throw 'User PATH lost existing entries.' }
+    if ($Key.GetValue('Path', '', 1) -cne $Expected) {
+        throw "User PATH differs: expected '$Expected', got '$($Key.GetValue('Path', '', 1))'."
+    }
     if ($Key.GetValueKind('Path') -ne 'ExpandString') { throw 'User PATH lost its registry type.' }
+    $env:PATH = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + $Key.GetValue('Path')
+    if ((orifude --version) -cne $env:ORIFUDE_EXPECTED_VERSION) { throw 'Saved PATH does not launch Orifude.' }
+    $env:PATH = $ProcessPath
     & $Installer -BinDir $BinDir
     if ($Key.GetValue('Path', '', 1) -cne $Expected) { throw 'Reinstall duplicated user PATH.' }
     $Key.SetValue('Path', "$($BinDir.ToUpperInvariant())\;$FixturePath", [Microsoft.Win32.RegistryValueKind]::String)
@@ -324,6 +332,7 @@ try {
     }
     if ($Key.GetValueKind('Path') -ne 'String') { throw 'String PATH changed type.' }
 } finally {
+    $env:PATH = $ProcessPath
     if ($Present) { $Key.SetValue('Path', $Original, $Kind) } else { $Key.DeleteValue('Path', $false) }
     $Key.Dispose()
 }
@@ -340,7 +349,11 @@ try {
         ])
         .arg(wrapper)
         .arg(&installer.script)
-        .arg(&installer.destination);
+        .arg(&installer.destination)
+        .env(
+            "ORIFUDE_EXPECTED_VERSION",
+            format!("orifude {}", archive::version()?),
+        );
     installer.environment(&mut command);
     expect(&mut command, true)
 }

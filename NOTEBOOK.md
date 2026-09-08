@@ -1565,3 +1565,19 @@ bump updates both application and fuzz lockfiles without changing dependencies.
 Public installer QA uses -NoPath for its disposable custom destination; candidate
 QA separately checks saved PATH and restores it. Windows change notification
 follows [Microsoft's documented broadcast](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-settingchange).
+
+The first [candidate run](https://github.com/nuggocto/orifude/actions/runs/34266737980)
+passed every archive build, packaged player journey, and package-channel check,
+but the Windows PATH fixture compared an 8.3 TEMP alias with its expanded path.
+The [isolated Windows probe](https://github.com/nuggocto/orifude/actions/runs/34268053323)
+confirmed the installer preserved the existing raw PATH entries and value type.
+The fixture now resolves its expected destination and also launches the game
+using the saved PATH. No installer weakening or production workaround was needed.
+The temporary diagnostic branch will be removed after verification.
+
+The local Linux candidate passed installer failures, defaults, custom destinations,
+reinstall, and the packaged save/restart/replay journey. Frontend browser checks
+found and fixed a narrow-screen overflow in the optional checksum section; all
+39 cases then passed on Chromium, Firefox, and WebKit. A deliberately broken
+POSIX launcher was rejected by its failed-transfer regression before the original
+command was restored. Windows launcher tests remain assigned to native CI.
