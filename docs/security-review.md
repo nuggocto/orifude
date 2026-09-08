@@ -159,3 +159,20 @@ judgment still governs authorship, license rights, and puzzle quality. Repositor
 administrators and the underlying hosted runner remain trusted. This review does
 not claim that a validator can prove artistic quality, license ownership, or
 protection against a compromised maintainer or hosting provider.
+
+## Installer simplification on 2026-09-08
+
+Version 1.0.1 creates user-owned default installation directories after verifying
+the archive. Windows saves only the user PATH, preserves raw expandable entries
+and their registry type, and offers -NoPath. Profiles, machine PATH, and saved
+execution policy remain unchanged. Candidate QA covers default and custom paths,
+failed transfers and checksums, safe replacement, opt-out, and saved PATH behavior.
+
+The shorter website command deliberately trusts the exact immutable GitHub release
+over HTTPS. The default launcher no longer checks a separately reviewed script
+hash; script inspection, the reviewed PowerShell hash, and GitHub attestation
+verification remain available separately. This tradeoff is explicit in
+[PROJECT.md](../PROJECT.md#installer-trust). Bounded complete transfers, temporary
+cleanup, embedded archive checksums, and verification before replacement remain.
+Native public installation and package evidence is linked in the
+[release QA record](release-qa.md#101-publication-decision-on-2026-09-08).

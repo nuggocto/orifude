@@ -1,6 +1,34 @@
 # Release QA
 
-## Current publication decision on 2026-09-07
+## 1.0.1 publication decision on 2026-09-08
+
+Release verdict: **PASS WITH KNOWN ISSUES**. Recommendation: **ship** within the
+existing supported-platform evidence limits described below. This patch changes
+installer defaults and player messages; it changes no save schema or dependency.
+
+Signed commit [4800168](https://github.com/nuggocto/orifude/commit/480016875b6ac7296f3c36915999aa2e39dd10b7)
+passed all seven [CI jobs](https://github.com/nuggocto/orifude/actions/runs/34268188969),
+all eleven [candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34268188948),
+and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34268188806).
+The first candidate exposed a Windows TEMP path-alias mismatch in installer QA.
+The corrected fixture passed without weakening its PATH assertions; the notebook
+links the failure and isolated diagnosis.
+
+[Orifude 1.0.1](https://github.com/nuggocto/orifude/releases/tag/v1.0.1) was published
+at 19:31:19 UTC as an immutable release. Publication checked the signed tag,
+compared the complete draft with the candidate, then verified the release and all
+eight asset attestations. Use its [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.1/SHA256SUMS)
+for archive hashes. The PowerShell script SHA-256 is
+`c0879a523df2bab1102359784431015da15d85aa08c50749504f7947d33c87e8`.
+
+All five [public installer journeys](https://github.com/nuggocto/orifude/actions/runs/34269489611)
+and all four [public package journeys](https://github.com/nuggocto/orifude/actions/runs/34270233779)
+passed, including installed-byte checks, play, save, restart, and replay. Homebrew,
+Scoop, and AUR now use the verified 1.0.1 archives. Existing minimum-OS, terminal-GUI,
+and Cloudflare 404 limitations remain unchanged; these hosted runs do not establish
+coverage that the original release did not have.
+
+## 1.0.0 publication decision on 2026-09-07
 
 Release verdict: **PASS WITH KNOWN ISSUES**. Recommendation: **ship**. On
 2026-09-07 the owner approved publication, waived the `www` redirect, and reported

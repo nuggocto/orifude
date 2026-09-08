@@ -1573,7 +1573,7 @@ The [isolated Windows probe](https://github.com/nuggocto/orifude/actions/runs/34
 confirmed the installer preserved the existing raw PATH entries and value type.
 The fixture now resolves its expected destination and also launches the game
 using the saved PATH. No installer weakening or production workaround was needed.
-The temporary diagnostic branch will be removed after verification.
+The temporary diagnostic branch was removed and its workflow disabled after verification.
 
 The local Linux candidate passed installer failures, defaults, custom destinations,
 reinstall, and the packaged save/restart/replay journey. Frontend browser checks
@@ -1581,3 +1581,55 @@ found and fixed a narrow-screen overflow in the optional checksum section; all
 39 cases then passed on Chromium, Firefox, and WebKit. A deliberately broken
 POSIX launcher was rejected by its failed-transfer regression before the original
 command was restored. Windows launcher tests remain assigned to native CI.
+
+## Verified 1.0.1 publication and website (2026-09-08)
+
+[Release 1.0.1](https://github.com/nuggocto/orifude/releases/tag/v1.0.1) is immutable
+and points to signed [4800168](https://github.com/nuggocto/orifude/commit/480016875b6ac7296f3c36915999aa2e39dd10b7).
+The exact commit passed [CI](https://github.com/nuggocto/orifude/actions/runs/34268188969),
+the complete [candidate matrix](https://github.com/nuggocto/orifude/actions/runs/34268188948),
+and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34268188806).
+The publisher compared all draft bytes with that candidate and verified the
+published release and all eight asset attestations. The original 1.0.0 assets
+remain unchanged.
+
+All five [public installer journeys](https://github.com/nuggocto/orifude/actions/runs/34269489611)
+passed before package publication. Homebrew [de5c63a](https://github.com/nuggocto/homebrew-tap/commit/de5c63a),
+Scoop [3716bc4](https://github.com/nuggocto/scoop-bucket/commit/3716bc4), and AUR
+commit 93d628c now use 1.0.1. All four [public package journeys](https://github.com/nuggocto/orifude/actions/runs/34270233779)
+then passed before the website advertised those channels. Each journey checks
+installed bytes and exercises play, save, restart, and replay.
+
+The four Unix archives matched the first candidate byte for byte. Windows
+produced different archive bytes on its second build, so the final PowerShell
+script and Scoop metadata use only the final candidate's checksum. This is not
+a claim of reproducible independent Windows builds. The final script SHA-256 is
+`c0879a523df2bab1102359784431015da15d85aa08c50749504f7947d33c87e8`.
+
+Frontend [9c5daca](https://github.com/nuggocto/orifude-front/commit/9c5dacac4cf042acd60f7e9e03d6d252858cec9c)
+is on shrek and passed both [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34271138988).
+That includes 39 Linux browser cases, 26 Windows browser cases, native PowerShell
+launcher tests, POSIX launcher tests on Linux, and the static data/build checks.
+The full frontend dependency audit reported no known vulnerabilities. The README
+is now 50 lines, with a separate 114-line maintenance guide; together they are
+shorter than the previous 205-line README. The visible PowerShell command fell
+from 1,236 to 646 characters.
+
+[Production](https://orifude.com/install/) serves the reviewed version from
+[deployment 4e84316b](https://4e84316b.orifude-front.pages.dev). Live Chromium checks
+verified the landing, install, changelog, and real 404 responses and their CSP.
+All seven copy buttons pasted exactly the reviewed command text. The expanded
+installation page fit at 1440, 390, and 320 pixels. The production-copied POSIX
+command installed and reinstalled 1.0.1 under private paths. Its executable SHA-256
+was `acdbe164d00f5b41534b4a4091e47868bd0dbb4f8a8ae50ba4f2a18a718d2ae6`, matching
+the verified archive. The test profile and saved-data file were unchanged, and
+all temporary installation files were removed. Local evidence is retained under
+`../orifude-front/.preview/cleanup/`. Both temporary diagnostic branches are gone.
+
+The [release QA record](docs/release-qa.md#101-publication-decision-on-2026-09-08)
+and [security review](docs/security-review.md#installer-simplification-on-2026-09-08)
+record the result and bootstrap tradeoff. Existing minimum-OS, terminal-GUI, native
+Windows WebKit, and Cloudflare 404 limitations remain explicit; none was silently
+claimed as fixed. Documentation-only commits now skip the expensive native and
+browser matrices, while manual dispatch remains available for exact-commit release
+checks.
