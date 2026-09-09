@@ -1,10 +1,10 @@
 # Building and distributing Orifude
 
-The game needs no network connection or interpreter. Release tooling is the Rust
-[distribution example](../examples/distribution.rs), built with the pinned compiler
-through mise. Its archive and JSON dependencies are development-only. Installer QA
-uses OpenSSL for a private loopback HTTPS fixture. The artifact matrix comes from the platform metadata
-in [Cargo.toml](../Cargo.toml).
+Release tooling is the Rust [distribution example](../examples/distribution.rs),
+built with the pinned compiler through mise. Start with the
+[contributor setup](../CONTRIBUTING.md#build-and-check). Its archive and JSON
+dependencies are development-only; installer QA uses OpenSSL for private loopback
+HTTPS. The artifact matrix comes from [Cargo.toml](../Cargo.toml).
 
 ## Candidate archives
 
@@ -37,30 +37,26 @@ removes only the new state it created. On macOS and Windows use a disposable
 account because platform directory APIs are not reliably redirected by environment
 variables. Do not run package-channel checks on an ordinary player account.
 
-The candidate workflow builds and tests every target without publication secrets.
-It preserves `release-set` as a workflow artifact. The archive tests cover order,
-metadata, checksums, unexpected members, links, traversal, and architecture.
-Repacking identical inputs is deterministic. This alone does not establish that
-independent compilers or different operating-system images produce identical
-executable bytes.
+The candidate workflow tests every target without publication secrets and retains
+`release-set` as an artifact. Archive checks reject altered checksums, unsafe
+members, and wrong architectures. Repacking identical inputs is deterministic;
+independent compiler output is not promised. Generate all hashes and package
+metadata from one candidate set.
 
-The installer tests render a private copy pointing at a local HTTPS fixture.
-Published scripts have fixed GitHub release URLs and no fixture URL override.
-The private Windows copy passes its fixture CA directly to curl; it leaves the
-account certificate store unchanged. Package-manager fixtures use local archive URLs. Homebrew and Scoop
-upgrade tests use a package metadata revision with the same verified executable.
-The Arch job assembles both architectures and installs x86_64 natively; the ARM
-executable has its own native Linux player journey.
+Installer fixtures use private script copies and local HTTPS. Published scripts
+have fixed release URLs. Windows passes the fixture CA directly to curl without
+changing the certificate store. Package fixtures use local archives; Homebrew and
+Scoop exercise upgrades through a metadata revision. Arch installs x86_64 natively
+and assembles ARM packages, whose binaries have separate native player checks.
 
 ## Installing an exact published version
-
-These commands apply after the named release exists. The first puzzle-game public
-release is `v1.0.0`; development fixture versions are not public upgrade sources.
 
 Use the copyable commands on [the installation page](https://orifude.com/install/).
 They download the complete exact-version script over HTTPS before executing it.
 For separate inspection, download the release's `install.sh` or `install.ps1`,
-read it, and verify it with `gh release verify-asset` as shown below.
+read it, and verify it with `gh release verify-asset` as shown below. The
+[security overview](security-review.md#installers-and-publication) explains the
+bootstrap trust assumptions.
 
 With version 1.0.1 and later, run the downloaded POSIX script with:
 
@@ -93,11 +89,10 @@ preserves saved progress.
 
 ## Publication
 
-Documentation-only changes to docs/, NOTEBOOK.md, PROJECT.md, and AGENTS.md skip
-the ordinary CI, candidate, and pack workflows. README and changelog changes still
-run them because they affect release assets. If releasing a documentation-only
-commit, dispatch CI and Release candidate manually for that exact commit. The
-publisher still requires both successful runs.
+Changes only to `docs/`, `CONTRIBUTING.md`, `IDEAS.md`, or `AGENTS.md` skip ordinary
+CI, candidate, and pack workflows. README and changelog changes still run them
+because they affect release assets. For a release from a documentation-only
+commit, dispatch CI and Release candidate for that exact commit first.
 
 Before creating a public release, approve the exact clean `shrek` commit, its
 successful ordinary CI run, and its successful candidate run. The version must
@@ -107,7 +102,7 @@ publication finishes.
 Inspect the exact proposed asset set without writing anything:
 
 ```sh
-mise run release-publish -- v1.0.0 APPROVED_COMMIT CANDIDATE_RUN_ID
+mise run release-publish -- vX.Y.Z APPROVED_COMMIT CANDIDATE_RUN_ID
 ```
 
 Adding `--publish` creates a draft with the complete archive, checksum, and
@@ -116,23 +111,22 @@ rechecks commit and tag identity, then publishes and verifies the immutable rele
 It refuses a preexisting release so a partial attempt requires inspection instead
 of silently replacing assets. Release immutability must already be enabled.
 
-The separate publication workflow defaults to this dry run. Its `release`
-environment permits only `shrek`. Actual publication uses the `release` environment's `RELEASE_TOKEN`: a token restricted to this
-repository, with contents write, actions read, and administration read for checking
-immutability. Do not put a broad personal token in that secret. Local publication
-can instead use the release operator's GitHub CLI session. No publisher credential
-is passed to ordinary checks or candidate builds.
+The publication workflow defaults to a dry run. Its `release` environment permits
+only `shrek`. `RELEASE_TOKEN` needs access only to this repository, with contents
+write, actions read, and administration read for the immutability check. Local
+publication can use the operator's GitHub CLI session. Ordinary checks and
+candidate builds receive no publisher credential.
 
 After publication, users and automation can verify the release and a local asset:
 
 ```sh
-gh release verify v1.0.0 --repo nuggocto/orifude
-gh release verify-asset v1.0.0 ARCHIVE --repo nuggocto/orifude
+gh release verify vX.Y.Z --repo nuggocto/orifude
+gh release verify-asset vX.Y.Z ARCHIVE --repo nuggocto/orifude
 ```
 
-These checks need a real published release attestation. A fixture or draft cannot
-establish that evidence. The publisher stops before any package update if release
-verification fails.
+Replace `vX.Y.Z` with the release tag and `ARCHIVE` with the downloaded file.
+These checks require a published release attestation. Package updates stop if
+release verification fails.
 
 The `Published release verification` workflow runs in two parts. Dispatch
 `installers` after GitHub publication and before updating package repositories;

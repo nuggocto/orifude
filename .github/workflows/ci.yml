@@ -3,11 +3,11 @@ name: CI
 on:
   push:
     branches: [shrek]
-    paths-ignore: ['docs/**', 'NOTEBOOK.md', 'PROJECT.md', 'AGENTS.md']
+    paths-ignore: ['docs/**', 'CONTRIBUTING.md', 'IDEAS.md', 'AGENTS.md']
     tags: ["v*"]
   pull_request:
     branches: [shrek]
-    paths-ignore: ['docs/**', 'NOTEBOOK.md', 'PROJECT.md', 'AGENTS.md']
+    paths-ignore: ['docs/**', 'CONTRIBUTING.md', 'IDEAS.md', 'AGENTS.md']
   workflow_dispatch:
 
 permissions:

@@ -19,4 +19,4 @@ prove uniqueness or replace a maintainer's judgment about puzzle quality.
 
 The publication workflow requires the operator to attest to this review against
 the exact source commit. Download, checksum, installation, and play verification
-are recorded in the [working notebook](../../NOTEBOOK.md).
+are recorded in [release QA](../release-qa.md#pack-publication-verification-on-2026-09-07).

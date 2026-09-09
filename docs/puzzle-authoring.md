@@ -124,14 +124,36 @@ brushes = [
 ```
 
 Line lengths are between 2 and 12 cells. A puzzle may declare at most 44 fold
-rules, 23 brush rules, 12 fold actions, and 8 brush actions. The full limits
-are kept in [`PROJECT.md`](../PROJECT.md#explicit-v1-bounds).
+rules, 23 brush rules, 12 fold actions, and 8 brush actions.
 
 `par`, tutorial cues, per-puzzle author and license, and `solution` are
 optional. A solution uses zero-based row and column values because it is file
 data; the TUI shows the same positions starting at 1. Orifude replays a supplied
 solution through the production engine during validation and rejects the whole
 pack if it does not solve the target exactly.
+
+## Limits
+
+The [pack loader](../src/packs/mod.rs), [text parser](../src/packs/format.rs),
+and [domain types](../src/domain/puzzle.rs) enforce these limits before play:
+
+| Resource | Maximum |
+| --- | --- |
+| Puzzle / metadata / note file | 64 / 32 / 16 KiB |
+| Puzzles / regular files per pack | 128 / 256 |
+| ZIP input / expanded content | 8 / 16 MiB |
+| Pack or puzzle ID | 64 ASCII bytes |
+| Path depth / component / relative path | 4 components / 80 ASCII bytes / 128 ASCII bytes |
+| Title / description | 80 / 512 Unicode scalar values |
+| Authors | 16 entries, 80 Unicode scalar values each |
+| Tutorial cues | 16 entries, 512 Unicode scalar values each |
+| SPDX license expression | 128 bytes |
+| Recorded solution | 64 actions, subject to the puzzle's fold and stroke budgets |
+
+Required display text must contain a non-whitespace character. Text fields and
+notes reject control characters. The validator reports at most 32 issues at once;
+fix those and check again. A player can install up to 32 packs with 512 MiB of
+managed content in total.
 
 ## Writing useful papers
 

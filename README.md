@@ -1,6 +1,6 @@
 # Orifude
 
-Orifude is a quiet puzzle game for your terminal. Fold a small sheet of paper,
+It is a quiet puzzle game for your terminal. Fold a small sheet of paper,
 brush ink through its layers, then open it to match a pattern.
 
 Play at your own pace. There is no timer, and you can undo a move or start over
@@ -95,13 +95,9 @@ solve your puzzles, and how to submit them through a pull request. Automated
 checks validate each submission, and a maintainer reviews the puzzles, writing,
 and license before publishing a ZIP and checksum on the website.
 
-## About the project
+## LICENSE
 
-Orifude is a coined name inspired by folding and brushwork. The project is open
-source under the [Apache 2.0 license](LICENSE).
+The project is open source under the [Apache 2.0 license](LICENSE).
 
-For contributors, [PROJECT.md](PROJECT.md) describes the game, its architecture,
-and the development workflow. [NOTEBOOK.md](NOTEBOOK.md) records implementation
-decisions and verification results. A
-[terminal recording of the first paper](docs/recordings/journey.cast) is also
-available to replay with an asciicast v2 player.
+The [contributor guide](CONTRIBUTING.md) covers building, testing, and the code
+layout. Possible future additions are collected in [IDEAS.md](IDEAS.md).

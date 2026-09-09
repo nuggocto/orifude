@@ -1,178 +1,79 @@
-# Security review
+# Security overview
 
-This review covers the native game, local author commands, puzzle packs,
-archives, paths, SQLite state, terminal I/O, configuration, CI, the locked
-product graph, and the separate fuzz-tool graph as they stand on 2026-09-04.
-It protects files outside Orifude's data root, saved progress, terminal state,
-and contributor machines from malformed or malicious local input.
+Orifude runs offline and treats local packs, archives, saved data, command-line
+arguments, and terminal input as untrusted. The controls below protect saved
+progress, terminal state, and files outside its managed directories. This is a
+description of the current design, not a guarantee that every defect is absent.
 
-The original review excluded the static website, release publication, installers,
-and package repositories. Their later assessment is recorded below.
+## Local input and storage
 
-A later [code review](https://github.com/nuggocto/orifude/blob/cc4c0654d8993f8f392d7d3c9917c61b689e31cf/docs/code-review-2026-09-04.md) found gaps in ZIP catalog
-validation and event shutdown, plus a puzzle-revision persistence defect.
-The [correction record](../NOTEBOOK.md#review-corrections-on-2026-09-04) explains
-the fixes and their focused regressions. The earlier verdict below is retained
-as historical evidence, not as the final assessment of those paths.
+| Boundary | Controls and source |
+| --- | --- |
+| Commands and errors | [CLI](../src/cli.rs) accepts a fixed grammar. [Error output](../src/main.rs) replaces control characters and stops after eight causes or 16 KiB. |
+| TOML and replay data | [Pack parsing](../src/packs/format.rs) and [replay decoding](../src/storage/replay.rs) check byte limits, reject undeclared fields, validate domain values, and execute supplied solutions through the production engine. |
+| Archives and paths | [Pack loading](../src/packs/mod.rs) bounds input, file count, and expanded bytes. [ZIP preflight](../src/packs/archive.rs) rejects ambiguous catalogs, duplicate paths, traversal, links, special files, and unsupported archive forms before installation. |
+| SQLite | [Storage](../src/storage/mod.rs) checks paths, takes an exclusive process lock, validates schemas and rows, and uses parameterized statements and transactions. Capacity limits preserve space for essential progress writes. |
+| Installed packs | Private staging, a pending-operation record, and registry reconciliation make installation recoverable. Fingerprints detect changed content before play. Source directories are never removal targets. |
+| Terminal | [Input](../src/tui/event.rs) has a bounded queue. External text cannot emit terminal controls. [Terminal ownership](../src/tui/terminal.rs) tracks acquired capabilities and retries failed restoration steps. |
 
-```mermaid
-flowchart LR
-    Local["Local bytes, paths,<br/>arguments, terminal input"] --> Bounds["Size, count, syntax,<br/>type, and text bounds"]
-    Bounds --> Meaning["Domain construction,<br/>replay, and fingerprint checks"]
-    Meaning --> State["One owned paper<br/>and bounded SQLite state"]
-    State --> Output["Bounded safe text<br/>and terminal lifecycle"]
-    Archive["ZIP metadata"] --> Preflight["8 MiB input, 256 files,<br/>16 MiB extracted"]
-    Preflight --> Bounds
-    CI["Locked crates and<br/>pinned CI actions"] --> Build["Read-only checks<br/>without release secrets"]
-```
+The [authoring guide](puzzle-authoring.md#limits) gives pack limits, and the
+[contributor guide](../CONTRIBUTING.md#resource-limits-and-verification) records
+storage and runtime bounds. Application code denies unsafe Rust, and release
+builds retain checked arithmetic and panic unwinding.
 
-## Source-to-effect review
+## Installers and publication
 
-| Source | Validation before retention or effect | Effect | Evidence |
-| --- | --- | --- | --- |
-| Command-line arguments | [`cli`](../src/cli.rs) accepts a fixed grammar and never reflects rejected bytes. [`SafeErrorReport`](../src/main.rs) replaces controls, follows at most eight causes, and stops at 16 KiB. | Starts the TUI or one bounded author command. | [`cli`](../tests/cli.rs) covers hostile, non-UTF-8, and unsupported arguments plus bounded SQLite and archive errors. |
-| Pack metadata | [`parse_metadata`](../src/packs/format.rs) checks the 32 KiB byte limit before UTF-8 and strict TOML parsing. IDs use portable ASCII. Text has scalar, nonblank, and control-character checks. Licenses are bounded SPDX expressions. Counts stop before retained allocation. | Creates immutable display metadata and the declared puzzle list. | [`packs`](../tests/packs.rs) covers empty, blank, long, malformed, mixed-script, combining, control, count, license, and undeclared-field cases. |
-| Puzzle files | [`parse_puzzle`](../src/packs/format.rs) checks the 64 KiB limit, strict TOML, dimensions, grids, rules, budgets, coordinates, display text, and the 64-action solution limit. Accepted solutions execute through the production engine and must match exactly. | Creates a validated [`Puzzle`](../src/domain/puzzle.rs), optional guidance, and an optional verified replay. | [`packs`](../tests/packs.rs), [`engine`](../tests/engine.rs), and [`content`](../tests/content.rs) cover malformed structures, independent issues, action failure atomicity, replay equivalence, and every built-in paper. |
-| Replay documents | [`decode_replay_bytes`](../src/storage/mod.rs) checks 64 KiB before strict TOML decoding. Every nested record rejects undeclared fields. Domain constructors check all coordinates and counts, and playback must succeed against the embedded revision before storage returns it. | Drives read-only keepsake playback or proves saved completion. | [`storage`](../tests/storage.rs) covers oversized, unsuccessful, mismatched, corrupt, and undeclared nested data. [`session`](../src/tui/session.rs) tests bounded forward and reverse playback for every built-in replay. |
-| ZIP archives | [`validate_archive_bytes`](../src/packs/mod.rs) checks the 8 MiB compressed limit. The [`archive`](../src/packs/archive.rs) preflight rejects split and ZIP64 catalogs, excessive entries, paths, depth, names, types, compression methods, per-file size, and the 16 MiB extracted total before installation. | Produces the same bounded validated file map as a directory source. It never extracts attacker-selected paths. | [`packs`](../tests/packs.rs) covers traversal, absolute and device names, links, duplicates, excessive catalogs, compressed input, extracted size, and undeclared files. [`archive_parser`](../fuzz/fuzz_targets/archive_parser.rs) exercises the public byte boundary under AddressSanitizer. |
-| Directory pack paths | Directory walking streams at most 256 declared regular files. It rejects symbolic and hard links, portable-name conflicts, unexpected directories, depth over four, components over 80 bytes, and relative paths over 128 bytes. | Reads validated bytes, then writes only fingerprint-named files below private staging. | [`packs`](../tests/packs.rs) and [`storage`](../tests/storage.rs) cover links, outside markers, conflicts, fingerprint drift, malicious installs, and every durable install state. |
-| SQLite file and rows | [`Storage::open`](../src/storage/mod.rs) rejects a linked database or managed root, takes one advisory lock, recovers a hot journal, checks schema markers and integrity, sets SQLite runtime limits, and caps the main file at 128 MiB. Mutations use parameterized statements and transactions. Stored text and fingerprints are revalidated on read. | Stores settings, progress, best solutions, bounded history, daily identity, registry rows, and one pending install. | [`storage`](../tests/storage.rs) and [`storage_recovery`](../tests/storage_recovery.rs) cover locks, corruption, unsupported schemas, migration rollback, read-only state, capacity, transaction rollback, journal recovery, pruning, and reconciliation. |
-| Settings and environment | Platform directories come from [`AppPaths`](../src/storage/paths.rs). Persisted enum and key values are parsed through closed sets; conflicting and reserved bindings fail before a write. Test path overrides exist only behind the named integration-test feature. | Selects local directories, rendering capability, motion, glyphs, and bounded input bindings. | [`storage`](../tests/storage.rs), [`style`](../src/tui/style.rs), and [`cli`](../tests/cli.rs) cover corrupt values, conflicts, migrations, environment capability ceilings, and test-root isolation. |
-| Terminal input and output | The event worker owns Crossterm polling. One 256-entry queue preserves keys, coalesces ticks and resizes, and keeps shutdown and work completion independent. Rendering is capped at 160 by 60. External text and errors cannot emit terminal controls. Acquired terminal capabilities restore in reverse order on success, failure, panic fallback, and retry. | Updates one app/session owner and writes Ratatui frames to the active terminal. | [`event`](../src/tui/event.rs), [`terminal`](../src/tui/terminal.rs), [`text`](../src/tui/text.rs), and [`terminal_pty`](../tests/terminal_pty.rs) cover queue pressure, worker failure, output bounds, partial acquisition, failed restoration, normal quit, Ctrl-C, resize, and saved journeys. |
-| Dependencies and CI | Product and fuzz dependencies have separate lockfiles and license policies. The fuzz-only NCSA allowance belongs only to libFuzzer tooling. CI actions use immutable revisions, repository permissions are read-only, caches are disabled, jobs have timeouts, and release credentials are absent. | Builds and tests source. Current CI cannot publish. | [`deny`](../deny.toml), [`fuzz policy`](../fuzz/deny.toml), [`CI`](../.github/workflows/ci.yml), and the local credential scanner provide the repeatable checks. |
+The website's default command trusts an exact immutable GitHub release over
+HTTPS. It downloads the complete script into a fresh temporary directory before
+execution, with transfer size and time limits and cleanup. It does not independently
+authenticate the script with a second hash. Script inspection, the reviewed
+PowerShell hash, and GitHub release attestations are available separately.
 
-## Confirmed correction
+The [installer templates](../scripts/release/) embed archive checksums, validate
+the archive layout and binary version, and replace the executable only after
+verification. Version 1.0.1 creates a user-owned default directory. Windows
+updates only user PATH, preserves expandable entries and registry type, and
+offers `-NoPath`. Its execution-policy option applies to the child process;
+saved policy, machine PATH, and shell profiles remain unchanged.
 
-Required display fields rejected an empty string but accepted a string made only
-of spaces. That could create a pack or paper with an effectively blank title.
-The public metadata test reproduced the accepted value before
-[`validate_display`](../src/packs/format.rs) was changed to reject all-whitespace
-text. Mixed-script text and combining marks remain valid and are preserved.
+[Game publication](../examples/distribution/publication.rs) binds the version,
+clean source commit, signed tag, passing CI, and verified candidate before
+publishing immutable assets. Package updates verify release and asset
+attestations, use fixed remotes, and never force-push. Publication credentials
+are separate from ordinary checks. The [distribution guide](distribution.md)
+documents inspection, credential scopes, and recovery.
 
-No high- or medium-severity weakness was confirmed. The display correction is
-low severity because content must already be selected locally and the result is
-confusing presentation rather than code execution, path escape, or lost state.
+[Pack CI](../.github/workflows/packs.yml) builds trusted base code before reading
+submitted data. Validation runs in a bounded container without network access
+or credentials. [Pack publication](../.github/workflows/pack-release.yml) requires
+a committed review and maintainer attestation for the selected source commit.
+Its write job compares prepared asset bytes and verifies release attestations.
+Maintainers remain responsible for authorship, license rights, and puzzle quality.
 
-## Residual risk
+## Static website
 
-- A user who selects a directory while another process under the same account
-  changes it has not gained an isolation boundary. Installation fingerprints
-  and stages only the validated bytes it actually read.
-- Bounds, regression tests, and sanitizer campaigns reduce parser risk but do
-  not prove the absence of every defect in SQLite, TOML, ZIP, or terminal
-  dependencies.
-- Container checks can establish Linux distribution userland compatibility,
-  not a distro-owned kernel result. Native host results remain distinct in the
-  QA record.
-- Publication credentials, archive checksums, installers, and package-manager
-  permissions must receive their own review when that code exists.
+The separate frontend validates bounded release records and hash-checked
+changelog snapshots, escapes contributor text, and derives download links from
+the fixed repository. Its only application script is the optional installation
+clipboard helper, permitted by its exact hash through CSP and script integrity.
+It has no accounts, analytics, or browser game.
 
-Within this scope, the trust boundaries are explicit, bounded, and supported by
-tests that reach the actual effects rather than checking configuration alone.
+Cloudflare's injected bot-detection markup on 404 responses was observed blocked
+by CSP. Removing the injection requires zone permissions unavailable during
+release verification; the owner accepted this limitation and waived the
+`www` redirect. [Release QA](release-qa.md#coverage-and-limitations) records the
+tested scope.
 
-## Distribution and website review on 2026-09-07
+## Verification and limits
 
-Reviewed the [publisher](../examples/distribution/publication.rs),
-[archive validation](../examples/distribution/archive.rs), generated installers,
-package updates, and new [public verification](../examples/distribution/published.rs).
-Publication binds the version, clean commit, signed tag, successful CI, and exact
-candidate before creating the immutable release. Package publication requires
-release and asset attestation verification. External repository updates use fixed
-remotes, reject unexpected state, and never force-push.
+Focused regressions cover invalid input, archive escape attempts, transactions,
+recovery, and terminal restoration. `mise run audit` checks the separate product
+and fuzz dependency policies; `mise run secret-scan` checks local content and
+Git history. Sanitizer campaigns and native artifact journeys complement these
+checks. Release-specific evidence belongs in [release QA](release-qa.md).
 
-Public verification rejects incomplete or oversized assets and checks their
-attestations before using them. Downloaded installers and checksum files must
-match values derived from the verified archives. Homebrew, Scoop, and AUR metadata
-must match the generated files before package execution. The installed executable
-must match the archive bytes before the existing player journey runs. Windows Git
-may convert JSON to CRLF; the Scoop comparison restores LF before hashing, without
-changing the JSON content. Its live public path still needs Windows execution.
-
-The new manual workflow has read-only GitHub permissions, pinned actions,
-disposable hosts, and a twenty-minute job limit. No release credential enters the
-candidate or public installation jobs. The release-tool regression rejects an
-asset one byte over the limit; weakening that bound in an isolated checkout made
-the regression fail. Local dependency and license checks and the tree/history
-credential scan passed, alongside the native candidate checks recorded in
-[release QA](release-qa.md#current-publication-decision-on-2026-09-07).
-
-The frontend accepts only bounded, hash-checked changelog snapshots and reviewed
-release records, derives fixed-repository links, and escapes notes as text. Its
-release tests cover altered hashes, malformed records, hidden unverified channels,
-and injected markup. The static build has no application JavaScript and blocks
-scripts through CSP. Cloudflare still injects a blocked bot-detection script on
-404 responses, and the `www` redirect is missing. The configured Pages credential
-cannot change those zone settings; both relevant APIs returned 403. These hosting
-limitations remain recorded in the [publication record](../NOTEBOOK.md#website-publication-on-2026-09-06).
-The owner subsequently waived the redirect and approved proceeding with the
-blocked 404 injection. The restrictive CSP remains unchanged; no execution or
-tracking was observed in the browser check.
-
-Self-review: **PASS: No confirmed findings remain in the reviewed code.** Live
-release attestations and public installation paths are untested until publication.
-This code review does not close the hosting or platform evidence gaps.
-
-A subsequent command comparison caught a Windows installation failure: the
-published invocation lacked the process policy option already used by candidate
-tests. Windows clients default to Restricted, which prevents the script starting.
-The correction uses the inspected script's own process and changes no persistent
-policy. [The notebook](../NOTEBOOK.md#windows-installation-command-on-2026-09-07)
-links Microsoft's policy contract and records the regression checks. The fixture
-now verifies an inherited Restricted policy before exercising installation.
-
-Publication on 2026-09-07 closed the pending live-path verification: the release
-and all eight assets passed attestation checks, all five public installer targets
-passed, and both Homebrew architectures, Scoop, and AUR completed their public
-installation journeys. The website's release manifest was activated only after
-those checks. Its deployed HTML matches the reviewed static output. The live 404
-probe confirmed that CSP blocks the injected script, with no challenge request,
-iframe, or cookie. [Release QA](release-qa.md#current-publication-decision-on-2026-09-07)
-records the immutable commits, workflow evidence, and accepted limits.
-
-## Community pack publication on 2026-09-07
-
-Reviewed the creator data path, catalog and archive builder, container isolation,
-manual publication and recovery, and static website catalog. The authorized
-scope includes the two Orifude repositories, their workflows, the new pack
-release, and read-only verification of its downloads and website.
-
-The [pack workflow](../.github/workflows/packs.yml) uses trusted base code and
-passes only data into a bounded container without network access or credentials.
-The [publisher](../.github/workflows/pack-release.yml) requires merged source,
-its successful validation run, a review record, and explicit maintainer
-attestation. Its separate write job checks source and tag identity, artifact
-bytes, immutable publication, and release attestations. Existing releases cannot
-be replaced during recovery. The website escapes pack text and derives URLs from
-validated IDs and versions; it accepts no contributor-supplied download URL.
-
-Review corrected missing license text in the example ZIP and the live
-attestation-availability failure. Recovery now waits only on the observed missing
-attestation condition and rejects mismatched source or bytes. The
-[successful recovery run](https://github.com/nuggocto/orifude/actions/runs/34139078008)
-verified the actual published release without modifying it. Dependency policy,
-shell and workflow lint, the credential scan, and behavioral regression checks
-passed. Details and the preserved first failure are in the
-[notebook](../NOTEBOOK.md#pack-submissions-and-publication-on-2026-09-07).
-
-Verdict: PASS, with no confirmed finding remaining in this scope. Maintainer
-judgment still governs authorship, license rights, and puzzle quality. Repository
-administrators and the underlying hosted runner remain trusted. This review does
-not claim that a validator can prove artistic quality, license ownership, or
-protection against a compromised maintainer or hosting provider.
-
-## Installer simplification on 2026-09-08
-
-Version 1.0.1 creates user-owned default installation directories after verifying
-the archive. Windows saves only the user PATH, preserves raw expandable entries
-and their registry type, and offers -NoPath. Profiles, machine PATH, and saved
-execution policy remain unchanged. Candidate QA covers default and custom paths,
-failed transfers and checksums, safe replacement, opt-out, and saved PATH behavior.
-
-The shorter website command deliberately trusts the exact immutable GitHub release
-over HTTPS. The default launcher no longer checks a separately reviewed script
-hash; script inspection, the reviewed PowerShell hash, and GitHub attestation
-verification remain available separately. This tradeoff is explicit in
-[PROJECT.md](../PROJECT.md#installer-trust). Bounded complete transfers, temporary
-cleanup, embedded archive checksums, and verification before replacement remain.
-Native public installation and package evidence is linked in the
-[release QA record](release-qa.md#101-publication-decision-on-2026-09-08).
+A process already running as the same user can change that user's files;
+directory validation is not isolation from that account. Installers assume
+user-controlled temporary and destination directories. Dependency defects,
+compromised maintainers, and compromised build or hosting providers remain
+outside what parser checks and archive hashes alone can prevent.

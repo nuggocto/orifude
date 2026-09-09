@@ -1,31 +1,13 @@
 # AGENTS.md
 
-Read `PROJECT.md` before planning or changing Orifude. It defines the product,
-architecture, limits, current work, and v1 checklist.
+Read `README.md` and `CONTRIBUTING.md` before changing Orifude. Read the relevant
+guide in `docs/` for pack, security, or release work.
 
-Then read `NOTEBOOK.md`. It explains what the repository already contains, why
-important choices were made, how the work was checked, and where the evidence
-lives.
-
-## Working notebook
-
-- Keep `NOTEBOOK.md` at the repository root.
-- Update it during every project task. Record each completed implementation,
-  material decision, correction, measurement, verification result, and known
-  limitation from that work. No material project knowledge should live only in
-  chat.
-- Link each note to the most useful source, test, document, or immutable commit.
-- Write for a person joining the project. Keep the explanation plain, relaxed,
-  and short enough to scan.
-- Record outcomes and reasons, not private reasoning, raw command transcripts,
-  temporary files, credentials, or secrets.
-- Keep `PROJECT.md` as the only phase tracker. The notebook may link to its
-  build-plan sections, but it must not copy phase names, phase numbers,
-  checkboxes, or progress claims.
-- For each implemented area that benefits from a visual, place the smallest
-  useful Mermaid graph or text diagram beside its notebook explanation. Use
-  real module and state names, and show important limits when they affect the
-  flow. Skip diagrams for simple facts or one-step changes.
+Keep documentation about current behavior and useful maintenance instructions.
+Update it when those change. Record release evidence in `docs/release-qa.md` and
+pack review decisions in `docs/pack-reviews/`. Use commit messages for change
+rationale; do not add a running development diary. `IDEAS.md` holds optional
+future ideas, not implementation requirements.
 
 ## Skills
 
@@ -40,18 +22,12 @@ lives.
   supported platforms, the frontend, or a release candidate.
 - Use the `show-me` skill when ownership, data flow, control flow, state
   transitions, or dependencies are easier to understand as a graph.
-- YOU MUST always use the `unslop` skill on every prompt.
 
 ## Project rules
 
-- Keep phase names, numbers, progress, and checkboxes only in `PROJECT.md`.
-  Never put them in source, tests, filenames, configuration, comments, CLI
-  output, or other documentation.
 - Treat `shrek` as the permanent default branch. Do not rename or replace it.
 - Name code after domain behavior such as paper, fold, ink, puzzle, replay, and
   pack.
-- Update the current item and checkboxes in `PROJECT.md` only after the stated
-  behavior and verification are complete.
 - Keep Orifude a native, keyboard-driven Rust TUI that works fully offline.
 - Do not add accounts, telemetry, required network access, or hosted application
   services. Do not use AWS, GCP, Azure, or similar providers.
@@ -65,8 +41,8 @@ lives.
 - Write in simple human prose. Product writing may borrow quiet images from
   paper, ink, branches, weather, and the terminal. Use complete, natural
   sentences and never isolate a few words as a dramatic ending.
-- Follow the architecture, invariants, resource bounds, security controls,
-  testing requirements, and release channels recorded in `PROJECT.md`.
+- Preserve the architecture, compatibility rules, and resource bounds described
+  in `CONTRIBUTING.md`, and the security and release controls in `docs/`.
 - Prefer the smallest auditable change. Keep external failures recoverable and
   reserve assertions or panics for programmer-error invariants.
 - Run the checks required by the affected surface. Exercise the shipped binary
