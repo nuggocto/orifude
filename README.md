@@ -26,6 +26,10 @@ Your first visit begins with a short, playable lesson. It walks you through a
 fold, a brush stroke, and opening the paper. A terminal at least 80 columns wide
 and 24 rows tall gives everything room; the minimum is 60 by 20.
 
+On Linux with Nix and flakes enabled, run `nix run github:nuggocto/orifude/v1.0.2`.
+The [Nix guide](docs/distribution.md#nix-and-nixos) also covers installation and
+NixOS configurations.
+
 ## How a paper works
 
 Each puzzle gives you a blank sheet, a target pattern, and a few tools.
@@ -68,6 +72,11 @@ screen. You can change key bindings, colors, glyphs, and motion in Settings.
 The journey has forty handcrafted puzzles, starting with simple marks and
 building toward more layered folds. Solved papers become keepsakes: revisit one
 and press `v` to replay your solution, one move at a time.
+
+After completing a Journey paper, press `Tab` to open the next one directly.
+The shortcut appears once your result is saved, whenever another paper remains.
+You can still press `Enter` to return to the home branch, `r` to retry, `v` to
+replay, or `x` to view the text keepsake.
 
 There is also a daily paper based on your computer's date and an endless garden
 of generated puzzles. Both work offline. Completed papers and keepsakes are

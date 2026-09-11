@@ -74,6 +74,7 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
                     profile,
                     now,
                     app.group_completion(),
+                    app.next_journey_index().is_some(),
                 );
             }
         }
@@ -433,6 +434,7 @@ fn render_walkthrough(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_session(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -441,6 +443,7 @@ fn render_session(
     profile: StyleProfile,
     now: Instant,
     group_completion: Option<&crate::content::JourneyGroup>,
+    next_journey: bool,
 ) {
     let status_height = if area.width >= 80 { 7 } else { 6 };
     let regions = Layout::default()
@@ -490,9 +493,9 @@ fn render_session(
     render_session_status(frame, regions[1], session, bindings, profile, reveal_state);
     if reveal.as_ref().is_some_and(|reveal| reveal.complete) && session.saved() {
         if let Some(group) = group_completion {
-            CompletionCourier::render(frame, regions[0], group, profile);
+            CompletionCourier::render(frame, regions[0], group, profile, next_journey);
         } else if !matches!(session.source(), PlaySource::Keepsake) {
-            render_success_card(frame, regions[0], session, bindings, profile);
+            render_success_card(frame, regions[0], session, bindings, profile, next_journey);
         }
     }
 }
@@ -503,6 +506,7 @@ fn render_success_card(
     session: &PlaySession,
     bindings: KeyBindings,
     profile: StyleProfile,
+    next_journey: bool,
 ) {
     let result = session.result().expect("success card requires a result");
     debug_assert!(result.is_success());
@@ -555,30 +559,50 @@ fn render_success_card(
         GlyphMode::Unicode => " · ",
         GlyphMode::Ascii => " | ",
     };
+    let next = if next_journey {
+        format!("Tab next{separator}")
+    } else {
+        String::new()
+    };
     let controls = if matches!(session.source(), PlaySource::Lesson) {
-        format!(
+        vec![format!(
             "Enter returns to the branch{separator}{} retries",
             bindings.reset
-        )
+        )]
+    } else if next_journey && area.width < 74 {
+        vec![
+            format!("Tab next{separator}Enter back"),
+            format!(
+                "{} retry{separator}v replay{separator}x keepsake",
+                bindings.reset
+            ),
+        ]
     } else {
-        format!(
-            "Enter back{separator}{} retry{separator}v replay{separator}x keepsake",
+        vec![format!(
+            "{next}Enter back{separator}{} retry{separator}v replay{separator}x keepsake",
             bindings.reset,
-        )
+        )]
     };
     let preferred_height = if area.width >= 74 { 7 } else { 9 };
     let height = area.height.min(preferred_height);
     let card = centered(area, 74, height);
     frame.render_widget(Clear, card);
+    let lines = [
+        Line::styled(headline, profile.title()).alignment(Alignment::Center),
+        Line::from(detail).alignment(Alignment::Center),
+        Line::styled(encouragement, profile.paper()).alignment(Alignment::Center),
+    ]
+    .into_iter()
+    .chain(
+        controls
+            .into_iter()
+            .map(|line| Line::styled(line, StyleProfile::muted()).alignment(Alignment::Center)),
+    )
+    .collect::<Vec<_>>();
     frame.render_widget(
-        Paragraph::new(vec![
-            Line::styled(headline, profile.title()).alignment(Alignment::Center),
-            Line::from(detail).alignment(Alignment::Center),
-            Line::styled(encouragement, profile.paper()).alignment(Alignment::Center),
-            Line::styled(controls, StyleProfile::muted()).alignment(Alignment::Center),
-        ])
-        .block(Paper::block("Paper complete", profile))
-        .wrap(Wrap { trim: true }),
+        Paragraph::new(lines)
+            .block(Paper::block("Paper complete", profile))
+            .wrap(Wrap { trim: true }),
         card,
     );
 }
@@ -1259,19 +1283,9 @@ fn result_status_lines(
     width: u16,
 ) -> Vec<Line<'static>> {
     if let Some((opened, total, false)) = reveal {
-        return vec![
-            Line::from(format!(
-                "Opening crease {opened}/{total}; the final comparison follows."
-            )),
-            Line::styled(
-                if session.saved() {
-                    "The matched result is already saved safely."
-                } else {
-                    "The matched result is being saved before confirmation."
-                },
-                profile.paper(),
-            ),
-        ];
+        return vec![Line::from(format!(
+            "Opening crease {opened}/{total}; the final comparison follows."
+        ))];
     }
     let result = session.result().expect("result status requires a result");
     let comparison = result.comparison();
@@ -1596,14 +1610,19 @@ fn play_status_text(app: &App, separator: &str, width: u16) -> String {
                 bindings.reset, bindings.help, bindings.quit
             );
         }
-        return if width >= 70 {
+        let next = if app.next_journey_index().is_some() {
+            format!("Tab next{separator}")
+        } else {
+            String::new()
+        };
+        return if width >= 90 || (next.is_empty() && width >= 70) {
             format!(
-                "Enter back{separator}{} retry{separator}v replay{separator}x keepsake{separator}{} help{separator}{} quit",
+                "{next}Enter back{separator}{} retry{separator}v replay{separator}x keepsake{separator}{} help{separator}{} quit",
                 bindings.reset, bindings.help, bindings.quit
             )
         } else {
             format!(
-                "Enter back{separator}{} retry{separator}v{separator}x{separator}{}{separator}{} quit",
+                "{next}Enter back{separator}{} retry{separator}v{separator}x{separator}{}{separator}{} quit",
                 bindings.reset, bindings.help, bindings.quit
             )
         };
@@ -2132,6 +2151,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("compact paper renders");
@@ -2160,6 +2180,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("compact target renders");
@@ -2221,6 +2242,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("failed result renders");
@@ -2249,6 +2271,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("scrolled failed result renders");
@@ -2332,54 +2355,80 @@ mod tests {
     }
 
     #[test]
-    fn minimum_saved_result_keeps_its_return_and_export_controls_visible() {
-        let paper = &crate::content::journey()[0];
-        let mut session = PlaySession::new(
-            paper.puzzle(),
-            paper.title(),
-            paper.description(),
-            Vec::new(),
-            PlaySource::Journey(0),
-        );
+    fn failed_opening_does_not_claim_a_match_or_a_save() {
+        use crossterm::event::KeyCode;
+
         let now = Instant::now();
-        for code in [
-            crossterm::event::KeyCode::Down,
-            crossterm::event::KeyCode::Right,
-            crossterm::event::KeyCode::Char('b'),
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyCode::Enter,
-        ] {
-            session.handle_key(
-                crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
-                KeyBindings::default(),
-                now,
-                true,
-            );
+        let mut app = App::new(Settings::default(), now);
+        for code in [KeyCode::Enter, KeyCode::Enter, KeyCode::Esc, KeyCode::Enter] {
+            press(&mut app, code, now);
         }
-        session.mark_saved();
-        let backend = TestBackend::new(60, 20);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
-        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
-        terminal
-            .draw(|frame| {
-                render_session(
-                    frame,
-                    Rect::new(2, 4, 56, 13),
-                    &session,
-                    KeyBindings::default(),
-                    profile,
-                    now,
-                    None,
-                );
-            })
-            .expect("minimum result renders");
-        let text = rendered_text(&terminal);
+        let text = menu_text(&app, now, 100, 30);
+        assert!(text.contains("Opening crease"));
+        assert!(!text.contains("matched result"));
+        assert!(!text.contains("being saved"));
+
+        let text = menu_text(&app, now + std::time::Duration::from_secs(2), 100, 30);
+        assert!(text.contains("2 missing (?) and 0 extra (!)"));
+        assert!(text.contains("Enter returns to the attempt"));
+    }
+
+    #[test]
+    fn minimum_saved_result_keeps_next_return_and_export_controls_visible() {
+        use crossterm::event::KeyCode;
+
+        let paper = &crate::content::journey()[0];
+        let now = Instant::now();
+        let mut app = App::new(
+            Settings {
+                lesson_complete: true,
+                reduced_motion: true,
+                glyph_mode: GlyphMode::Ascii,
+                ..Settings::default()
+            },
+            now,
+        );
+        for code in [
+            KeyCode::Enter,
+            KeyCode::Enter,
+            KeyCode::Down,
+            KeyCode::Right,
+            KeyCode::Enter,
+            KeyCode::Enter,
+        ] {
+            press(&mut app, code, now);
+        }
+        app.completion_saved(PuzzleProgress {
+            pack_id: paper.puzzle().identity().pack_id().into(),
+            puzzle_id: paper.puzzle().identity().puzzle_id().into(),
+            attempt_count: 1,
+            best_folds: 0,
+            best_strokes: 1,
+            best_replay_id: 1,
+            updated_at_unix_seconds: 1,
+        });
+        let render_compact = |app: &App| {
+            let backend = TestBackend::new(60, 20);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
+            terminal
+                .draw(|frame| render(frame, app, profile, now))
+                .expect("compact result renders");
+            rendered_text(&terminal)
+        };
+        let text = render_compact(&app);
         assert!(text.contains("Paper complete"));
         assert!(text.contains("Congratulations, the opened paper matches."));
         assert!(text.contains("Reference path found: 0 folds and 1 stroke."));
+        assert!(text.contains("Tab next"));
         assert!(text.contains("Enter back"));
         assert!(text.contains("x keepsake"));
         assert!(text.is_ascii());
+
+        press(&mut app, KeyCode::Char('?'), now);
+        let help = render_compact(&app);
+        assert!(help.contains("Open the next Journey paper"));
+        assert!(help.contains("Esc or Enter closes help"));
     }
 
     #[test]
@@ -2474,6 +2523,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("above-reference result renders");
@@ -2510,6 +2560,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("saved replay renders");
@@ -2549,6 +2600,7 @@ mod tests {
                     profile,
                     now,
                     None,
+                    false,
                 );
             })
             .expect("completed replay renders");
@@ -2591,6 +2643,7 @@ mod tests {
                     profile,
                     Instant::now(),
                     None,
+                    false,
                 );
             })
             .expect("empty replay renders");
@@ -2696,6 +2749,7 @@ mod tests {
                     profile,
                     started,
                     None,
+                    false,
                 );
             })
             .expect("fold feedback renders");
@@ -2713,6 +2767,7 @@ mod tests {
                     profile,
                     started + std::time::Duration::from_secs(2),
                     None,
+                    false,
                 );
             })
             .expect("static feedback renders later");
@@ -2768,6 +2823,7 @@ mod tests {
                     profile,
                     started,
                     None,
+                    false,
                 );
             })
             .expect("ink state renders");

@@ -18,6 +18,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  nix:
+    name: Nix player (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and exercise the installed Nix package
+        # Docker isolates the build; no host credentials or writable checkout are mounted.
+        run: |
+          docker run --rm --cpus 2 --memory 6g --pids-limit 512 \
+            --security-opt no-new-privileges \
+            --volume "$PWD:/work:ro" --workdir /work \
+            nixos/nix@sha256:7a007c766426c1877758ddc5cb87a965ac131fc78c582ce0083d922d51ae945c \
+            nix --extra-experimental-features 'nix-command flakes' \
+              flake check path:/work --no-update-lock-file \
+              --option sandbox false --print-build-logs
+
   check:
     name: check
     runs-on: ubuntu-24.04

@@ -361,7 +361,13 @@ impl CompletionCourier {
         area: Rect,
         group: &JourneyGroup,
         profile: StyleProfile,
+        next_journey: bool,
     ) {
+        let controls = if next_journey {
+            "Tab opens the next paper. Enter returns to the branch."
+        } else {
+            "Enter returns to the changed branch."
+        };
         if area.height < 12 || area.width < 40 {
             let card = centered(area, 56, 7);
             frame.render_widget(Clear, card);
@@ -373,7 +379,7 @@ impl CompletionCourier {
                     ),
                     Line::from(format!("I carried {} home.", group.gift.label())),
                     Line::from(""),
-                    Line::from("Enter returns to the changed branch."),
+                    Line::from(controls),
                 ])
                 .block(Paper::block("A paper joins the branch", profile))
                 .alignment(Alignment::Center)
@@ -393,7 +399,7 @@ impl CompletionCourier {
                     format!("{} is complete. I carried {gift} home.", group.title),
                     profile.title(),
                 ),
-                Line::from("Enter returns to the changed branch."),
+                Line::from(controls),
             ])
             .collect::<Vec<_>>();
         frame.render_widget(
@@ -928,6 +934,7 @@ mod tests {
                         Rect::new(0, 0, 60, height),
                         &content::journey_groups()[0],
                         profile,
+                        true,
                     );
                 })
                 .expect("completion card renders");
@@ -941,6 +948,7 @@ mod tests {
 
             assert!(text.contains("Ink on paper is complete"));
             assert!(text.contains("a first leaf"));
+            assert!(text.contains("Tab opens the next paper"));
             assert!(text.contains("Enter returns"));
             assert!(text.is_ascii());
         }

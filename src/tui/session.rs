@@ -40,6 +40,7 @@ pub(crate) enum SessionEvent {
     ConfirmReset,
     Save,
     Back,
+    NextJourneyPaper,
     Replay,
     Export([String; 3]),
     Error(String),
@@ -429,6 +430,13 @@ impl PlaySession {
                 self.result = None;
                 self.draft = first_available_draft(&self.attempt);
                 SessionEvent::Render
+            }
+            KeyCode::Tab
+                if result.is_success()
+                    && self.saved
+                    && matches!(self.source, PlaySource::Journey(_)) =>
+            {
+                SessionEvent::NextJourneyPaper
             }
             KeyCode::Char(character) if character == bindings.reset => {
                 self.reset();
@@ -948,6 +956,10 @@ mod tests {
         let state = session.attempt().state_key();
         session.handle_key(key(KeyCode::Esc), KeyBindings::default(), now, true);
         session.handle_key(key(KeyCode::Enter), KeyBindings::default(), now, true);
+        assert_eq!(
+            session.handle_key(key(KeyCode::Tab), KeyBindings::default(), now, true),
+            SessionEvent::None
+        );
         assert!(session.result().is_some_and(|result| !result.is_success()));
         session.handle_key(key(KeyCode::Enter), KeyBindings::default(), now, true);
         assert_eq!(session.attempt().state_key(), state);

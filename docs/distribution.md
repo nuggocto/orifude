@@ -168,6 +168,49 @@ AUR uses the operator's dedicated `aur@sshmoi.com` SSH identity. The tooling nev
 reads or stores private key material. No AUR package other than `orifude-bin` is
 published.
 
+## Nix and NixOS
+
+The source flake supports Linux x86_64 and ARM64. It pins nixpkgs, rust-overlay,
+the declared Rust toolchain, and Cargo dependencies. Nix downloads the build
+inputs; the installed game works offline. This is a project flake, not a package
+in the nixpkgs collection.
+
+With Nix and flakes enabled, play an exact release or install it in your profile:
+
+```sh
+nix run github:nuggocto/orifude/v1.0.2
+nix profile add github:nuggocto/orifude/v1.0.2
+```
+
+For a NixOS configuration that already uses flakes, add an input:
+
+```nix
+inputs.orifude.url = "github:nuggocto/orifude/v1.0.2";
+```
+
+Pass the input into your modules through `specialArgs`, or use it in an inline
+module in the flake's outputs:
+
+```nix
+{ pkgs, ... }: {
+  environment.systemPackages = [
+    orifude.packages.${pkgs.stdenv.hostPlatform.system}.default
+  ];
+}
+```
+
+Here `orifude` is the input bound by the outputs function. For a separate module
+receiving `specialArgs`, include `orifude` in that module's argument list.
+Update your configuration's lockfile and rebuild through your usual NixOS
+workflow. The package uses the same per-user data paths as the other Linux builds.
+
+Maintainers run `nix flake check --no-update-lock-file` on each supported Linux
+architecture. It builds the production package, runs the Rust tests, and exercises
+the installed binary through the complete player journey. CI does this on native
+x86_64 and ARM64 runners in a pinned Nix container. Test-only features are enabled
+after installation and never enter the installed executable. Update `flake.lock`
+deliberately when changing Nix inputs, and recheck both architectures before tagging.
+
 ## Recovery
 
 If draft creation or upload fails, inspect the draft and candidate hashes before

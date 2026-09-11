@@ -237,6 +237,19 @@ impl App {
             && (self.journey_complete(index) || index == 0 || self.journey_complete(index - 1))
     }
 
+    pub(crate) fn next_journey_index(&self) -> Option<usize> {
+        let session = self.session.as_ref()?;
+        let PlaySource::Journey(index) = session.source() else {
+            return None;
+        };
+        if !session.saved() || !session.result()?.is_success() {
+            return None;
+        }
+        index
+            .checked_add(1)
+            .filter(|&next| self.journey_unlocked(next))
+    }
+
     pub(crate) fn completed_group_count(&self) -> usize {
         content::journey_groups()
             .iter()
@@ -655,6 +668,14 @@ impl App {
                 self.selection = 0;
                 AppAction::Render
             }
+            SessionEvent::NextJourneyPaper => {
+                let Some(next) = self.next_journey_index() else {
+                    return AppAction::None;
+                };
+                self.group_completion = None;
+                self.selection = next;
+                self.activate_journey()
+            }
             SessionEvent::Replay => {
                 let Some(session) = self.session.as_ref() else {
                     return AppAction::None;
@@ -962,6 +983,15 @@ impl App {
                     format!("{} restart   x keepsake   Esc back", keys.reset),
                 ]
             }
+            Screen::Play if self.next_journey_index().is_some() => vec![
+                "Paper complete".to_owned(),
+                "Tab                Open the next Journey paper".to_owned(),
+                "Enter              Return to the home branch".to_owned(),
+                format!("{}                  Retry this paper", keys.reset),
+                "v                  Replay the saved solution".to_owned(),
+                "x                  View the text keepsake".to_owned(),
+                format!("{} help   {} quit", keys.help, keys.quit),
+            ],
             Screen::Play => vec![
                 "Move and act".to_owned(),
                 "Arrows / h j k l   Move @ or choose a fold".to_owned(),
@@ -1096,6 +1126,81 @@ mod tests {
         let paper = &content::journey()[0];
 
         assert_eq!(app.replay_title(paper.puzzle()).as_ref(), paper.title());
+    }
+
+    fn solved_first_journey_paper(now: Instant) -> App {
+        let mut app = App::new(
+            Settings {
+                lesson_complete: true,
+                reduced_motion: true,
+                ..Settings::default()
+            },
+            now,
+        );
+        for code in [
+            KeyCode::Enter,
+            KeyCode::Enter,
+            KeyCode::Down,
+            KeyCode::Right,
+            KeyCode::Enter,
+        ] {
+            app.handle_key(key(code), now);
+        }
+        assert_eq!(
+            app.handle_key(key(KeyCode::Enter), now),
+            AppAction::SaveCompletion
+        );
+        app
+    }
+
+    fn save_first_journey_paper(app: &mut App) {
+        let paper = &content::journey()[0];
+        app.completion_saved(PuzzleProgress {
+            pack_id: paper.puzzle().identity().pack_id().into(),
+            puzzle_id: paper.puzzle().identity().puzzle_id().into(),
+            attempt_count: 1,
+            best_folds: 0,
+            best_strokes: 1,
+            best_replay_id: 1,
+            updated_at_unix_seconds: 1,
+        });
+    }
+
+    #[test]
+    fn next_journey_paper_waits_for_a_saved_completion() {
+        let now = Instant::now();
+        let mut app = solved_first_journey_paper(now);
+        let completed_replay = app.session().unwrap().replay();
+        assert_eq!(app.handle_key(key(KeyCode::Tab), now), AppAction::None);
+        assert_eq!(app.session().unwrap().replay(), completed_replay);
+        assert!(!app.journey_unlocked(1));
+
+        save_first_journey_paper(&mut app);
+        assert_eq!(app.handle_key(key(KeyCode::Tab), now), AppAction::Render);
+        let session = app.session().unwrap();
+        assert_eq!(session.source(), &PlaySource::Journey(1));
+        assert_eq!(session.puzzle(), content::journey()[1].puzzle());
+        assert!(session.attempt().actions().next().is_none());
+        assert!(session.result().is_none());
+        assert!(app.journey_complete(0));
+        assert!(!app.journey_complete(1));
+        assert_eq!(app.recent()[0].attempt_count, 1);
+    }
+
+    #[test]
+    fn last_journey_paper_does_not_wrap_or_leave_on_tab() {
+        let now = Instant::now();
+        let mut app = solved_first_journey_paper(now);
+        // A one-paper catalog exercises the end without coupling the test to its size.
+        app.journey = &content::journey()[..1];
+        app.journey_done.truncate(1);
+        save_first_journey_paper(&mut app);
+
+        assert_eq!(app.handle_key(key(KeyCode::Tab), now), AppAction::None);
+        assert_eq!(app.session().unwrap().source(), &PlaySource::Journey(0));
+        assert!(app.session().unwrap().saved());
+        assert_eq!(app.handle_key(key(KeyCode::Enter), now), AppAction::Render);
+        assert_eq!(app.screen(), Screen::Branch);
     }
 
     #[test]

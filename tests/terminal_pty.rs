@@ -175,6 +175,48 @@ fn player_journey(binary: &Path, state: &Path, paths: &AppPaths) {
 }
 
 #[test]
+fn next_journey_paper_opens_directly_and_preserves_each_completion() {
+    let _journey = native_journey();
+    let state = tempfile::tempdir().expect("isolated next-paper state");
+    let paths = configured_returning_player(state.path());
+    let binary = Path::new(env!("CARGO_BIN_EXE_orifude"));
+    let output = run_in_native_pty_scripted(
+        binary,
+        state.path(),
+        &[
+            PtyStep {
+                input: b"\r\rjl\r\r",
+                wait_for: b"Tab next",
+            },
+            PtyStep {
+                input: b"\t",
+                wait_for: b"Ready:",
+            },
+            PtyStep {
+                input: b"lll\r\r",
+                wait_for: b"Congratulations",
+            },
+        ],
+        b"qy",
+    );
+    assert!(
+        output.status_success,
+        "the next-paper journey exits cleanly"
+    );
+    let storage = Storage::open(paths).expect("saved player state opens");
+    for puzzle in ["first-drop", "corner-seed"] {
+        let progress = storage
+            .progress("orifude-journey", puzzle)
+            .expect("progress read")
+            .expect("each paper's completion is durable");
+        assert_eq!(
+            progress.attempt_count, 1,
+            "advancing must not resave {puzzle}"
+        );
+    }
+}
+
+#[test]
 fn revised_journey_completion_survives_a_real_player_restart() {
     use orifude::domain::paper::{BrushRule, Dimensions};
     use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};

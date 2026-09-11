@@ -5,6 +5,23 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.0.2 - 2026-09-11
+
+Continue straight to the next Journey paper after completing a puzzle.
+
+### Added
+
+- Press Tab on a saved Journey completion to open the next paper, including
+  the first paper of the next group.
+- Build and play on Linux x86_64 and ARM64 with a pinned Nix flake, or add
+  Orifude to a NixOS configuration.
+
+### Fixed
+
+- The opening animation uses neutral text until the final comparison, so
+  failed attempts no longer appear to be saving a matched result.
+- Completion controls and their help text fit the minimum 60-by-20 terminal.
+
 ## 1.0.1 - 2026-09-08
 
 Install Orifude with fewer steps and clearer instructions.

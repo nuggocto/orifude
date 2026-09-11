@@ -29,6 +29,11 @@ The production binary ignores `ORIFUDE_TEST_ROOT`. Packaged-player and
 package-manager checks need disposable accounts; follow the
 [distribution guide](docs/distribution.md) before running them.
 
+On Linux with Nix and flakes enabled, `nix build` builds the game and
+`nix flake check --no-update-lock-file` also verifies the installed player journey.
+The [Nix guide](docs/distribution.md#nix-and-nixos) describes supported systems
+and the pinned build inputs.
+
 ## Code layout
 
 | Location | Responsibility |
@@ -118,4 +123,3 @@ For packs, follow the [authoring guide](docs/puzzle-authoring.md). For release
 work, use the [distribution guide](docs/distribution.md), [security
 overview](docs/security-review.md), and [release evidence](docs/release-qa.md).
 Keep these documents current; change explanations belong in commit messages.
-
