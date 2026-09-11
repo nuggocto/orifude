@@ -4,6 +4,65 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.0.2 publication decision on 2026-09-11
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.2)
+uses signed source commit [535d9a7](https://github.com/nuggocto/orifude/commit/535d9a708ee9ecd3db79ca59923e80bd87ec59c6)
+and a verified signed annotated tag. It adds direct Journey continuation and a
+Nix flake, and corrects the opening message and compact completion controls.
+Save schemas and Cargo dependencies are unchanged. The
+[coverage limitations below](#coverage-and-limitations) still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/34604129409), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34604129309), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34604129238) passed. The first macOS ARM64 CI setup lost its rustup process to SIGKILL; that job passed on a fresh runner without a source change. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34605479565) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34606186147) passed for both Homebrew architectures, Scoop, and x86_64 AUR. |
+| Nix | [Tag CI](https://github.com/nuggocto/orifude/actions/runs/34605393560) passed both native Linux flake checks and the other seven CI jobs. The public tagged flake also passed local installation and player checks. |
+| Website | [Frontend 3d653d2](https://github.com/nuggocto/orifude-front/commit/3d653d2523d9659ec6641632ee58ec9ad37c4ef8) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34607263711), including 39 Linux and 26 Windows browser cases and native launcher fixtures. |
+
+Publication compared all eight draft assets with the candidate and verified the
+release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.2/SHA256SUMS)
+records the five archive hashes. The PowerShell script SHA-256 is
+`8456bbb2d3c056ecb1eb09bc1c87e456f5a5a2fb4b14732c09fdbc141083e97e`.
+Package updates are [Homebrew 224858f](https://github.com/nuggocto/homebrew-tap/commit/224858f623bcd2f4832ffc52fc2dd98f30734d81),
+[Scoop cc765fd](https://github.com/nuggocto/scoop-bucket/commit/cc765fddd53ac06e293b12dfae51bde0325176a5),
+and AUR commit `863f7e8bab15695be459bc023822784f6b60f66c`.
+The public AUR page and RPC index report `orifude-bin` version `1.0.2-1`.
+
+The packaged Linux musl executable has SHA-256
+`04eb9b0fc25d8fc94dc0ab400d04970a8728ebc9604ab158485adce9e13dc5e8`.
+Manual tmux checks reproduced the failed lesson opening with neutral text, then
+confirmed two missing cells. Saved Journey completions offered Tab at 100-by-30
+and 60-by-20, advanced into the next group, and kept each completion count at one.
+The last paper stayed complete after Tab and returned home with all forty saved.
+Captures remain in `/tmp/orifude-102-game-qa`; its synthetic player data was removed.
+
+Local optimized checks passed 253 tests and one doctest, along with formatting,
+shell analysis, dependency policies, and warning-denied Clippy. Independent-model
+checks, the secret scan, and five 60-second sanitizer campaigns with seed 424242
+passed. On Linux 7.2.3 x86_64 with a Ryzen AI MAX+ 395, 25 startup samples and 100
+input samples gave startup p95 111.801 ms, returning startup p95 87.036 ms, and
+input p95 5.555 ms. Ordinary play used 6,828 KiB RSS, and measured idle CPU was 0%.
+Five storage runs had p95 between 21.331 and 28.587 ms. All configured budgets
+passed. Player timing used the packaged musl binary; solver and storage helpers
+used the local GNU build. Raw measurements remain in
+`target/release-measurement-1.0.2`.
+
+The published Nix run and profile commands both reported 1.0.2. The package ran
+its installed-player journey after copying the production executable, keeping
+test-only features out of the installed game. NixOS configuration evaluation
+accepted the package; a complete NixOS system was not booted for this release.
+
+Live checks of [deployment 7ef1c694](https://7ef1c694.orifude-front.pages.dev)
+and production verified all four routes, current release text, CSP, eight exact
+clipboard pastes, and installation layout at 1440, 390, and 320 pixels. Preview
+routes retained noindex and worked with JavaScript disabled. The production-copied
+POSIX command installed and reinstalled 1.0.2 inside a disposable container,
+preserved a saved-data sentinel, cleaned its temporary files, and produced the
+exact musl executable above. Frontend captures remain under its ignored
+`.preview/release-1.0.2/` directory.
+
 ## 1.0.1 publication decision on 2026-09-08
 
 Shipped with the [coverage limitations below](#coverage-and-limitations).
@@ -104,5 +163,5 @@ The measured 1.0.0 musl executable had SHA-256
 On Linux 7.1.9 x86_64 with a Ryzen AI MAX+ 395, startup p95 was 131.243 ms,
 input p95 5.565 ms, and ordinary-play RSS 6,832 KiB. All measured budgets passed.
 These warm-filesystem lab results are a historical baseline, not measurements
-of 1.0.1 or minimum-OS performance. Solver and storage helpers used the local
+of later releases or minimum-OS performance. Solver and storage helpers used the local
 GNU build; player timing used the packaged musl binary.
