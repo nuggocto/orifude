@@ -20,6 +20,7 @@ still apply.
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34705122298) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34705496315) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/34705072050) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation commands also reported 1.0.3 in the pinned Nix container. |
+| Website | [Frontend 949c395](https://github.com/nuggocto/orifude-front/commit/949c395f1ebe7c0b4478618d7f6793e74e10bd1b) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34706049591), including 39 Linux and 26 Windows browser cases and native launcher fixtures. Cloudflare deployment succeeded. |
 
 Publication compared all eight draft assets with the candidate and verified the
 release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.3/SHA256SUMS)
@@ -29,7 +30,7 @@ Package updates are [Homebrew 8c6d023](https://github.com/nuggocto/homebrew-tap/
 [Scoop 4227efe](https://github.com/nuggocto/scoop-bucket/commit/4227efe4d7ba233f696a630497b678ae82bfa8bc),
 and AUR commit `30c6bed402976c0812d7dfa75f253f0944c3b0b2`.
 Public repository contents match the verified metadata, and the AUR package page
-reports `orifude-bin` version `1.0.3-1`.
+and RPC index report `orifude-bin` version `1.0.3-1`.
 
 The packaged Linux musl executable has SHA-256
 `d74f54c0252a312eb718d4f893fae2cc16b5b3343b1ec6019528d6dc3d7b8db9`.
@@ -58,6 +59,21 @@ observation; unrelated system load was not controlled. They establish no speedup
 over 1.0.2. Player timing used the packaged musl binary; solver and storage helpers
 used the local GNU release build. Exact commands, environment details, raw samples,
 and results remain in `target/release-measurement-1.0.3`.
+
+Live checks of [deployment 1f2cde51](https://1f2cde51.orifude-front.pages.dev)
+and production verified all four routes, current release notes, security headers,
+eight exact clipboard pastes, and installation layout at 1440, 390, and 320 pixels.
+Preview routes retained noindex, and the pages worked with JavaScript disabled.
+The production-copied POSIX command installed and reinstalled 1.0.3 in a disposable
+Arch container, preserved a saved-data sentinel, cleaned its temporary files, and
+produced the exact musl executable above. Frontend captures and checks remain
+under its ignored `.preview/release-1.0.3/` directory.
+
+Local WebKit verification required the matching Playwright container because
+the desktop lacked browser libraries. Initial container runs hit its 512-process
+limit; all thirteen unchanged cases passed with a 2,048-process limit, 1 GiB
+shared memory, and the pinned Node 24.19.0 binary. Hosted browser checks passed
+without those local environment adjustments.
 
 ## 1.0.2 publication decision on 2026-09-11
 
