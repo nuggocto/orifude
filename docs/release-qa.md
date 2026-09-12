@@ -4,6 +4,61 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.0.3 publication decision on 2026-09-12
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.3)
+uses signed source commit [54b2130](https://github.com/nuggocto/orifude/commit/54b2130bf0197a643a1f781a6818db1d0959072a)
+and a verified signed annotated tag. It normalizes valid SPDX whitespace before
+installation, repairs affected registries without changing pack files or saved
+play, and keeps the selected tool visible in compact layouts. Save schemas and
+Cargo dependencies are unchanged. The [coverage limitations below](#coverage-and-limitations)
+still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/34704505187), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34704505177), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34704505291) passed. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34705122298) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34705496315) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
+| Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/34705072050) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation commands also reported 1.0.3 in the pinned Nix container. |
+
+Publication compared all eight draft assets with the candidate and verified the
+release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.3/SHA256SUMS)
+records the five archive hashes. The PowerShell script SHA-256 is
+`6f818c68fb3034626846b09748c727ee0078b030f5a6dd140effd8810777d7ca`.
+Package updates are [Homebrew 8c6d023](https://github.com/nuggocto/homebrew-tap/commit/8c6d023be5e10579e87384d5f087396c512fbad3),
+[Scoop 4227efe](https://github.com/nuggocto/scoop-bucket/commit/4227efe4d7ba233f696a630497b678ae82bfa8bc),
+and AUR commit `30c6bed402976c0812d7dfa75f253f0944c3b0b2`.
+Public repository contents match the verified metadata, and the AUR package page
+reports `orifude-bin` version `1.0.3-1`.
+
+The packaged Linux musl executable has SHA-256
+`d74f54c0252a312eb718d4f893fae2cc16b5b3343b1ec6019528d6dc3d7b8db9`.
+Installing a tab-suffixed license with the old 1.0.2 binary reproduced the corrupt
+registry error. Listing with the packaged 1.0.3 binary repaired it; listing with
+the old binary then worked too. Regression tests verify preserved pack bytes,
+fingerprints, progress, and replays, plus transaction rollback and retry after a
+failed repair. At 60-by-20, manual tmux checks of the packaged binary confirmed
+that Tab after folding shows Open paper and Shift-Tab shows Dot brush. Captures
+remain in `/tmp/orifude-103-artifact-ui`.
+
+Local optimized checks passed 257 tests and one doctest, along with formatting,
+shell analysis, dependency policies, and warning-denied Clippy. The packaged
+player journey, independent-model checks, secret scan, and five 60-second
+sanitizer campaigns with seed 424242 passed. The campaigns completed 24,978,343
+executions across the five fuzz targets without failures.
+
+On Linux 7.2.3 x86_64 with a Ryzen AI MAX+ 395, 25 fresh and 25 returning startup
+samples gave p95 values of 111.761 and 96.740 ms. One hundred samples each gave
+input p95 5.327 ms, fold p95 5.762 ms, and brush p95 5.469 ms. Ordinary play used
+6,960 KiB RSS; the journey solver used 7,340 KiB. Measured idle CPU was 0% over
+three seconds. Five storage runs had p95 between 21.293 and 28.775 ms. The shipped
+executable is 5,741,824 bytes and its archive is 2,369,943 bytes. All configured
+budgets passed. These warm-filesystem desktop measurements include tmux and frame
+observation; unrelated system load was not controlled. They establish no speedup
+over 1.0.2. Player timing used the packaged musl binary; solver and storage helpers
+used the local GNU release build. Exact commands, environment details, raw samples,
+and results remain in `target/release-measurement-1.0.3`.
+
 ## 1.0.2 publication decision on 2026-09-11
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.2)
