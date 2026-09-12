@@ -11,6 +11,7 @@ use std::io::{self, Read};
 use std::path::Path;
 
 pub use format::{PackMetadata, PuzzleContent};
+pub(crate) use format::{license_is_valid, normalize_license};
 
 pub const CURRENT_PACK_FORMAT_VERSION: u16 = 1;
 pub const MAX_PUZZLE_BYTES: u64 = 64 * 1024;

@@ -5,6 +5,18 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.0.3 - 2026-09-12
+
+Keep installed packs usable and the selected tool visible.
+
+### Fixed
+
+- Licenses with valid SPDX whitespace no longer prevent the game from starting
+  after pack installation. Affected registry entries recover automatically,
+  preserving installed pack files, saved progress, and replays.
+- Compact terminal layouts keep the current tool visible after a fold or brush
+  stroke, including when switching to Open paper.
+
 ## 1.0.2 - 2026-09-11
 
 Continue straight to the next Journey paper after completing a puzzle.

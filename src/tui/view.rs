@@ -1458,9 +1458,7 @@ fn active_status_lines(
         }
         lines
     } else {
-        let mut lines = vec![Line::from(
-            session.action_feedback().map_or(ready, str::to_owned),
-        )];
+        let mut lines = vec![Line::from(ready)];
         if let Some(guidance) = guidance {
             lines.push(Line::styled(guidance, profile.paper()));
         }
@@ -2073,6 +2071,30 @@ mod tests {
         assert!(!text.contains("[ACTIVE]"));
         assert!(text.contains("Low to high"));
         assert!(text.contains("q quit"));
+    }
+
+    #[test]
+    fn compact_tool_selection_stays_visible_after_an_action() {
+        use crossterm::event::KeyCode;
+        let now = Instant::now();
+        let mut app = App::new(
+            Settings {
+                reduced_motion: true,
+                ..Settings::default()
+            },
+            now,
+        );
+        press(&mut app, KeyCode::Enter, now);
+        press(&mut app, KeyCode::Enter, now);
+        for (key, ready) in [
+            (KeyCode::Tab, "Ready: Open paper"),
+            (KeyCode::BackTab, "Ready: Dot brush"),
+        ] {
+            press(&mut app, key, now);
+            for (width, height) in [(60, 20), (80, 24)] {
+                assert!(menu_text(&app, now, width, height).contains(ready));
+            }
+        }
     }
 
     #[test]
@@ -2829,7 +2851,7 @@ mod tests {
             .expect("ink state renders");
         let text = rendered_text(&terminal);
         assert!(text.contains('◉'));
-        assert!(text.contains("Ink reached 2 layers. Enter opens the paper."));
+        assert!(text.contains("Ready: Open paper"));
         assert!(text.contains("0: cell 6 ink"));
         assert!(text.contains("1: cell 5 ink"));
     }

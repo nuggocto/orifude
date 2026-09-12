@@ -471,8 +471,9 @@ impl Storage {
         storage.reconcile_registered_pack_paths()?;
         storage.cleanup_orphan_packs()?;
         storage.verify_registry_bounds()?;
-        let _registered = storage.registered_packs()?;
         storage.verify_footprint()?;
+        storage.recover_pack_licenses()?;
+        let _registered = storage.registered_packs()?;
         Ok(storage)
     }
 
@@ -1241,6 +1242,50 @@ impl Storage {
         Ok(())
     }
 
+    fn recover_pack_licenses(&mut self) -> Result<(), StorageError> {
+        let registered = {
+            let mut statement = self
+                .connection
+                .prepare("SELECT pack_id, license FROM pack_registry ORDER BY pack_id LIMIT 33")?;
+            statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })?
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        if registered.len() > MAX_INSTALLED_PACKS {
+            return Err(StorageError::Corrupt);
+        }
+        let mut repairs = Vec::new();
+        for (pack_id, license) in registered {
+            if !crate::packs::license_is_valid(&license) {
+                return Err(StorageError::Corrupt);
+            }
+            if license.chars().any(char::is_control) {
+                repairs.push((pack_id, crate::packs::normalize_license(&license)));
+            }
+        }
+        if repairs.is_empty() {
+            return Ok(());
+        }
+        // Older releases accepted SPDX whitespace but rejected it on restart.
+        // Repair only registry text; pack bytes and saved play remain unchanged.
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        for (pack_id, license) in repairs {
+            let changed = transaction.execute(
+                "UPDATE pack_registry SET license = ?1 WHERE pack_id = ?2",
+                params![license, pack_id],
+            )?;
+            if changed != 1 {
+                return Err(StorageError::Corrupt);
+            }
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     fn reconcile_registered_pack_paths(&mut self) -> Result<(), StorageError> {
         let registered = {
             let mut statement = self.connection.prepare(
@@ -1929,9 +1974,8 @@ fn validate_registered_pack(pack: &RegisteredPack, managed_name: &str) -> Result
             .is_some_and(|value| !display_is_valid(value, 512))
         || pack.authors.chars().count() > 1_310
         || pack.authors.chars().any(char::is_control)
-        || pack.license.len() > 128
         || pack.license.chars().any(char::is_control)
-        || spdx::Expression::parse(&pack.license).is_err()
+        || !crate::packs::license_is_valid(&pack.license)
         || pack.extracted_bytes > crate::packs::MAX_EXTRACTED_BYTES
         || !is_fingerprint_name(managed_name)
     {

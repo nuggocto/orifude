@@ -1,6 +1,6 @@
 [package]
 name = "orifude"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 rust-version = "1.98.1"
 description = "A quiet, offline folding and ink puzzle game for the terminal"

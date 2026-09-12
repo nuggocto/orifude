@@ -298,7 +298,7 @@ pub(super) fn parse_metadata(bytes: &[u8]) -> Result<PackMetadata, PackError> {
             .into_iter()
             .map(String::into_boxed_str)
             .collect(),
-        license: document.license.into_boxed_str(),
+        license: normalize_license(&document.license),
         puzzle_ids: document.puzzles.into_boxed_slice(),
     })
 }
@@ -348,7 +348,7 @@ pub(crate) fn puzzle_from_document(
             .map(String::into_boxed_str)
             .collect(),
         author: document.author.map(String::into_boxed_str),
-        license: document.license.map(String::into_boxed_str),
+        license: document.license.as_deref().map(normalize_license),
         solution,
     })
 }
@@ -640,17 +640,29 @@ fn validate_display(
 }
 
 fn validate_license(value: &str, location: &'static str, issues: &mut Vec<PackIssue>) {
-    if value.is_empty()
-        || value.len() > MAX_LICENSE_BYTES
-        || !value.is_ascii()
-        || spdx::Expression::parse(value).is_err()
-    {
+    if !license_is_valid(value) {
         record_issue(
             issues,
             location,
             "license is not a valid bounded SPDX expression",
         );
     }
+}
+
+pub(crate) fn license_is_valid(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_LICENSE_BYTES
+        && value.is_ascii()
+        && !value
+            .chars()
+            .any(|character| character.is_control() && !character.is_whitespace())
+        && spdx::Expression::parse(value).is_ok()
+}
+
+pub(crate) fn normalize_license(value: &str) -> Box<str> {
+    // SPDX whitespace separates tokens; spaces keep the same expression safe
+    // for display and storage without changing the fingerprinted source bytes.
+    value.replace(char::is_whitespace, " ").into_boxed_str()
 }
 
 fn record_issue(

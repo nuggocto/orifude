@@ -109,6 +109,37 @@ fn display_controls_and_invalid_licenses_are_rejected() {
 }
 
 #[test]
+fn pack_and_puzzle_licenses_normalize_only_valid_spdx_whitespace() {
+    for whitespace in ["\\t", "\\n", "\\r", "\\u000b", "\\f"] {
+        let license = format!("Apache-2.0{whitespace}OR{whitespace}MIT");
+        let metadata = metadata("quiet-grove", "Quiet Grove").replace("Apache-2.0", &license);
+        assert_eq!(
+            validate_metadata_bytes(metadata.as_bytes())
+                .unwrap()
+                .license(),
+            "Apache-2.0 OR MIT"
+        );
+        let puzzle = puzzle().replace("Apache-2.0", &license);
+        assert_eq!(
+            validate_puzzle_bytes("quiet-grove", "berry", puzzle.as_bytes())
+                .unwrap()
+                .license(),
+            Some("Apache-2.0 OR MIT")
+        );
+    }
+    for license in ["MIT\\u001b", "MIT\\u0000", "MIT\\u00a0", "Apache-2.0 OR"] {
+        let metadata = metadata("quiet-grove", "Quiet Grove").replace("Apache-2.0", license);
+        let error = validate_metadata_bytes(metadata.as_bytes()).unwrap_err();
+        assert!(
+            error
+                .issues()
+                .iter()
+                .any(|issue| issue.location() == "pack.license")
+        );
+    }
+}
+
+#[test]
 fn display_text_rejects_blank_and_malformed_values_without_forbidding_unicode() {
     let blank = metadata("quiet-grove", "   ");
     let blank_error = validate_metadata_bytes(blank.as_bytes()).unwrap_err();

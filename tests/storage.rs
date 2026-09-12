@@ -730,6 +730,142 @@ fn installation_load_conflict_removal_and_progress_are_consistent() {
 }
 
 #[test]
+fn spdx_whitespace_installs_and_reopens_with_safe_license_text() {
+    let root = test_directory("license-whitespace");
+    let source = root.path().join("source");
+    fs::create_dir(&source).unwrap();
+    write_pack(&source, "quiet-grove");
+    let metadata = fs::read_to_string(source.join("pack.toml")).unwrap();
+    let metadata = metadata.replace("Apache-2.0", "Apache-2.0\\tOR\\nMIT");
+    fs::write(source.join("pack.toml"), &metadata).unwrap();
+    let paths = app_paths(root.path());
+    let mut storage = Storage::open(paths.clone()).unwrap();
+    storage.install_pack(&source, 1).unwrap();
+    drop(storage);
+
+    let mut storage = Storage::open(paths).expect("an accepted pack must survive restart");
+    assert_eq!(
+        storage.registered_packs().unwrap()[0].license.as_ref(),
+        "Apache-2.0 OR MIT"
+    );
+    let pack = storage.load_pack("quiet-grove").unwrap().unwrap();
+    assert_eq!(pack.metadata().license(), "Apache-2.0 OR MIT");
+    assert_eq!(
+        fs::read_to_string(source.join("pack.toml")).unwrap(),
+        metadata
+    );
+    assert!(storage.remove_pack("quiet-grove").unwrap());
+}
+
+#[test]
+fn legacy_license_recovery_preserves_pack_bytes_progress_and_replay() {
+    let root = test_directory("legacy-license");
+    let source = root.path().join("source");
+    fs::create_dir(&source).unwrap();
+    write_pack(&source, "quiet-grove");
+    let metadata = fs::read_to_string(source.join("pack.toml"))
+        .unwrap()
+        .replace("Apache-2.0", "Apache-2.0\\t");
+    fs::write(source.join("pack.toml"), &metadata).unwrap();
+    let fingerprint = validate_directory(&source).unwrap().fingerprint();
+    let paths = app_paths(root.path());
+    let (puzzle, replay) = solved_replay("quiet-grove");
+    let mut storage = Storage::open(paths.clone()).unwrap();
+    storage.install_pack(&source, 7).unwrap();
+    let progress = storage
+        .record_completion(&puzzle, &replay, 8, 0, false)
+        .unwrap();
+    drop(storage);
+    // Releases before 1.0.3 wrote SPDX whitespace directly into the registry.
+    let connection = Connection::open(paths.database()).unwrap();
+    connection
+        .execute("UPDATE pack_registry SET license = ?1", ["Apache-2.0\t"])
+        .unwrap();
+    drop(connection);
+
+    let mut storage = Storage::open(paths.clone()).expect("legacy license recovers");
+    let pack = storage.load_pack("quiet-grove").unwrap().unwrap();
+    assert_eq!(pack.fingerprint(), fingerprint);
+    assert_eq!(
+        storage.progress("quiet-grove", "berry").unwrap().unwrap(),
+        progress
+    );
+    assert_eq!(
+        storage
+            .best_replay("quiet-grove", "berry")
+            .unwrap()
+            .unwrap()
+            .replay(),
+        &replay
+    );
+    let managed = paths
+        .managed_packs()
+        .join(orifude::packs::fingerprint_hex(fingerprint))
+        .join("pack.toml");
+    assert_eq!(fs::read_to_string(managed).unwrap(), metadata);
+    drop(storage);
+    let connection = Connection::open(paths.database()).unwrap();
+    let license: String = connection
+        .query_row("SELECT license FROM pack_registry", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(license, "Apache-2.0 ");
+    drop(connection);
+    assert!(Storage::open(paths).is_ok());
+}
+
+#[test]
+fn failed_license_recovery_rolls_back_every_repair_and_can_retry() {
+    let root = test_directory("license-recovery-rollback");
+    let paths = app_paths(root.path());
+    let mut storage = Storage::open(paths.clone()).unwrap();
+    for id in ["first-pack", "second-pack"] {
+        let source = root.path().join(id);
+        fs::create_dir(&source).unwrap();
+        write_pack(&source, id);
+        storage.install_pack(&source, 1).unwrap();
+    }
+    drop(storage);
+    let connection = Connection::open(paths.database()).unwrap();
+    connection
+        .execute("UPDATE pack_registry SET license = ?1", ["Apache-2.0\t"])
+        .unwrap();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_license BEFORE UPDATE ON pack_registry
+         WHEN OLD.pack_id = 'second-pack'
+         BEGIN SELECT RAISE(ABORT, 'injected license recovery failure'); END;",
+        )
+        .unwrap();
+    drop(connection);
+
+    assert!(matches!(
+        Storage::open(paths.clone()),
+        Err(StorageError::Sqlite(_))
+    ));
+    let connection = Connection::open(paths.database()).unwrap();
+    let unchanged: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM pack_registry WHERE license = ?1",
+            ["Apache-2.0\t"],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(unchanged, 2);
+    connection
+        .execute_batch("DROP TRIGGER reject_license")
+        .unwrap();
+    drop(connection);
+    let storage = Storage::open(paths).expect("repair retries after the external failure");
+    assert!(
+        storage
+            .registered_packs()
+            .unwrap()
+            .iter()
+            .all(|pack| pack.license.as_ref() == "Apache-2.0 ")
+    );
+}
+
+#[test]
 fn community_packs_cannot_claim_built_in_pack_identities() {
     let root = test_directory("reserved-pack-ids");
     let mut storage = Storage::open(app_paths(root.path())).unwrap();

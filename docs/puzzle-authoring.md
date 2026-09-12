@@ -68,8 +68,10 @@ puzzles = ["first-seed", "folded-leaves", "garden-path"]
 ```
 
 The `description` and `authors` fields may be omitted. The license is a valid
-SPDX expression. IDs are stable lowercase ASCII keys: letters and digits may
-be separated by single hyphens, with no leading or trailing hyphen. Changing
+ASCII SPDX expression. SPDX whitespace becomes ordinary spaces in displayed and
+stored metadata; source files and their fingerprints stay unchanged. This also
+applies to an optional puzzle license. IDs are stable lowercase ASCII keys:
+letters and digits may be separated by single hyphens, with no leading or trailing hyphen. Changing
 an ID creates a different pack or puzzle from the player's point of view.
 
 ## Puzzle file

@@ -26,7 +26,7 @@ Your first visit begins with a short, playable lesson. It walks you through a
 fold, a brush stroke, and opening the paper. A terminal at least 80 columns wide
 and 24 rows tall gives everything room; the minimum is 60 by 20.
 
-On Linux with Nix and flakes enabled, run `nix run github:nuggocto/orifude/v1.0.2`.
+On Linux with Nix and flakes enabled, run `nix run github:nuggocto/orifude/v1.0.3`.
 The [Nix guide](docs/distribution.md#nix-and-nixos) also covers installation and
 NixOS configurations.
 

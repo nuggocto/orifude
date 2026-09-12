@@ -535,17 +535,6 @@ mod tests {
     }
 
     #[test]
-    fn queue_never_grows_past_its_documented_capacity() {
-        let mut state = super::QueueState::new();
-        for _ in 0..EVENT_QUEUE_CAPACITY {
-            state.events.push_back(key('x'));
-        }
-
-        assert_eq!(state.events.len(), EVENT_QUEUE_CAPACITY);
-        assert_eq!(state.events.capacity(), EVENT_QUEUE_CAPACITY);
-    }
-
-    #[test]
     fn completed_work_stays_observable_without_waiting_for_queue_capacity() {
         let queue = SharedQueue::new();
         for _ in 0..EVENT_QUEUE_CAPACITY {

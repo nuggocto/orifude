@@ -21,6 +21,11 @@ The [authoring guide](puzzle-authoring.md#limits) gives pack limits, and the
 storage and runtime bounds. Application code denies unsafe Rust, and release
 builds retain checked arithmetic and panic unwinding.
 
+Valid SPDX whitespace in license metadata becomes ordinary spaces before display
+or storage. Startup repairs legacy registry licenses in one bounded transaction;
+it preserves pack source bytes, fingerprints, progress, and replays. Invalid SPDX
+expressions and other control characters remain errors.
+
 ## Installers and publication
 
 The website's default command trusts an exact immutable GitHub release over
