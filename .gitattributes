@@ -13,6 +13,7 @@
 *.zst binary
 
 # Distribution formats and development automation should not skew language statistics.
+*.nix linguist-detectable=false
 *.sh linguist-detectable=false
 *.ps1 linguist-detectable=false
 *.sh.in linguist-detectable=false
