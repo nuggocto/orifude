@@ -1,4 +1,4 @@
-# Orifude
+# Orifude ༼⁠ ⁠つ⁠ ⁠◕⁠‿⁠◕⁠ ⁠༽⁠つ
 
 It is a quiet puzzle game for your terminal. Fold a small sheet of paper,
 brush ink through its layers, then open it to match a pattern.
