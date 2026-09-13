@@ -34,6 +34,11 @@ On Linux with Nix and flakes enabled, `nix build` builds the game and
 The [Nix guide](docs/distribution.md#nix-and-nixos) describes supported systems
 and the pinned build inputs.
 
+Routine CI runs the general checks, five native platforms, both Nix platforms,
+and Linux distribution checks (on pushes and manual CI runs). The archive and
+installation checks run on demand before a release through the
+[Release candidate workflow](docs/distribution.md#candidate-archives).
+
 ## Code layout
 
 | Location | Responsibility |

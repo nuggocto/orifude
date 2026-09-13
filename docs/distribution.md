@@ -37,11 +37,17 @@ removes only the new state it created. On macOS and Windows use a disposable
 account because platform directory APIs are not reliably redirected by environment
 variables. Do not run package-channel checks on an ordinary player account.
 
-The candidate workflow tests every target without publication secrets and retains
-`release-set` as an artifact. Archive checks reject altered checksums, unsafe
-members, and wrong architectures. Repacking identical inputs is deterministic;
-independent compiler output is not promised. Generate all hashes and package
-metadata from one candidate set.
+Run the Release candidate workflow manually on `shrek` when preparing a release:
+
+```sh
+gh workflow run release-candidate.yml --repo nuggocto/orifude --ref shrek
+```
+
+It tests every target without publication secrets and retains `release-set` as an
+artifact. Archive checks reject altered checksums, unsafe members, and wrong
+architectures. Repacking identical inputs is deterministic; independent compiler
+output is not promised. Generate all hashes and package metadata from one
+candidate set.
 
 Installer fixtures use private script copies and local HTTPS. Published scripts
 have fixed release URLs. Windows passes the fixture CA directly to curl without
@@ -89,10 +95,10 @@ preserves saved progress.
 
 ## Publication
 
-Changes only to `docs/`, `CONTRIBUTING.md`, or `IDEAS.md` skip ordinary CI,
-candidate, and pack workflows. README and changelog changes still run them
-because they affect release assets. For a release from a documentation-only
-commit, dispatch CI and Release candidate for that exact commit first.
+Changes only to `docs/`, `CONTRIBUTING.md`, or `IDEAS.md` skip ordinary CI and
+pack workflows. README and changelog changes still run them because they affect
+release assets. Release candidate always runs on demand before a release. For a
+release from a documentation-only commit, also dispatch CI for that exact commit.
 
 Before creating a public release, approve the exact clean `shrek` commit, its
 successful ordinary CI run, and its successful candidate run. The version must
