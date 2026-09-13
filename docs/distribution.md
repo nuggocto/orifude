@@ -89,8 +89,8 @@ preserves saved progress.
 
 ## Publication
 
-Changes only to `docs/`, `CONTRIBUTING.md`, `IDEAS.md`, or `AGENTS.md` skip ordinary
-CI, candidate, and pack workflows. README and changelog changes still run them
+Changes only to `docs/`, `CONTRIBUTING.md`, or `IDEAS.md` skip ordinary CI,
+candidate, and pack workflows. README and changelog changes still run them
 because they affect release assets. For a release from a documentation-only
 commit, dispatch CI and Release candidate for that exact commit first.
 

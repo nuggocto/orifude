@@ -3,10 +3,10 @@ name: Release candidate
 on:
   push:
     branches: [shrek]
-    paths-ignore: ['docs/**', 'CONTRIBUTING.md', 'IDEAS.md', 'AGENTS.md']
+    paths-ignore: ['docs/**', 'CONTRIBUTING.md', 'IDEAS.md']
   pull_request:
     branches: [shrek]
-    paths-ignore: ['docs/**', 'CONTRIBUTING.md', 'IDEAS.md', 'AGENTS.md']
+    paths-ignore: ['docs/**', 'CONTRIBUTING.md', 'IDEAS.md']
   workflow_dispatch:
 
 permissions:
