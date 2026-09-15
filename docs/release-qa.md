@@ -4,6 +4,76 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.0.4 publication decision on 2026-09-15
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.4)
+uses signed source commit [50bd5ac](https://github.com/nuggocto/orifude/commit/50bd5ac540441e43bd9b72b28faa7143fe8cef80)
+and a verified signed annotated tag. It adds file names and actionable reasons to
+pack diagnostics, separates paper state, storage, and rendering responsibilities,
+and removes redundant defensive code and tests. Save schemas, content formats,
+generator compatibility, and dependency versions are unchanged. The
+[coverage limitations below](#coverage-and-limitations) still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/34989688261), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34989703209), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34989688219) passed. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34991803353) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34992694636) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
+| Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/34991646087) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.0.4 in the pinned Nix container and resolved to the release commit. |
+
+The first candidate Intel macOS installation job failed during toolchain setup:
+the runner's rustup process exited with SIGILL before any project code ran. The
+Intel build and ordinary CI had passed on the same runner image version. A single
+rerun of the failed job on a fresh runner passed every check, using the same
+archives. No application or workflow change was made for that setup failure.
+The original [failure](https://github.com/nuggocto/orifude/actions/runs/34989703209/job/104453170061)
+and successful [rerun](https://github.com/nuggocto/orifude/actions/runs/34989703209/job/104454972158)
+remain available in the candidate record.
+
+Publication compared all eight draft assets with the candidate and verified the
+release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.4/SHA256SUMS)
+records the five archive hashes. The PowerShell script SHA-256 is
+`99b766de70fb8f485024e74a8617ef69e2ca8cb4b44e42478168f6f7098cb3d4`.
+
+Package updates are [Homebrew 5634a82](https://github.com/nuggocto/homebrew-tap/commit/5634a82fac05bd878a15f56e55acd0bc55e12e74),
+[Scoop ec94511](https://github.com/nuggocto/scoop-bucket/commit/ec945115403ed1a9457ad83d827ed8de85894243),
+and AUR commit `219320028a6d82435f5028e55c541b732a03ae7d`. Their public files match
+the verified generated metadata. AUR's `.SRCINFO` was regenerated and pushed with
+the dedicated `aur@sshmoi.com` SSH identity after GitHub publication.
+AUR's package page and a fresh RPC query report `1.0.4-1`. An earlier single-package
+RPC query continued to serve 1.0.3 after the Git repository and package page had
+updated; the public AUR installation test independently verified 1.0.4.
+
+Local optimized checks passed 258 tests and one doctest, with formatting, shell
+analysis, dependency policies, warning-denied Clippy, independent-model checks,
+and the secret scan. The separately invoked packaged-player test passed. Five
+60-second sanitizer campaigns with seed 424242 completed 17,015,792 executions
+without failures, using the existing accumulated corpus.
+
+The packaged Linux binary reports each invalid puzzle's filename and the precise
+stroke-budget limit where 1.0.3 emitted identical generic messages. New regression
+tests also cover parser positions and bounded, sanitized diagnostic text. Direct
+binary upgrade and rollback between 1.0.3 and 1.0.4 preserved installed packs and
+saved progress in an isolated player directory.
+
+The Linux musl executable has SHA-256
+`580281295d45b638d8596e5deff7a9b7b69e62f50b47707eb140b7f5de14aeea`.
+It is 5,762,016 bytes; its archive is 2,382,235 bytes. On Linux 7.2.3 x86_64 with
+a Ryzen AI MAX+ 395, twenty-five fresh and twenty-five returning startup samples
+gave p95 values of 224.497 and 85.991 ms.
+One hundred samples each gave input p95 5.322 ms, fold p95 5.211 ms, and brush p95
+5.070 ms. Ordinary play used 6,896 KiB RSS; the journey solver used 7,468 KiB.
+Measured idle CPU was 0% over three seconds. Five storage processes, each measuring
+500 fresh and 500 populated completion writes, had p95 between 21.028 and 29.288 ms.
+All configured budgets passed.
+
+These warm-filesystem desktop measurements include tmux and frame observation.
+Background load was not controlled, and artifact verification briefly overlapped
+storage measurement. They establish no speedup over 1.0.3. Player timing used the
+packaged musl binary; solver and storage helpers used the local GNU release build.
+Commands, environment details, raw samples, and results remain in
+`target/release-measurement-1.0.4`; validation logs are under `target/`.
+
 ## 1.0.3 publication decision on 2026-09-12
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.3)
