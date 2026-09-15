@@ -20,6 +20,7 @@ generator compatibility, and dependency versions are unchanged. The
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34991803353) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34992694636) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/34991646087) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.0.4 in the pinned Nix container and resolved to the release commit. |
+| Website | [Frontend 7c41fad](https://github.com/nuggocto/orifude-front/commit/7c41fadc73c21338ad5b2e98f58c3311b6ff73c2) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34993780147), including 39 Linux and 26 Windows browser cases. Cloudflare deployment succeeded. |
 
 The first candidate Intel macOS installation job failed during toolchain setup:
 the runner's rustup process exited with SIGILL before any project code ran. The
@@ -42,7 +43,8 @@ the verified generated metadata. AUR's `.SRCINFO` was regenerated and pushed wit
 the dedicated `aur@sshmoi.com` SSH identity after GitHub publication.
 AUR's package page and a fresh RPC query report `1.0.4-1`. An earlier single-package
 RPC query continued to serve 1.0.3 after the Git repository and package page had
-updated; the public AUR installation test independently verified 1.0.4.
+updated; it subsequently refreshed to 1.0.4-1. The public AUR installation test
+independently verified 1.0.4.
 
 Local optimized checks passed 258 tests and one doctest, with formatting, shell
 analysis, dependency policies, warning-denied Clippy, independent-model checks,
@@ -73,6 +75,20 @@ storage measurement. They establish no speedup over 1.0.3. Player timing used th
 packaged musl binary; solver and storage helpers used the local GNU release build.
 Commands, environment details, raw samples, and results remain in
 `target/release-measurement-1.0.4`; validation logs are under `target/`.
+
+Live checks of [deployment e0b34107](https://e0b34107.orifude-front.pages.dev)
+and production verified all four routes, the new version and every changelog
+bullet, security headers, eight exact clipboard pastes, and installation layout
+at 1440, 390, and 320 pixels. Preview routes retained noindex, and the pages worked
+with JavaScript disabled. Local Chromium and Firefox checks passed all 26 cases;
+hosted Linux CI also covered WebKit.
+
+The production-copied POSIX command installed and reinstalled 1.0.4 as an
+unprivileged user in a disposable Arch container. It preserved a saved-data
+sentinel, removed temporary files, and produced the exact musl executable above.
+Frontend captures and checks remain under its ignored `.preview/release-1.0.4/`
+directory. The release record pins the canonical changelog to the signed native
+release commit and advertises only the six verified installation channels.
 
 ## 1.0.3 publication decision on 2026-09-12
 
