@@ -86,33 +86,25 @@ fn load() -> Box<[BuiltInPaper]> {
 macro_rules! journey_files {
     ($files:ident; $($id:literal),+ $(,)?) => {
         $(
-            assert!(
-                $files
-                    .insert(
-                        concat!("puzzles/", $id, ".toml").to_owned(),
-                        include_bytes!(concat!(
-                            "../../puzzles/journey/puzzles/",
-                            $id,
-                            ".toml"
-                        ))
-                        .to_vec(),
-                    )
-                    .is_none(),
-                "embedded journey paths must be unique",
+            let previous = $files.insert(
+                concat!("puzzles/", $id, ".toml").to_owned(),
+                include_bytes!(concat!(
+                    "../../puzzles/journey/puzzles/",
+                    $id,
+                    ".toml"
+                ))
+                .to_vec(),
             );
+            assert!(previous.is_none(), "embedded journey paths must be unique");
         )+
     };
 }
 
 fn files() -> BTreeMap<String, Vec<u8>> {
     let mut files = BTreeMap::new();
-    assert!(
-        files
-            .insert(
-                "pack.toml".to_owned(),
-                include_bytes!("../../puzzles/journey/pack.toml").to_vec(),
-            )
-            .is_none()
+    files.insert(
+        "pack.toml".to_owned(),
+        include_bytes!("../../puzzles/journey/pack.toml").to_vec(),
     );
     journey_files!(files;
         "first-drop", "corner-seed", "two-drops", "open-window", "small-sprig",

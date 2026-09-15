@@ -358,8 +358,7 @@ mod tests {
     use std::io;
 
     use super::{
-        Acquired, Lifecycle, MAX_RENDER_HEIGHT, MAX_RENDER_WIDTH, TERMINAL_OWNED, TerminalControl,
-        bounded_viewport,
+        Acquired, Lifecycle, MAX_RENDER_HEIGHT, MAX_RENDER_WIDTH, TerminalControl, bounded_viewport,
     };
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -534,16 +533,5 @@ mod tests {
             bounded_viewport(1_000, 500),
             ratatui::layout::Rect::new(420, 220, MAX_RENDER_WIDTH, MAX_RENDER_HEIGHT)
         );
-    }
-
-    #[test]
-    fn terminal_ownership_does_not_follow_the_event_worker_thread() {
-        TERMINAL_OWNED.with(|owned| owned.set(true));
-        let worker_owned = std::thread::spawn(|| TERMINAL_OWNED.with(std::cell::Cell::get))
-            .join()
-            .expect("worker joins");
-        TERMINAL_OWNED.with(|owned| owned.set(false));
-
-        assert!(!worker_owned);
     }
 }

@@ -5,6 +5,23 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.0.4 - 2026-09-15
+
+Make puzzle-pack errors easier to fix and the codebase easier to maintain.
+
+### Fixed
+
+- Pack validation identifies each invalid puzzle file and reports TOML line and
+  column positions or the specific puzzle rule that failed. Diagnostic output
+  remains bounded and safe for terminals.
+
+### Changed
+
+- Separate paper state transitions, storage responsibilities, and board rendering
+  into focused modules. Rendering uses named inputs and explicit display modes.
+- Simplify bounded arithmetic and test setup, remove an unused custom state hash,
+  and keep tests focused on game behavior, compatibility, and failure recovery.
+
 ## 1.0.3 - 2026-09-12
 
 Keep installed packs usable and the selected tool visible.

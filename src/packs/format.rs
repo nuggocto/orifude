@@ -223,8 +223,8 @@ pub(super) fn parse_metadata(bytes: &[u8]) -> Result<PackMetadata, PackError> {
     }
     let text = std::str::from_utf8(bytes)
         .map_err(|_| PackError::one("pack.toml", "metadata is not valid UTF-8"))?;
-    let document: PackDocument = toml::from_str(text)
-        .map_err(|_| PackError::one("pack.toml", "metadata TOML is invalid"))?;
+    let document: PackDocument =
+        toml::from_str(text).map_err(|error| toml_error("pack.toml", text, &error))?;
     let mut issues = Vec::with_capacity(MAX_VALIDATION_ISSUES);
     if document.format_version != CURRENT_PACK_FORMAT_VERSION {
         record_issue(
@@ -314,8 +314,19 @@ pub(super) fn parse_puzzle(
     let text = std::str::from_utf8(bytes)
         .map_err(|_| PackError::one("puzzle", "puzzle is not valid UTF-8"))?;
     let document: PuzzleDocument =
-        toml::from_str(text).map_err(|_| PackError::one("puzzle", "puzzle TOML is invalid"))?;
+        toml::from_str(text).map_err(|error| toml_error("puzzle", text, &error))?;
     puzzle_from_document(pack_id, expected_id, document)
+}
+
+fn toml_error(location: &str, text: &str, error: &toml::de::Error) -> PackError {
+    let problem = if let Some(prefix) = error.span().and_then(|span| text.get(..span.start)) {
+        let line = prefix.bytes().filter(|&byte| byte == b'\n').count() + 1;
+        let column = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
+        format!("TOML at line {line}, column {column}: {}", error.message())
+    } else {
+        format!("invalid TOML: {}", error.message())
+    };
+    PackError::one(location, problem)
 }
 
 pub(crate) fn puzzle_from_document(
@@ -567,11 +578,12 @@ fn build_puzzle(
     if let ValidatedPar::Present(par) = par {
         spec = spec.with_par(par);
     }
-    if let Ok(puzzle) = Puzzle::new(spec) {
-        Some(puzzle)
-    } else {
-        record_issue(issues, "puzzle.rules", "puzzle gameplay rules are invalid");
-        None
+    match Puzzle::new(spec) {
+        Ok(puzzle) => Some(puzzle),
+        Err(error) => {
+            record_issue(issues, "puzzle.rules", error.to_string());
+            None
+        }
     }
 }
 

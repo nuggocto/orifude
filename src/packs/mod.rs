@@ -27,6 +27,7 @@ pub const MAX_PATH_DEPTH: usize = 4;
 pub const MAX_COMPONENT_BYTES: usize = 80;
 pub const MAX_RELATIVE_PATH_BYTES: usize = 128;
 pub const MAX_VALIDATION_ISSUES: usize = 32;
+const MAX_DIAGNOSTIC_SCALARS: usize = 512;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackIssue {
@@ -37,8 +38,8 @@ pub struct PackIssue {
 impl PackIssue {
     fn new(location: impl Into<Box<str>>, problem: impl Into<Box<str>>) -> Self {
         Self {
-            location: safe_diagnostic_text(location.into()),
-            problem: safe_diagnostic_text(problem.into()),
+            location: safe_diagnostic_text(&location.into()),
+            problem: safe_diagnostic_text(&problem.into()),
         }
     }
 
@@ -53,11 +54,9 @@ impl PackIssue {
     }
 }
 
-fn safe_diagnostic_text(text: Box<str>) -> Box<str> {
-    if !text.chars().any(char::is_control) {
-        return text;
-    }
+fn safe_diagnostic_text(text: &str) -> Box<str> {
     text.chars()
+        .take(MAX_DIAGNOSTIC_SCALARS)
         .map(|character| {
             if character.is_control() {
                 '?'
@@ -324,7 +323,13 @@ pub(crate) fn validate_files(files: BTreeMap<String, Vec<u8>>) -> Result<Validat
                 Err(PackError::Invalid {
                     issues: puzzle_issues,
                 }) => {
-                    append_issues(&mut issues, puzzle_issues);
+                    for issue in puzzle_issues {
+                        let location = issue
+                            .location()
+                            .strip_prefix("puzzle.")
+                            .map_or_else(|| path.clone(), |field| format!("{path} ({field})"));
+                        push_issue(&mut issues, PackIssue::new(location, issue.problem()));
+                    }
                 }
                 Err(error) => return Err(error),
             },
@@ -390,12 +395,6 @@ pub(crate) fn validate_files(files: BTreeMap<String, Vec<u8>>) -> Result<Validat
         fingerprint,
         extracted_bytes,
     })
-}
-
-fn append_issues(target: &mut Vec<PackIssue>, source: Box<[PackIssue]>) {
-    for issue in source {
-        push_issue(target, issue);
-    }
 }
 
 fn push_issue(issues: &mut Vec<PackIssue>, issue: PackIssue) {

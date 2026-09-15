@@ -233,6 +233,21 @@ fn nested_brush_and_solution_tables_reject_unknown_fields() {
 }
 
 #[test]
+fn parser_diagnostics_bound_and_sanitize_untrusted_field_names() {
+    for field in ["bad\\u001b[31m".to_owned(), "x".repeat(2_000)] {
+        let invalid = format!("\"{field}\" = true\n{}", puzzle());
+        let error = validate_puzzle_bytes("quiet-grove", "berry", invalid.as_bytes())
+            .expect_err("unknown field must be rejected");
+        let problem = error.issues()[0].problem();
+
+        assert!(problem.contains("line 1, column 1"), "{problem}");
+        assert!(problem.contains("unknown field"), "{problem}");
+        assert!(problem.chars().count() <= 512);
+        assert!(!problem.chars().any(char::is_control));
+    }
+}
+
+#[test]
 fn puzzle_validation_keeps_independent_issues_in_one_report() {
     let invalid = puzzle()
         .replace("id = \"berry\"", "id = \"bad_id\"")

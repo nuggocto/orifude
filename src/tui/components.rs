@@ -319,7 +319,6 @@ fn branch_art(completed: usize, glyph_mode: GlyphMode) -> Vec<String> {
             '.',
         ),
     };
-    assert_eq!(base.len(), BRANCH_ART_HEIGHT);
     assert_eq!(gift_slots.len(), content::journey_groups().len());
     assert_eq!(gifts.len(), gift_slots.len());
 

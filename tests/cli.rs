@@ -181,9 +181,41 @@ fn malformed_pack_reports_bounded_safe_diagnostics() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     assert!(stderr.contains("failed validation"));
-    assert!(stderr.contains("puzzle"));
+    assert!(stderr.contains("puzzles/bad-paper.toml"));
+    assert!(stderr.contains("line 1, column"));
     assert!(stderr.len() < 4096);
     assert!(!stderr.contains('\u{1b}'));
+}
+
+#[test]
+fn invalid_puzzle_budgets_identify_each_file_and_the_limit() {
+    let pack = tempfile::tempdir().expect("isolated invalid pack");
+    std::fs::create_dir(pack.path().join("puzzles")).unwrap();
+    std::fs::write(
+        pack.path().join("pack.toml"),
+        "format_version = 1\nid = 'bad-pack'\ntitle = 'Bad pack'\nlicense = 'MIT'\npuzzles = ['first', 'second']\n",
+    )
+    .unwrap();
+    for id in ["first", "second"] {
+        let puzzle = format!(
+            "format_version = 1\nid = '{id}'\ntitle = 'Paper'\nwidth = 4\nheight = 4\ntarget = ['#...', '....', '....', '....']\nfolds = []\nbrushes = [{{kind = 'dot'}}]\nfold_budget = 0\nstroke_budget = 20\n"
+        );
+        std::fs::write(pack.path().join(format!("puzzles/{id}.toml")), puzzle).unwrap();
+    }
+
+    let output = run([OsStr::new("verify"), pack.path().as_os_str()]);
+    let stderr = utf8(&output.stderr);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    for id in ["first", "second"] {
+        assert!(
+            stderr.contains(&format!(
+                "puzzles/{id}.toml (rules): stroke budget 20 exceeds 8"
+            )),
+            "{stderr}"
+        );
+    }
 }
 
 #[test]

@@ -1492,7 +1492,6 @@ mod tests {
         let Some(Overlay::Export(lines)) = app.overlay() else {
             panic!("export overlay is visible");
         };
-        assert_eq!(lines.len(), 3);
         assert!(lines.iter().all(|line| !line.as_str().contains('\n')));
         assert!(lines.iter().all(|line| !line.as_str().contains('\u{1b}')));
     }

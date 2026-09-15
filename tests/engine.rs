@@ -701,24 +701,15 @@ fn undo_and_reset_restore_canonical_state_and_replay_history() {
 }
 
 #[test]
-fn canonical_keys_match_exact_state_and_have_a_stable_hash() {
+fn canonical_keys_track_exact_state_through_fold_and_undo() {
     let left = Fold::new(FoldDirection::Left, 2);
     let puzzle = fold_puzzle(4, 4, vec![left], 1);
     let mut first = puzzle.start();
     let second = puzzle.start();
 
     assert_eq!(first.state_key(), second.state_key());
-    assert_eq!(
-        first.state_key().stable_hash(),
-        second.state_key().stable_hash()
-    );
-    assert_eq!(second.state_key().stable_hash(), 1_914_948_199_483_280_709);
     first.fold(left).expect("the fold should succeed");
     assert_ne!(first.state_key(), second.state_key());
-    assert_ne!(
-        first.state_key().stable_hash(),
-        second.state_key().stable_hash()
-    );
     first.undo().expect("the fold should undo");
     assert_eq!(first.state_key(), second.state_key());
 }
@@ -750,10 +741,6 @@ fn replay_matches_direct_execution_and_excludes_undone_actions() {
 
     assert_eq!(replayed.state_key(), direct.state_key());
     assert_eq!(replayed.result().comparison(), direct.result().comparison());
-    assert_eq!(
-        replayed.state_key().stable_hash(),
-        14_918_048_313_021_682_743
-    );
 }
 
 #[test]
