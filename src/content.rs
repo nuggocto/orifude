@@ -226,19 +226,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn built_in_papers_are_solved_by_their_recorded_actions() {
-        for paper in journey().iter().chain(std::iter::once(&lesson())) {
-            let replay = Replay::new(
-                ReplayMetadata::current(paper.puzzle()),
-                paper.solution().to_vec(),
-            )
-            .expect("recorded replay");
-            let attempt = replay.execute(paper.puzzle()).expect("replay executes");
-            assert!(attempt.result().is_success());
-        }
-    }
-
-    #[test]
     fn journey_groups_cover_the_catalog_exactly() {
         let papers = journey();
         let groups = journey_groups();

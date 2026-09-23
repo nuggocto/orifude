@@ -10,14 +10,20 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use crate::domain::puzzle::PuzzleIdentity;
 use crate::packs::{
-    MAX_INSTALLED_PACKS, MAX_MANAGED_BYTES, PackError, ValidatedPack, fingerprint_hex,
-    validate_directory, validate_source,
+    MAX_AUTHOR_SCALARS, MAX_AUTHORS, MAX_DESCRIPTION_SCALARS, MAX_EXTRACTED_BYTES,
+    MAX_INSTALLED_PACKS, MAX_MANAGED_BYTES, MAX_TITLE_SCALARS, PackError, ValidatedPack,
+    fingerprint_hex, license_is_valid, normalize_license, validate_directory, validate_source,
 };
 use crate::storage::{
-    MAX_INSTALLED_PACKS_DB, MAX_MANAGED_ENTRIES, RESERVED_PACK_IDS, Storage, StorageError,
+    MAX_INSTALLED_PACKS_DB, MAX_MANAGED_ENTRIES, REGISTRY_QUERY_LIMIT_DB,
+    REGISTRY_RECONCILE_LIMIT_DB, RESERVED_PACK_IDS, Storage, StorageError,
     create_private_directory, i64_to_u64, is_fingerprint_name, set_private_file, sync_directory,
     u64_to_i64,
 };
+
+const AUTHOR_SEPARATOR: &str = ", ";
+const MAX_JOINED_AUTHOR_SCALARS: usize =
+    MAX_AUTHORS * MAX_AUTHOR_SCALARS + (MAX_AUTHORS - 1) * AUTHOR_SEPARATOR.len();
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RegisteredPack {
@@ -47,9 +53,9 @@ impl Storage {
         let mut statement = self.connection.prepare(
             "SELECT pack_id, title, description, authors, license, fingerprint,
                     extracted_bytes, installed_at, managed_name
-             FROM pack_registry ORDER BY pack_id LIMIT 33",
+             FROM pack_registry ORDER BY pack_id LIMIT ?1",
         )?;
-        let rows = statement.query_map([], |row| {
+        let rows = statement.query_map([REGISTRY_QUERY_LIMIT_DB], |row| {
             Ok((registered_pack_from_row(row)?, row.get::<_, String>(8)?))
         })?;
         let registered = rows.collect::<Result<Vec<_>, _>>()?;
@@ -260,10 +266,10 @@ impl Storage {
             PackError::Io(source) if source.kind() != io::ErrorKind::NotFound => {
                 StorageError::from(source)
             }
-            PackError::Io(_) | PackError::Invalid { .. } | PackError::SourceType => {
-                StorageError::PackFingerprint
-            }
-            PackError::Archive => StorageError::PackFingerprint,
+            PackError::Io(_)
+            | PackError::Invalid { .. }
+            | PackError::SourceType
+            | PackError::Archive => StorageError::PackFingerprint,
         })?;
         if loaded.metadata().id() != summary.id.as_ref()
             || loaded.fingerprint() != summary.fingerprint
@@ -329,9 +335,9 @@ impl Storage {
         let registered = {
             let mut statement = self
                 .connection
-                .prepare("SELECT pack_id, license FROM pack_registry ORDER BY pack_id LIMIT 33")?;
+                .prepare("SELECT pack_id, license FROM pack_registry ORDER BY pack_id LIMIT ?1")?;
             statement
-                .query_map([], |row| {
+                .query_map([REGISTRY_QUERY_LIMIT_DB], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
@@ -341,11 +347,11 @@ impl Storage {
         }
         let mut repairs = Vec::new();
         for (pack_id, license) in registered {
-            if !crate::packs::license_is_valid(&license) {
+            if !license_is_valid(&license) {
                 return Err(StorageError::Corrupt);
             }
             if license.chars().any(char::is_control) {
-                repairs.push((pack_id, crate::packs::normalize_license(&license)));
+                repairs.push((pack_id, normalize_license(&license)));
             }
         }
         if repairs.is_empty() {
@@ -372,10 +378,10 @@ impl Storage {
     pub(super) fn reconcile_registered_pack_paths(&mut self) -> Result<(), StorageError> {
         let registered = {
             let mut statement = self.connection.prepare(
-                "SELECT pack_id, managed_name FROM pack_registry ORDER BY pack_id LIMIT 37",
+                "SELECT pack_id, managed_name FROM pack_registry ORDER BY pack_id LIMIT ?1",
             )?;
             statement
-                .query_map([], |row| {
+                .query_map([REGISTRY_RECONCILE_LIMIT_DB], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
@@ -425,9 +431,9 @@ impl Storage {
     pub(super) fn cleanup_orphan_packs(&self) -> Result<(), StorageError> {
         let mut statement = self
             .connection
-            .prepare("SELECT managed_name FROM pack_registry ORDER BY managed_name LIMIT 33")?;
+            .prepare("SELECT managed_name FROM pack_registry ORDER BY managed_name LIMIT ?1")?;
         let live = statement
-            .query_map([], |row| row.get::<_, String>(0))?
+            .query_map([REGISTRY_QUERY_LIMIT_DB], |row| row.get::<_, String>(0))?
             .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
         if live.len() > MAX_INSTALLED_PACKS {
             return Err(StorageError::Corrupt);
@@ -488,7 +494,7 @@ fn register_pack(
         .iter()
         .map(AsRef::as_ref)
         .collect::<Vec<&str>>()
-        .join(", ");
+        .join(AUTHOR_SEPARATOR);
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     transaction.execute(
         "INSERT INTO pack_registry(
@@ -569,16 +575,16 @@ fn validate_registered_pack(pack: &RegisteredPack, managed_name: &str) -> Result
     };
     if PuzzleIdentity::new(&pack.id, "probe").is_err()
         || RESERVED_PACK_IDS.contains(&pack.id.as_ref())
-        || !display_is_valid(&pack.title, 80)
+        || !display_is_valid(&pack.title, MAX_TITLE_SCALARS)
         || pack
             .description
             .as_deref()
-            .is_some_and(|value| !display_is_valid(value, 512))
-        || pack.authors.chars().count() > 1_310
+            .is_some_and(|value| !display_is_valid(value, MAX_DESCRIPTION_SCALARS))
+        || pack.authors.chars().count() > MAX_JOINED_AUTHOR_SCALARS
         || pack.authors.chars().any(char::is_control)
         || pack.license.chars().any(char::is_control)
-        || !crate::packs::license_is_valid(&pack.license)
-        || pack.extracted_bytes > crate::packs::MAX_EXTRACTED_BYTES
+        || !license_is_valid(&pack.license)
+        || pack.extracted_bytes > MAX_EXTRACTED_BYTES
         || !is_fingerprint_name(managed_name)
     {
         return Err(StorageError::Corrupt);
@@ -609,12 +615,11 @@ fn write_pack_files(root: &Path, pack: &ValidatedPack) -> Result<(), StorageErro
             create_private_directory(parent)?;
             directories.insert(parent.to_path_buf());
         }
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&destination)?;
         set_private_file(&file)?;
-        let mut file = file;
         file.write_all(contents)?;
         file.sync_all()?;
     }

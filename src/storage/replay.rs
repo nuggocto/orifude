@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::paper::{
-    BrushRule, Fold, FoldCount, FoldDirection, LineStroke, PaperAction, StrokeAxis, StrokeCount,
-};
+use crate::domain::paper::{BrushRule, Fold, FoldCount, LineStroke, PaperAction, StrokeCount};
 use crate::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 use crate::domain::replay::{ENGINE_COMPATIBILITY_VERSION, Replay, ReplayMetadata};
 use crate::domain::score::Par;
+use crate::wire::{BrushDocument, DirectionDocument, FoldDocument, ParDocument};
 
 pub const CURRENT_REPLAY_FORMAT_VERSION: u16 = 1;
 pub const MAX_REPLAY_BYTES: usize = 64 * 1024;
@@ -51,43 +50,6 @@ struct GameplayDocument {
     fold_budget: u8,
     stroke_budget: u8,
     par: Option<ParDocument>,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct FoldDocument {
-    direction: DirectionDocument,
-    crease: u8,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum DirectionDocument {
-    Left,
-    Right,
-    Up,
-    Down,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
-enum BrushDocument {
-    Dot {},
-    Line { axis: AxisDocument, length: u8 },
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum AxisDocument {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ParDocument {
-    folds: u8,
-    strokes: u8,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -143,10 +105,7 @@ pub(super) fn encode(puzzle: &Puzzle, replay: &Replay) -> Result<Vec<u8>, Replay
                 .collect(),
             fold_budget: puzzle.fold_budget().get(),
             stroke_budget: puzzle.stroke_budget().get(),
-            par: puzzle.par().map(|par| ParDocument {
-                folds: par.folds().get(),
-                strokes: par.strokes().get(),
-            }),
+            par: puzzle.par().map(ParDocument::from),
         },
         actions: replay
             .actions()
@@ -190,11 +149,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<DecodedReplay, ReplayDocumentError>
                 .map_err(|_| ReplayDocumentError)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let folds = gameplay
-        .folds
-        .into_iter()
-        .map(|fold| Fold::new(fold.direction.into(), fold.crease))
-        .collect();
+    let folds = gameplay.folds.into_iter().map(Fold::from).collect();
     let brushes = gameplay.brushes.into_iter().map(BrushRule::from).collect();
     let mut spec = PuzzleSpec::new(identity, gameplay.width, gameplay.height)
         .with_format_version(gameplay.puzzle_format_version)
@@ -226,79 +181,6 @@ pub(super) fn decode(bytes: &[u8]) -> Result<DecodedReplay, ReplayDocumentError>
         return Err(ReplayDocumentError);
     }
     Ok(DecodedReplay { puzzle, replay })
-}
-
-impl From<Fold> for FoldDocument {
-    fn from(fold: Fold) -> Self {
-        Self {
-            direction: fold.direction().into(),
-            crease: fold.crease(),
-        }
-    }
-}
-
-impl From<FoldDirection> for DirectionDocument {
-    fn from(direction: FoldDirection) -> Self {
-        match direction {
-            FoldDirection::Left => Self::Left,
-            FoldDirection::Right => Self::Right,
-            FoldDirection::Up => Self::Up,
-            FoldDirection::Down => Self::Down,
-        }
-    }
-}
-
-impl From<DirectionDocument> for FoldDirection {
-    fn from(direction: DirectionDocument) -> Self {
-        match direction {
-            DirectionDocument::Left => Self::Left,
-            DirectionDocument::Right => Self::Right,
-            DirectionDocument::Up => Self::Up,
-            DirectionDocument::Down => Self::Down,
-        }
-    }
-}
-
-impl From<BrushRule> for BrushDocument {
-    fn from(brush: BrushRule) -> Self {
-        match brush {
-            BrushRule::Dot => Self::Dot {},
-            BrushRule::Line { axis, length } => Self::Line {
-                axis: axis.into(),
-                length,
-            },
-        }
-    }
-}
-
-impl From<BrushDocument> for BrushRule {
-    fn from(brush: BrushDocument) -> Self {
-        match brush {
-            BrushDocument::Dot {} => Self::Dot,
-            BrushDocument::Line { axis, length } => Self::Line {
-                axis: axis.into(),
-                length,
-            },
-        }
-    }
-}
-
-impl From<StrokeAxis> for AxisDocument {
-    fn from(axis: StrokeAxis) -> Self {
-        match axis {
-            StrokeAxis::Horizontal => Self::Horizontal,
-            StrokeAxis::Vertical => Self::Vertical,
-        }
-    }
-}
-
-impl From<AxisDocument> for StrokeAxis {
-    fn from(axis: AxisDocument) -> Self {
-        match axis {
-            AxisDocument::Horizontal => Self::Horizontal,
-            AxisDocument::Vertical => Self::Vertical,
-        }
-    }
 }
 
 impl From<PaperAction> for ActionDocument {

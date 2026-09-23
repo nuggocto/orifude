@@ -22,30 +22,52 @@ pub use managed_packs::{InstallOutcome, RegisteredPack};
 pub use paths::{AppPaths, PathError};
 pub use progress::{DailyHistory, DailyKey, ProgressPage, PuzzleProgress};
 pub use replay::{CURRENT_REPLAY_FORMAT_VERSION, DecodedReplay, MAX_REPLAY_BYTES};
+pub(crate) use settings::BindingSlot;
 pub use settings::{ColorMode, GlyphMode, KeyBindings, Settings};
 
 const SCHEMA_VERSION: u32 = 3;
 const PAGE_SIZE: u64 = 4 * 1024;
-const PAGE_SIZE_DB: i64 = 4 * 1024;
+const PAGE_SIZE_DB: i64 = sqlite_integer(PAGE_SIZE);
 const MAIN_FILE_LIMIT: u64 = 128 * 1024 * 1024;
 const MAX_PAGE_COUNT: u64 = MAIN_FILE_LIMIT / PAGE_SIZE;
-const MAX_PAGE_COUNT_DB: i64 = 32 * 1024;
+const MAX_PAGE_COUNT_DB: i64 = sqlite_integer(MAX_PAGE_COUNT);
 const NONESSENTIAL_RESERVE: u64 = 16 * 1024 * 1024;
 const RESERVE_PAGES: u64 = NONESSENTIAL_RESERVE / PAGE_SIZE;
 const TRANSIENT_SIDECAR_LIMIT: u64 = 132 * 1024 * 1024;
 const RECENT_REPLAYS_DB: i64 = 20;
 const PRUNE_BATCH_DB: i64 = 256;
 const MAX_MANAGED_ENTRIES: usize = MAX_INSTALLED_PACKS + 2;
-const MAX_INSTALLED_PACKS_DB: u64 = 32;
+const MAX_INSTALLED_PACKS_DB: u64 = MAX_INSTALLED_PACKS as u64;
+// One row past each bound lets a read detect an over-limit registry.
+const REGISTRY_QUERY_LIMIT_DB: i64 = sqlite_integer(MAX_INSTALLED_PACKS_DB + 1);
+const REGISTRY_RECONCILE_LIMIT_DB: i64 =
+    sqlite_integer(MAX_INSTALLED_PACKS_DB + RESERVED_PACK_IDS.len() as u64 + 1);
 const MAX_DATABASE_VALUE_BYTES: i32 = 1024 * 1024;
 pub const PROGRESS_PAGE_SIZE: usize = 128;
-const PROGRESS_PAGE_QUERY_DB: i64 = 129;
+const PROGRESS_PAGE_QUERY_DB: i64 = sqlite_integer(PROGRESS_PAGE_SIZE as u64 + 1);
 const RESERVED_PACK_IDS: [&str; 4] = [
     "orifude-lesson",
     "orifude-journey",
     "orifude-daily",
     "orifude-endless",
 ];
+
+// A rollback journal holds at most one framed record per database page plus
+// one sector-sized header, so it must fit the transient sidecar budget.
+const _: () = {
+    const RECORD_FRAMING_BYTES: u64 = 8;
+    const MAX_SQLITE_SECTOR_BYTES: u64 = 64 * 1024;
+    assert!(MAIN_FILE_LIMIT == MAX_PAGE_COUNT * PAGE_SIZE);
+    assert!(
+        MAX_PAGE_COUNT * (PAGE_SIZE + RECORD_FRAMING_BYTES) + MAX_SQLITE_SECTOR_BYTES
+            <= TRANSIENT_SIDECAR_LIMIT
+    );
+};
+
+const fn sqlite_integer(value: u64) -> i64 {
+    assert!(value <= i64::MAX.cast_unsigned());
+    value.cast_signed()
+}
 
 /// Parses a bounded replay document and validates it through the domain engine.
 ///
@@ -424,9 +446,7 @@ fn i64_to_u64(value: i64) -> Result<u64, StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        MAIN_FILE_LIMIT, MAX_PAGE_COUNT, PAGE_SIZE, StorageError, TRANSIENT_SIDECAR_LIMIT,
-    };
+    use super::StorageError;
 
     #[test]
     fn sqlite_capacity_and_permission_codes_keep_typed_recovery_paths() {
@@ -443,15 +463,5 @@ mod tests {
             StorageError::from(read_only),
             StorageError::ReadOnly
         ));
-    }
-
-    #[test]
-    fn rollback_journal_budget_covers_one_record_per_database_page() {
-        const RECORD_FRAMING_BYTES: u64 = 8;
-        const MAX_SQLITE_SECTOR_BYTES: u64 = 64 * 1024;
-        let largest_journal =
-            MAX_PAGE_COUNT * (PAGE_SIZE + RECORD_FRAMING_BYTES) + MAX_SQLITE_SECTOR_BYTES;
-        assert_eq!(MAIN_FILE_LIMIT, MAX_PAGE_COUNT * PAGE_SIZE);
-        assert!(largest_journal <= TRANSIENT_SIDECAR_LIMIT);
     }
 }

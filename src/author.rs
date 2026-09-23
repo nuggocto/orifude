@@ -3,8 +3,8 @@ use std::fmt::{self, Write as _};
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::cli::{CommandOutcome, ExitStatus};
-use crate::domain::paper::{FoldDirection, PaperAction};
+use crate::cli::{AuthorCommand, ExitStatus};
+use crate::domain::paper::PaperAction;
 use crate::packs::{PackError, ValidatedPack, validate_source};
 use crate::solver::{NeverCancel, SolveOutcome, Solver, SolverLimits};
 use crate::storage::{AppPaths, InstallOutcome, PathError, Storage, StorageError};
@@ -22,7 +22,6 @@ pub enum AuthorError {
         puzzle_id: Box<str>,
         reason: &'static str,
     },
-    Command,
     OutputLimit,
 }
 
@@ -37,7 +36,6 @@ impl fmt::Display for AuthorError {
             Self::Solver { puzzle_id, reason } => {
                 write!(formatter, "solver {reason} for puzzle {puzzle_id}")
             }
-            Self::Command => formatter.write_str("command is not an author operation"),
             Self::OutputLimit => formatter.write_str("author command output exceeded its limit"),
         }
     }
@@ -50,7 +48,7 @@ impl Error for AuthorError {
             Self::Paths(error) => Some(error),
             Self::Storage(error) => Some(error),
             Self::Output(error) => Some(error),
-            Self::Clock | Self::Solver { .. } | Self::Command | Self::OutputLimit => None,
+            Self::Clock | Self::Solver { .. } | Self::OutputLimit => None,
         }
     }
 }
@@ -59,16 +57,16 @@ impl Error for AuthorError {
 ///
 /// # Errors
 ///
-/// Returns a typed pack, storage, solver, clock, command, output, or resource
+/// Returns a typed pack, storage, solver, clock, output, or resource
 /// error. Validation failures with structured issues are written to `stderr`
 /// and returned as a normal failure status.
 pub fn execute_author(
-    command: CommandOutcome,
+    command: AuthorCommand,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<ExitStatus, AuthorError> {
     match command {
-        CommandOutcome::Verify(path) => match validate_source(&path) {
+        AuthorCommand::Verify(path) => match validate_source(&path) {
             Ok(pack) => {
                 let message = format!(
                     "Verified {} puzzle(s) in pack {} [{}].\n",
@@ -81,17 +79,16 @@ pub fn execute_author(
             }
             Err(error) => report_pack_error(stderr, error),
         },
-        CommandOutcome::Solve(path) => match validate_source(&path) {
+        AuthorCommand::Solve(path) => match validate_source(&path) {
             Ok(pack) => solve_pack(&pack, stdout),
             Err(error) => report_pack_error(stderr, error),
         },
-        CommandOutcome::PackInstall(path) => match validate_source(&path) {
+        AuthorCommand::PackInstall(path) => match validate_source(&path) {
             Ok(pack) => install_pack(&pack, stdout),
             Err(error) => report_pack_error(stderr, error),
         },
-        CommandOutcome::PackList => list_packs(stdout),
-        CommandOutcome::PackRemove(pack_id) => remove_pack(&pack_id, stdout),
-        CommandOutcome::Play | CommandOutcome::Exit(_) => Err(AuthorError::Command),
+        AuthorCommand::PackList => list_packs(stdout),
+        AuthorCommand::PackRemove(pack_id) => remove_pack(&pack_id, stdout),
     }
 }
 
@@ -99,34 +96,17 @@ fn solve_pack(pack: &ValidatedPack, stdout: &mut impl Write) -> Result<ExitStatu
     let mut output = String::new();
     writeln!(output, "pack = \"{}\"", pack.metadata().id()).expect("string writes cannot fail");
     for content in pack.puzzles() {
-        let solution = match Solver::solve(content.puzzle(), SolverLimits::default(), &NeverCancel)
-        {
-            SolveOutcome::Solved(solution) => solution,
-            SolveOutcome::Unsolved(_) => {
-                return Err(AuthorError::Solver {
-                    puzzle_id: content.puzzle().identity().puzzle_id().into(),
-                    reason: "found no solution",
-                });
-            }
-            SolveOutcome::Exhausted { .. } => {
-                return Err(AuthorError::Solver {
-                    puzzle_id: content.puzzle().identity().puzzle_id().into(),
-                    reason: "reached a resource limit",
-                });
-            }
-            SolveOutcome::Cancelled(_) => {
-                return Err(AuthorError::Solver {
-                    puzzle_id: content.puzzle().identity().puzzle_id().into(),
-                    reason: "was cancelled",
-                });
-            }
-            SolveOutcome::Invalid(_) => {
-                return Err(AuthorError::Solver {
-                    puzzle_id: content.puzzle().identity().puzzle_id().into(),
-                    reason: "received invalid limits",
-                });
-            }
+        let outcome = match Solver::solve(content.puzzle(), SolverLimits::default(), &NeverCancel) {
+            SolveOutcome::Solved(solution) => Ok(solution),
+            SolveOutcome::Unsolved(_) => Err("found no solution"),
+            SolveOutcome::Exhausted { .. } => Err("reached a resource limit"),
+            SolveOutcome::Cancelled(_) => Err("was cancelled"),
+            SolveOutcome::Invalid(_) => Err("received invalid limits"),
         };
+        let solution = outcome.map_err(|reason| AuthorError::Solver {
+            puzzle_id: content.puzzle().identity().puzzle_id().into(),
+            reason,
+        })?;
         writeln!(
             output,
             "\n[puzzle.{}]\nfolds = {}\nstrokes = {}\nsolution = [",
@@ -151,7 +131,7 @@ fn action_toml(action: PaperAction) -> String {
     match action {
         PaperAction::Fold(fold) => format!(
             "{{ kind = \"fold\", direction = \"{}\", crease = {} }}",
-            direction_name(fold.direction()),
+            fold.direction(),
             fold.crease()
         ),
         PaperAction::Dot(coordinate) => format!(
@@ -166,15 +146,6 @@ fn action_toml(action: PaperAction) -> String {
             line.end().row().get(),
             line.end().column().get()
         ),
-    }
-}
-
-const fn direction_name(direction: FoldDirection) -> &'static str {
-    match direction {
-        FoldDirection::Left => "left",
-        FoldDirection::Right => "right",
-        FoldDirection::Up => "up",
-        FoldDirection::Down => "down",
     }
 }
 

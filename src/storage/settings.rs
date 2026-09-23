@@ -64,56 +64,83 @@ pub struct KeyBindings {
     pub quit: char,
 }
 
+/// One rebindable action. [`BindingSlot::ALL`] is the single ordering shared
+/// by the settings screen and the settings table columns.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum BindingSlot {
+    Fold,
+    Brush,
+    Undo,
+    Reset,
+    Preview,
+    Help,
+    Quit,
+}
+
+impl BindingSlot {
+    pub(crate) const ALL: [Self; 7] = [
+        Self::Fold,
+        Self::Brush,
+        Self::Undo,
+        Self::Reset,
+        Self::Preview,
+        Self::Help,
+        Self::Quit,
+    ];
+
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::Fold => "Fold",
+            Self::Brush => "Brush",
+            Self::Undo => "Undo",
+            Self::Reset => "Reset",
+            Self::Preview => "Preview",
+            Self::Help => "Help",
+            Self::Quit => "Quit",
+        }
+    }
+}
+
 impl KeyBindings {
     #[must_use]
     pub fn is_conflict_free(self) -> bool {
-        let keys = [
-            self.fold,
-            self.brush,
-            self.undo,
-            self.reset,
-            self.preview,
-            self.help,
-            self.quit,
-        ];
-        keys.iter().enumerate().all(|(index, key)| {
-            (key.is_ascii_graphic() || (index == 4 && *key == ' '))
+        let keys = self.keys();
+        BindingSlot::ALL.into_iter().zip(keys).all(|(slot, key)| {
+            (key.is_ascii_graphic() || (slot == BindingSlot::Preview && key == ' '))
                 && !matches!(key, 'h' | 'j' | 'k' | 'l' | 't' | 'v' | 'x')
-                && keys.iter().filter(|candidate| *candidate == key).count() == 1
+                && keys.iter().filter(|&&candidate| candidate == key).count() == 1
         })
     }
 
-    fn database_values(self) -> [String; 7] {
-        [
-            self.fold,
-            self.brush,
-            self.undo,
-            self.reset,
-            self.preview,
-            self.help,
-            self.quit,
-        ]
-        .map(|key| key.to_string())
+    pub(crate) fn key(mut self, slot: BindingSlot) -> char {
+        *self.key_mut(slot)
+    }
+
+    pub(crate) const fn key_mut(&mut self, slot: BindingSlot) -> &mut char {
+        match slot {
+            BindingSlot::Fold => &mut self.fold,
+            BindingSlot::Brush => &mut self.brush,
+            BindingSlot::Undo => &mut self.undo,
+            BindingSlot::Reset => &mut self.reset,
+            BindingSlot::Preview => &mut self.preview,
+            BindingSlot::Help => &mut self.help,
+            BindingSlot::Quit => &mut self.quit,
+        }
+    }
+
+    fn keys(self) -> [char; 7] {
+        BindingSlot::ALL.map(|slot| self.key(slot))
     }
 
     fn from_database(values: [&str; 7]) -> Result<Self, StorageError> {
-        let mut keys = ['\0'; 7];
-        for (index, value) in values.into_iter().enumerate() {
+        let mut bindings = Self::default();
+        for (slot, value) in BindingSlot::ALL.into_iter().zip(values) {
             let mut characters = value.chars();
-            keys[index] = characters.next().ok_or(StorageError::Corrupt)?;
+            *bindings.key_mut(slot) = characters.next().ok_or(StorageError::Corrupt)?;
             if characters.next().is_some() {
                 return Err(StorageError::Corrupt);
             }
         }
-        let bindings = Self {
-            fold: keys[0],
-            brush: keys[1],
-            undo: keys[2],
-            reset: keys[3],
-            preview: keys[4],
-            help: keys[5],
-            quit: keys[6],
-        };
         bindings
             .is_conflict_free()
             .then_some(bindings)
@@ -224,7 +251,7 @@ impl Storage {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let color = settings.color_mode.database_value();
         let glyphs = settings.glyph_mode.database_value();
-        let bindings = settings.bindings.database_values();
+        let bindings = settings.bindings.keys().map(String::from);
         let changed = transaction.execute(
             "UPDATE settings
              SET color_mode = ?1, glyph_mode = ?2, reduced_motion = ?3,

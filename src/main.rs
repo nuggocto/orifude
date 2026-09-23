@@ -23,13 +23,7 @@ fn main() -> ExitCode {
             Ok(()) => ExitStatus::Success.into(),
             Err(error) => report_failure(&error),
         },
-        Ok(
-            command @ (CommandOutcome::Verify(_)
-            | CommandOutcome::Solve(_)
-            | CommandOutcome::PackInstall(_)
-            | CommandOutcome::PackList
-            | CommandOutcome::PackRemove(_)),
-        ) => {
+        Ok(CommandOutcome::Author(command)) => {
             let stdout = io::stdout();
             let stderr = io::stderr();
             match execute_author(command, &mut stdout.lock(), &mut stderr.lock()) {

@@ -10,7 +10,7 @@ use crate::generator::{
 };
 use crate::packs::ValidatedPack;
 use crate::storage::{
-    ColorMode, DecodedReplay, GlyphMode, KeyBindings, ProgressPage, PuzzleProgress, RegisteredPack,
+    BindingSlot, ColorMode, DecodedReplay, GlyphMode, ProgressPage, PuzzleProgress, RegisteredPack,
     Settings,
 };
 
@@ -20,7 +20,8 @@ use super::text::SafeText;
 pub(crate) const MARK_FRAME_COUNT: usize = 24;
 const MARK_REVEAL_LIMIT: std::time::Duration = std::time::Duration::from_millis(1_100);
 const BRANCH_CHOICE_COUNT: usize = 7;
-const SETTING_CHOICE_COUNT: usize = 12;
+const PREFERENCE_CHOICE_COUNT: usize = 4;
+const SETTING_CHOICE_COUNT: usize = PREFERENCE_CHOICE_COUNT + BindingSlot::ALL.len() + 1;
 const WALKTHROUGH_FRAME_COUNT: usize = 6;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -83,7 +84,7 @@ pub(crate) struct App {
     pack_papers: Vec<PackPaper>,
     session: Option<PlaySession>,
     walkthrough_step: usize,
-    binding_capture: Option<usize>,
+    binding_capture: Option<BindingSlot>,
     local_date: CalendarDate,
     endless_seed: u64,
     pending_generation: Option<(u64, PlaySource)>,
@@ -216,7 +217,7 @@ impl App {
         self.session.as_ref()
     }
 
-    pub(crate) const fn binding_capture(&self) -> Option<usize> {
+    pub(crate) const fn binding_capture(&self) -> Option<BindingSlot> {
         self.binding_capture
     }
 
@@ -781,9 +782,11 @@ impl App {
                 AppAction::Render
             }
             Screen::Settings if self.selection == SETTING_CHOICE_COUNT - 1 => self.back(),
-            Screen::Settings if self.selection < 4 => self.change_setting(1),
+            Screen::Settings if self.selection < PREFERENCE_CHOICE_COUNT => self.change_setting(1),
             Screen::Settings => {
-                self.binding_capture = Some(self.selection - 4);
+                self.binding_capture = BindingSlot::ALL
+                    .get(self.selection - PREFERENCE_CHOICE_COUNT)
+                    .copied();
                 AppAction::Render
             }
             Screen::Capabilities | Screen::Play | Screen::Loading => AppAction::None,
@@ -913,7 +916,7 @@ impl App {
     }
 
     fn capture_binding(&mut self, code: KeyCode) -> AppAction {
-        let Some(binding) = self.binding_capture.take() else {
+        let Some(slot) = self.binding_capture.take() else {
             return AppAction::None;
         };
         if matches!(code, KeyCode::Esc) {
@@ -923,7 +926,7 @@ impl App {
             return self.internal_error("Bindings use one key character.");
         };
         let mut bindings = self.settings.bindings;
-        *binding_slot(&mut bindings, binding) = character;
+        *bindings.key_mut(slot) = character;
         if !bindings.is_conflict_free() {
             return self.internal_error(
                 "That key is already used or reserved for movement or result actions.",
@@ -1042,18 +1045,6 @@ pub(crate) fn key_label(key: char) -> String {
         "Space".to_owned()
     } else {
         key.to_string()
-    }
-}
-
-fn binding_slot(bindings: &mut KeyBindings, index: usize) -> &mut char {
-    match index {
-        0 => &mut bindings.fold,
-        1 => &mut bindings.brush,
-        2 => &mut bindings.undo,
-        3 => &mut bindings.reset,
-        4 => &mut bindings.preview,
-        5 => &mut bindings.help,
-        _ => &mut bindings.quit,
     }
 }
 

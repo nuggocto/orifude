@@ -1,25 +1,25 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::domain::paper::{
-    BrushRule, Fold, FoldCount, FoldDirection, LineStroke, MAX_ACTIONS, PaperAction, StrokeAxis,
-    StrokeCount,
+    BrushRule, Fold, FoldCount, LineStroke, MAX_ACTIONS, PaperAction, StrokeCount,
 };
 use crate::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 use crate::domain::replay::{Replay, ReplayMetadata};
 use crate::domain::score::Par;
+use crate::wire::{BrushDocument, DirectionDocument, FoldDocument, ParDocument};
 
 use super::{
     CURRENT_PACK_FORMAT_VERSION, MAX_METADATA_BYTES, MAX_PUZZLE_BYTES, MAX_PUZZLES,
     MAX_VALIDATION_ISSUES, PackError, PackIssue,
 };
 
-const MAX_TITLE_SCALARS: usize = 80;
-const MAX_DESCRIPTION_SCALARS: usize = 512;
-const MAX_AUTHORS: usize = 16;
-const MAX_AUTHOR_SCALARS: usize = 80;
+pub(crate) const MAX_TITLE_SCALARS: usize = 80;
+pub(crate) const MAX_DESCRIPTION_SCALARS: usize = 512;
+pub(crate) const MAX_AUTHORS: usize = 16;
+pub(crate) const MAX_AUTHOR_SCALARS: usize = 80;
 const MAX_TUTORIAL_CUES: usize = 16;
 const MAX_TUTORIAL_SCALARS: usize = 512;
 const MAX_LICENSE_BYTES: usize = 128;
@@ -135,69 +135,32 @@ struct PackDocument {
     puzzles: Vec<String>,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct PuzzleDocument {
-    pub(crate) format_version: u16,
-    pub(crate) id: String,
-    pub(crate) title: String,
-    pub(crate) description: Option<String>,
-    pub(crate) width: u8,
-    pub(crate) height: u8,
-    pub(crate) target: Vec<String>,
-    pub(crate) folds: Vec<FoldDocument>,
-    pub(crate) brushes: Vec<BrushDocument>,
-    pub(crate) fold_budget: u8,
-    pub(crate) stroke_budget: u8,
-    pub(crate) par: Option<ParDocument>,
+struct PuzzleDocument {
+    format_version: u16,
+    id: String,
+    title: String,
+    description: Option<String>,
+    width: u8,
+    height: u8,
+    target: Vec<String>,
+    folds: Vec<FoldDocument>,
+    brushes: Vec<BrushDocument>,
+    fold_budget: u8,
+    stroke_budget: u8,
+    par: Option<ParDocument>,
     #[serde(default)]
-    pub(crate) tutorial_cues: Vec<String>,
-    pub(crate) author: Option<String>,
-    pub(crate) license: Option<String>,
+    tutorial_cues: Vec<String>,
+    author: Option<String>,
+    license: Option<String>,
     #[serde(default)]
-    pub(crate) solution: Option<Vec<ActionDocument>>,
+    solution: Option<Vec<ActionDocument>>,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct FoldDocument {
-    pub(crate) direction: DirectionDocument,
-    pub(crate) crease: u8,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum DirectionDocument {
-    Left,
-    Right,
-    Up,
-    Down,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
-pub(crate) enum BrushDocument {
-    Dot {},
-    Line { axis: AxisDocument, length: u8 },
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum AxisDocument {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ParDocument {
-    pub(crate) folds: u8,
-    pub(crate) strokes: u8,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
-pub(crate) enum ActionDocument {
+enum ActionDocument {
     Fold {
         direction: DirectionDocument,
         crease: u8,
@@ -329,7 +292,7 @@ fn toml_error(location: &str, text: &str, error: &toml::de::Error) -> PackError 
     PackError::one(location, problem)
 }
 
-pub(crate) fn puzzle_from_document(
+fn puzzle_from_document(
     pack_id: &str,
     expected_id: &str,
     document: PuzzleDocument,
@@ -558,11 +521,7 @@ fn build_puzzle(
     }
     let identity = identity?;
     let target = target?;
-    let folds = document
-        .folds
-        .iter()
-        .map(|fold| Fold::new(fold.direction.into(), fold.crease))
-        .collect();
+    let folds = document.folds.iter().copied().map(Fold::from).collect();
     let brushes = document
         .brushes
         .iter()
@@ -684,32 +643,6 @@ fn record_issue(
 ) {
     if issues.len() < MAX_VALIDATION_ISSUES {
         issues.push(PackIssue::new(location, problem));
-    }
-}
-
-impl From<DirectionDocument> for FoldDirection {
-    fn from(direction: DirectionDocument) -> Self {
-        match direction {
-            DirectionDocument::Left => Self::Left,
-            DirectionDocument::Right => Self::Right,
-            DirectionDocument::Up => Self::Up,
-            DirectionDocument::Down => Self::Down,
-        }
-    }
-}
-
-impl From<BrushDocument> for BrushRule {
-    fn from(brush: BrushDocument) -> Self {
-        match brush {
-            BrushDocument::Dot {} => Self::Dot,
-            BrushDocument::Line { axis, length } => Self::Line {
-                axis: match axis {
-                    AxisDocument::Horizontal => StrokeAxis::Horizontal,
-                    AxisDocument::Vertical => StrokeAxis::Vertical,
-                },
-                length,
-            },
-        }
     }
 }
 

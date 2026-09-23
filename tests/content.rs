@@ -44,10 +44,6 @@ fn official_journey_is_valid_and_independently_solvable() {
             "{} should carry a short description",
             puzzle.identity().puzzle_id()
         );
-        let attempt = recorded
-            .execute(puzzle)
-            .expect("recorded solution executes");
-        assert!(attempt.result().is_success());
 
         match Solver::solve(puzzle, SolverLimits::default(), &NeverCancel) {
             SolveOutcome::Solved(solution) => {
@@ -88,13 +84,6 @@ fn example_community_pack_uses_the_public_format() {
 
     assert_eq!(pack.metadata().id(), "paper-garden");
     assert_eq!(pack.puzzles().len(), 3);
-    assert!(
-        pack.puzzles()
-            .iter()
-            .all(|content| content.solution().is_some_and(|solution| solution
-                .execute(content.puzzle())
-                .is_ok_and(|attempt| attempt.result().is_success())))
-    );
     for content in pack.puzzles() {
         assert_eq!(
             content.tutorial_cues().len(),

@@ -10,8 +10,11 @@ use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::Path;
 
+pub(crate) use format::{
+    MAX_AUTHOR_SCALARS, MAX_AUTHORS, MAX_DESCRIPTION_SCALARS, MAX_TITLE_SCALARS, license_is_valid,
+    normalize_license,
+};
 pub use format::{PackMetadata, PuzzleContent};
-pub(crate) use format::{license_is_valid, normalize_license};
 
 pub const CURRENT_PACK_FORMAT_VERSION: u16 = 1;
 pub const MAX_PUZZLE_BYTES: u64 = 64 * 1024;

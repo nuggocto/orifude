@@ -40,36 +40,28 @@ run = "cargo test --locked --doc"
 description = "Build the release binary"
 run = "cargo build --locked --release"
 
-[tasks.paper]
-description = "Run the plain-text paper exercise"
-run = "cargo run --quiet --locked --example paper"
-
-[tasks.paper-measure]
-description = "Measure the paper representations in a release build"
-run = "cargo run --quiet --locked --release --example paper_measure"
-
 [tasks.solver-measure]
 description = "Measure bounded solver search in a release build"
 run = "cargo run --quiet --locked --release --example solver_measure"
 
 [tasks.domain-fuzz]
-description = "Run the bounded domain-action fuzz harness"
+description = "Replay one bounded input from standard input through the domain-action fuzz target"
 run = "cargo run --quiet --locked --release --example domain_actions_fuzz"
 
 [tasks.puzzle-parser-fuzz]
-description = "Run the bounded puzzle-parser fuzz harness"
+description = "Replay one bounded input from standard input through the puzzle-parser fuzz target"
 run = "cargo run --quiet --locked --release --example puzzle_parser_fuzz"
 
 [tasks.pack-metadata-fuzz]
-description = "Run the bounded pack-metadata fuzz harness"
+description = "Replay one bounded input from standard input through the pack-metadata fuzz target"
 run = "cargo run --quiet --locked --release --example pack_metadata_fuzz"
 
 [tasks.replay-parser-fuzz]
-description = "Run the bounded replay-parser fuzz harness"
+description = "Replay one bounded input from standard input through the replay-parser fuzz target"
 run = "cargo run --quiet --locked --release --example replay_parser_fuzz"
 
 [tasks.archive-parser-fuzz]
-description = "Run the bounded ZIP-parser fuzz harness"
+description = "Replay one bounded input from standard input through the ZIP-parser fuzz target"
 run = "cargo run --quiet --locked --release --example archive_parser_fuzz"
 
 [tasks.fuzz-campaign]

@@ -21,8 +21,9 @@ pub mod packs;
 pub mod solver;
 pub mod storage;
 mod tui;
+mod wire;
 
 pub use author::{AuthorError, execute_author};
-pub use cli::{CommandOutcome, ExitStatus, run};
+pub use cli::{AuthorCommand, CommandOutcome, ExitStatus, run};
 pub use error::{OutputError, OutputStream};
 pub use tui::{EventError, TuiError, play};

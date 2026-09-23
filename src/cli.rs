@@ -50,11 +50,7 @@ enum Command {
     Play,
     Help,
     Version,
-    Verify(PathBuf),
-    Solve(PathBuf),
-    PackInstall(PathBuf),
-    PackList,
-    PackRemove(Box<str>),
+    Author(AuthorCommand),
     Invalid,
 }
 
@@ -71,12 +67,18 @@ fn parse(mut arguments: impl Iterator<Item = OsString>) -> Command {
     match (first, second, third) {
         (argument, None, None) if argument == "-h" || argument == "--help" => Command::Help,
         (argument, None, None) if argument == "-V" || argument == "--version" => Command::Version,
-        (command, Some(path), None) if command == "verify" => Command::Verify(PathBuf::from(path)),
-        (command, Some(path), None) if command == "solve" => Command::Solve(PathBuf::from(path)),
-        (pack, Some(command), Some(path)) if pack == "pack" && command == "install" => {
-            Command::PackInstall(PathBuf::from(path))
+        (command, Some(path), None) if command == "verify" => {
+            Command::Author(AuthorCommand::Verify(PathBuf::from(path)))
         }
-        (pack, Some(command), None) if pack == "pack" && command == "list" => Command::PackList,
+        (command, Some(path), None) if command == "solve" => {
+            Command::Author(AuthorCommand::Solve(PathBuf::from(path)))
+        }
+        (pack, Some(command), Some(path)) if pack == "pack" && command == "install" => {
+            Command::Author(AuthorCommand::PackInstall(PathBuf::from(path)))
+        }
+        (pack, Some(command), None) if pack == "pack" && command == "list" => {
+            Command::Author(AuthorCommand::PackList)
+        }
         (pack, Some(command), Some(pack_id)) if pack == "pack" && command == "remove" => {
             let Ok(pack_id) = pack_id.into_string() else {
                 return Command::Invalid;
@@ -84,7 +86,7 @@ fn parse(mut arguments: impl Iterator<Item = OsString>) -> Command {
             if PuzzleIdentity::new(&pack_id, "probe").is_err() {
                 Command::Invalid
             } else {
-                Command::PackRemove(pack_id.into_boxed_str())
+                Command::Author(AuthorCommand::PackRemove(pack_id.into_boxed_str()))
             }
         }
         _ => Command::Invalid,
@@ -97,6 +99,15 @@ fn parse(mut arguments: impl Iterator<Item = OsString>) -> Command {
 pub enum CommandOutcome {
     /// Open the interactive terminal application after releasing stream locks.
     Play,
+    /// Run one local author or pack-management command.
+    Author(AuthorCommand),
+    /// Finish without opening the terminal application.
+    Exit(ExitStatus),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// A local author or pack-management command.
+pub enum AuthorCommand {
     /// Validate one local pack directory or ZIP archive.
     Verify(PathBuf),
     /// Solve every puzzle in one validated local pack.
@@ -107,8 +118,6 @@ pub enum CommandOutcome {
     PackList,
     /// Remove one installed pack while preserving its progress.
     PackRemove(Box<str>),
-    /// Finish without opening the terminal application.
-    Exit(ExitStatus),
 }
 
 /// Runs the command-line boundary with caller-provided streams.
@@ -135,11 +144,7 @@ pub fn run(
             flush(stdout, OutputStream::Stdout)?;
             Ok(CommandOutcome::Exit(ExitStatus::Success))
         }
-        Command::Verify(path) => Ok(CommandOutcome::Verify(path)),
-        Command::Solve(path) => Ok(CommandOutcome::Solve(path)),
-        Command::PackInstall(path) => Ok(CommandOutcome::PackInstall(path)),
-        Command::PackList => Ok(CommandOutcome::PackList),
-        Command::PackRemove(pack_id) => Ok(CommandOutcome::PackRemove(pack_id)),
+        Command::Author(command) => Ok(CommandOutcome::Author(command)),
         Command::Invalid => write(stderr, OutputStream::Stderr, USAGE_ERROR, ExitStatus::Usage),
     }
 }

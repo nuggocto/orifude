@@ -7,7 +7,7 @@ use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
 
 use crate::domain::attempt::Attempt;
 use crate::domain::paper::{Coordinate, Row};
-use crate::storage::{ColorMode, GlyphMode, KeyBindings};
+use crate::storage::{BindingSlot, ColorMode, GlyphMode, KeyBindings};
 
 use super::app::{App, Overlay, Screen, action_label, key_label};
 use super::components::{
@@ -293,20 +293,17 @@ fn render_settings(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleP
         GlyphMode::Unicode => "Unicode",
         GlyphMode::Ascii => "ASCII only",
     };
-    let choices = vec![
+    let mut choices = vec![
         format!("Color: {color}"),
         format!("Symbols: {glyphs}"),
         format!("Reduced motion: {}", on_off(settings.reduced_motion)),
         format!("Instant reveal: {}", on_off(settings.instant_reveal)),
-        format!("Fold key: {}", bindings.fold),
-        format!("Brush key: {}", bindings.brush),
-        format!("Undo key: {}", bindings.undo),
-        format!("Reset key: {}", bindings.reset),
-        format!("Preview key: {}", key_label(bindings.preview)),
-        format!("Help key: {}", bindings.help),
-        format!("Quit key: {}", bindings.quit),
-        "Back to the branch".to_owned(),
     ];
+    choices.extend(
+        BindingSlot::ALL
+            .map(|slot| format!("{} key: {}", slot.label(), key_label(bindings.key(slot)))),
+    );
+    choices.push("Back to the branch".to_owned());
     let regions = if app.binding_capture().is_some() {
         Layout::default()
             .direction(Direction::Vertical)
