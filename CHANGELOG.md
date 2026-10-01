@@ -5,6 +5,10 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-01
+
+Find your way around the paper at a glance, from the first fold to the last chapter.
+
 ### Fixed
 
 - Keys pressed while the terminal is below the minimum size no longer change
