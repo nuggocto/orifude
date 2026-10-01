@@ -4,6 +4,68 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.1.1 publication decision on 2026-10-01
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.1)
+uses signed source commit [70025e8](https://github.com/nuggocto/orifude/commit/70025e8bceb5c4aa1fbc0713bd5931d13ef94e88)
+and a verified signed annotated tag. Dialogs now measure text with the renderer's
+own wrapping and keep their body above the footer, and the paper panel and
+keepsake rows shorten titles by terminal display width. An 80-character title in
+two-column characters no longer hides the ready tool, guidance, export lines, or
+scores. The property script now fails unless each named test runs. Save schemas,
+content formats, and generator compatibility are unchanged; `unicode-width`
+became a direct dependency at the version already in the tree. The
+[coverage limitations below](#coverage-and-limitations) still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/36916155466), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/36916174149), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/36916155427) passed. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/36918002797) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/36918655073) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
+| Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/36917877941) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.1.1 in the pinned Nix container and resolved to the release commit. |
+| Website | [Frontend 6e693f4](https://github.com/nuggocto/orifude-front/commit/6e693f459552604f0b6fa923f9105fe9a1e39887) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/36919264278), including 39 Linux and 26 Windows browser cases. Cloudflare deployment succeeded. |
+
+Publication compared all eight draft assets with the candidate and verified the
+release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.1.1/SHA256SUMS)
+records the five archive hashes. The PowerShell script SHA-256 is
+`4d024c3a727a59e4d2b93603d2dbc935e9d169f7c5720197912cc395494541b2`.
+
+Package updates are [Homebrew 150b11d](https://github.com/nuggocto/homebrew-tap/commit/150b11d382b6ea93a6dca5303406a8fbc518769c),
+[Scoop 40248b1](https://github.com/nuggocto/scoop-bucket/commit/40248b17e3535ce6e768bcba9bdb1ce69f8b80e6),
+and AUR commit `93f29b5393809e2fbecb4392a8fe564495806952`. Their public files match
+the verified generated metadata. AUR's `.SRCINFO` was regenerated and pushed with
+the dedicated `aur@sshmoi.com` SSH identity after GitHub publication. AUR's web
+view first served 1.1.0 while its Git repository already held 1.1.1; the view and
+RPC then reported `1.1.1-1`.
+
+Local optimized checks passed 266 tests and one doctest, with formatting, shell
+analysis, dependency policies, warning-denied Clippy, and the property script,
+whose five checks each ran exactly one test. Five 60-second sanitizer campaigns
+with seed 424242 completed about 9.4 million executions without failures. The
+direct-binary lifecycle check installed the published 1.1.0 and 1.1.1 Linux musl
+archives in turn: 1.1.0 saved a completion through its own terminal, 1.1.1
+replayed it, 1.1.0 replayed it again after rollback, and installed packs and saved
+progress were preserved.
+
+The Linux musl executable has SHA-256
+`4a24caa2c90e7e3dfa048fe9466b55074b770e78c2480cd7ea92ff4d2e9aef02`.
+It is 5,713,504 bytes; its archive is 2,387,304 bytes. On the same host as 1.1.0,
+twenty-five fresh and twenty-five returning startup samples gave p95 values of
+61.809 and 45.635 ms. One hundred samples each gave input p95 4.935 ms, fold p95
+5.503 ms, and brush p95 6.113 ms. Ordinary play used 6,956 KiB RSS; the journey
+solver used 7,340 KiB. Measured idle CPU was 0% over three seconds. Five storage
+processes had p95 between 20.806 and 28.952 ms. All configured budgets passed.
+These warm-filesystem measurements share the limits recorded for 1.1.0. Results
+remain in `target/release-measurement-1.1.1`.
+
+Live production checks verified all four routes, the new version and both
+changelog bullets, security headers, eight exact clipboard pastes, and layouts
+without horizontal scrolling at 1440, 390, and 320 pixels, and the landing and
+installation pages worked with JavaScript disabled. The production-copied POSIX
+command installed and reinstalled 1.1.1 as an unprivileged user in a disposable
+Arch container, preserved a saved-data sentinel, removed temporary files, and
+produced the exact musl executable above.
+
 ## 1.1.0 publication decision on 2026-10-01
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.0)
