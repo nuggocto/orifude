@@ -4,6 +4,7 @@ use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, List, ListItem, ListState, Padding, Paragraph, Wrap};
+use unicode_width::UnicodeWidthStr;
 
 use crate::domain::attempt::Attempt;
 use crate::domain::paper::{Coordinate, Row};
@@ -301,10 +302,16 @@ fn render_keepsakes(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Style
     let mut choice = |items: &mut Vec<ListItem<'static>>, label: String, detail: String| {
         let index = rows.len();
         rows.push(items.len());
-        let label = SafeText::external_display(&label, 160, profile.glyph_mode());
+        // Measured in terminal columns, so a wide pack title cannot push the
+        // score off the row.
+        let detail_columns = detail.width();
+        let label = SafeText::external_display(&label, 160, profile.glyph_mode()).fit_columns(
+            width.saturating_sub(detail_columns).saturating_sub(2),
+            profile.glyph_mode(),
+        );
         let gap = width
-            .saturating_sub(label.as_str().chars().count())
-            .saturating_sub(detail.chars().count())
+            .saturating_sub(label.as_str().width())
+            .saturating_sub(detail_columns)
             .max(2);
         items.push(ListItem::new(choice_line(
             index == app.selection(),
@@ -931,13 +938,7 @@ fn render_session_status(
     profile: StyleProfile,
     reveal: Option<(usize, usize, bool)>,
 ) {
-    let mut lines = vec![Line::from(vec![
-        Span::styled(
-            SafeText::external_display(&session.title(), 80, profile.glyph_mode())
-                .as_str()
-                .to_owned(),
-            profile.title(),
-        ),
+    let counters = [
         Span::styled("   Folds ", StyleProfile::muted()),
         Span::styled(
             format!(
@@ -956,7 +957,18 @@ fn render_session_status(
             ),
             profile.ink(),
         ),
-    ])];
+    ];
+    // A long or wide title shares one row with the counters, so the ready tool
+    // and guidance below keep their rows. Borders and padding take four columns.
+    let title_columns = usize::from(area.width.saturating_sub(4))
+        .saturating_sub(counters.iter().map(Span::width).sum());
+    let title = SafeText::external_display(&session.title(), 80, profile.glyph_mode())
+        .fit_columns(title_columns, profile.glyph_mode());
+    let mut lines = vec![Line::from(
+        std::iter::once(Span::styled(title.as_str().to_owned(), profile.title()))
+            .chain(counters)
+            .collect::<Vec<_>>(),
+    )];
     if session.result().is_some() {
         lines.extend(result_status_lines(
             session, bindings, profile, reveal, area.width,

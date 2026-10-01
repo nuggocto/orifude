@@ -599,6 +599,7 @@ dependencies = [
  "spdx",
  "time",
  "toml",
+ "unicode-width",
  "winapi-util",
  "zip",
 ]

@@ -1,5 +1,7 @@
 use std::fmt::{self, Write};
 
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
 use crate::storage::GlyphMode;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -32,6 +34,34 @@ impl SafeText {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Shortens the text to at most `columns` terminal columns, counting wide
+    /// characters such as 界 as two, and marks a cut with an ellipsis.
+    #[must_use]
+    pub fn fit_columns(&self, columns: usize, glyph_mode: GlyphMode) -> Self {
+        if self.0.width() <= columns {
+            return self.clone();
+        }
+        let marker = match glyph_mode {
+            GlyphMode::Unicode => '…',
+            GlyphMode::Ascii => '~',
+        };
+        let budget = columns.saturating_sub(1);
+        let mut used = 0;
+        let mut output = String::with_capacity(self.0.len());
+        for character in self.0.chars() {
+            let width = character.width().unwrap_or(0);
+            if used + width > budget {
+                break;
+            }
+            used += width;
+            output.push(character);
+        }
+        if columns > 0 {
+            output.push(marker);
+        }
+        Self(output.into_boxed_str())
     }
 }
 
@@ -111,6 +141,17 @@ mod tests {
         let safe = SafeText::external("paper 枝 weather", 8, GlyphMode::Ascii);
         assert_eq!(safe.as_str(), "paper ?~");
         assert!(safe.as_str().is_ascii());
+    }
+
+    #[test]
+    fn fitting_counts_wide_characters_as_two_columns() {
+        let wide = SafeText::external("界界界界", 80, GlyphMode::Unicode);
+        assert_eq!(wide.fit_columns(8, GlyphMode::Unicode).as_str(), "界界界界");
+        assert_eq!(wide.fit_columns(7, GlyphMode::Unicode).as_str(), "界界界…");
+        assert_eq!(wide.fit_columns(6, GlyphMode::Unicode).as_str(), "界界…");
+        let ascii = SafeText::external("Small sprig", 80, GlyphMode::Ascii);
+        assert_eq!(ascii.fit_columns(6, GlyphMode::Ascii).as_str(), "Small~");
+        assert_eq!(ascii.fit_columns(0, GlyphMode::Ascii).as_str(), "");
     }
 
     #[test]

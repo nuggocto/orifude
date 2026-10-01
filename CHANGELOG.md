@@ -5,6 +5,13 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+### Fixed
+
+- Long pack titles in wide scripts such as Chinese or Japanese no longer hide
+  the ready tool and guidance in the paper panel; the title is shortened to fit.
+- The text keepsake shows every line above its instructions, and keepsake rows
+  keep their score visible, when a pack title uses wide characters.
+
 ## 1.1.0 - 2026-10-01
 
 Find your way around the paper at a glance, from the first fold to the last chapter.

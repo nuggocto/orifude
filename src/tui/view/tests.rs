@@ -365,7 +365,7 @@ fn compact_maximum_board_keeps_the_cursor_visible_and_switches_to_the_target() {
     assert!(paper.contains("Folded paper rows"));
     assert!(paper.contains("-12/12"));
     assert!(paper.contains('@'));
-    assert!(!paper.contains("PATTERN TO MATCH"));
+    assert!(!paper.contains("Pattern to match"));
 
     session.handle_key(
         KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
@@ -391,7 +391,7 @@ fn compact_maximum_board_keeps_the_cursor_visible_and_switches_to_the_target() {
     let target = rendered_text(&terminal);
     assert!(target.contains("Pattern to match rows"));
     assert!(target.contains("-12/12"));
-    assert!(!target.contains("FOLDED PAPER"));
+    assert!(!target.contains("Folded paper"));
 }
 
 #[test]
@@ -760,7 +760,7 @@ fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
     let text = rendered_text(&terminal);
     assert!(text.contains("Folded paper"));
     assert!(text.contains("Replay ready: fresh paper."));
-    assert!(!text.contains("OPENED COMPARISON"));
+    assert!(!text.contains("Opened comparison"));
     assert!(replay_status_text(&session, KeyBindings::default(), " · ", 60).contains("Left/Right"));
 
     session.handle_key(
@@ -1229,6 +1229,61 @@ fn keepsakes_use_the_names_players_saw() {
 }
 
 #[test]
+fn a_wide_pack_title_keeps_the_keepsake_score_on_its_row() {
+    let now = Instant::now();
+    let pack = crate::storage::RegisteredPack {
+        id: "wide-pack".into(),
+        title: "界".repeat(80).into(),
+        description: None,
+        authors: "Ada".into(),
+        license: "Apache-2.0".into(),
+        fingerprint: [0; 32],
+        extracted_bytes: 1,
+        installed_at_unix_seconds: 1,
+    };
+    let mut app = App::with_state(
+        Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        },
+        ProgressPage {
+            entries: vec![PuzzleProgress {
+                pack_id: "wide-pack".into(),
+                puzzle_id: "berry".into(),
+                attempt_count: 1,
+                best_folds: 1,
+                best_strokes: 2,
+                best_replay_id: 1,
+                updated_at_unix_seconds: 1,
+            }],
+            has_more: false,
+        },
+        vec![pack],
+        vec![false; crate::content::journey().len()],
+        CalendarDate::new(2026, 9, 3).expect("valid date"),
+        1,
+        now,
+    );
+    for _ in 0..4 {
+        press(&mut app, KeyCode::Down, now);
+    }
+    press(&mut app, KeyCode::Enter, now);
+
+    for (width, height) in [(60, 20), (100, 30)] {
+        let text = menu_text(&app, now, width, height);
+        assert!(
+            text.contains("1 fold, 2 strokes"),
+            "{width}x{height}: {text}"
+        );
+        assert!(
+            text.contains('…'),
+            "{width}x{height}: the title is shortened"
+        );
+    }
+}
+
+#[test]
 fn empty_keepsakes_explain_themselves_and_offer_the_way_back() {
     let now = Instant::now();
     let mut app = App::new(
@@ -1254,6 +1309,57 @@ fn empty_keepsakes_explain_themselves_and_offer_the_way_back() {
     let text = menu_text(&app, now, 60, 20);
     assert!(text.contains("No keepsakes yet."), "{text}");
     assert!(text.contains("› Back to the branch"), "{text}");
+}
+
+#[test]
+fn a_maximum_wide_title_leaves_the_ready_tool_and_guide_visible() {
+    // Pack titles may hold 80 characters; these each take two terminal columns.
+    let paper = &crate::content::journey()[0];
+    let session = PlaySession::new(
+        paper.puzzle(),
+        "界".repeat(80),
+        paper.description(),
+        paper.cues().to_vec(),
+        PlaySource::Journey(0),
+    );
+    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+    for (width, height) in [(60, 20), (80, 24), (100, 30)] {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let area = Rect::new(0, 0, width, height);
+        let content = content_area(
+            ShellLayout::new(area, LayoutMode::for_area(area)).expect("supported size"),
+        );
+        terminal
+            .draw(|frame| {
+                render_session(
+                    frame,
+                    content,
+                    &session,
+                    KeyBindings::default(),
+                    profile,
+                    Instant::now(),
+                    None,
+                    false,
+                    true,
+                );
+            })
+            .expect("wide title renders");
+        let text = rendered_text(&terminal);
+        assert!(
+            text.contains("Ready: Dot brush"),
+            "{width}x{height}: {text}"
+        );
+        assert!(
+            text.contains("Guide: Dot brush ready."),
+            "{width}x{height}: {text}"
+        );
+        assert!(
+            text.contains('…'),
+            "{width}x{height}: the title is shortened"
+        );
+        assert!(text.contains("Folds 0/0"), "{width}x{height}: {text}");
+    }
 }
 
 fn rendered_text(terminal: &Terminal<TestBackend>) -> String {

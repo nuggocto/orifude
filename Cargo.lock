@@ -609,6 +609,7 @@ dependencies = [
  "tempfile",
  "time",
  "toml",
+ "unicode-width",
  "winapi-util",
  "zip",
 ]

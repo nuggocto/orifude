@@ -1,5 +1,5 @@
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::symbols::border;
 use ratatui::text::{Line, Span};
@@ -253,35 +253,20 @@ impl BranchChoices {
         // would be cut off rather than show half a sentence.
         let note_top = card.bottom().saturating_add(1);
         let room = area.bottom().saturating_sub(note_top).min(3);
-        if let Some(note) = BRANCH_CHOICE_NOTES.get(selected)
-            && wrapped_rows(note, card.width) <= room
-        {
-            frame.render_widget(
-                Paragraph::new(*note)
-                    .style(StyleProfile::muted())
-                    .alignment(Alignment::Center)
-                    .wrap(Wrap { trim: true }),
-                Rect::new(card.x, note_top, card.width, room),
-            );
+        if let Some(note) = BRANCH_CHOICE_NOTES.get(selected) {
+            let note = branch_note(note);
+            if note.line_count(card.width) <= usize::from(room) {
+                frame.render_widget(note, Rect::new(card.x, note_top, card.width, room));
+            }
         }
     }
 }
 
-/// Counts the rows a greedy word wrap needs for `text` at `width` columns.
-fn wrapped_rows(text: &str, width: u16) -> u16 {
-    let width = usize::from(width.max(1));
-    let mut rows = 1_u16;
-    let mut used = 0_usize;
-    for word in text.split_whitespace() {
-        let length = word.chars().count();
-        if used > 0 && used + 1 + length > width {
-            rows = rows.saturating_add(1);
-            used = length;
-        } else {
-            used += usize::from(used > 0) + length;
-        }
-    }
-    rows
+fn branch_note(note: &str) -> Paragraph<'_> {
+    Paragraph::new(note)
+        .style(StyleProfile::muted())
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true })
 }
 
 pub(crate) struct BranchGrowth;
@@ -757,13 +742,7 @@ impl Dialog {
         style: Style,
         profile: StyleProfile,
     ) {
-        // Borders, a blank line, and the footer surround the wrapped body.
-        let inner = DIALOG_WIDTH.min(host.width).saturating_sub(4);
-        let height = body
-            .iter()
-            .map(|line| wrapped_rows(&line.to_string(), inner))
-            .fold(4_u16, u16::saturating_add);
-        Self::render_with_size(
+        Self::render_with_width(
             frame,
             host,
             title,
@@ -772,12 +751,13 @@ impl Dialog {
             style,
             profile,
             DIALOG_WIDTH,
-            height,
         );
     }
 
+    /// Sizes the dialog to its body, measured with the renderer's own word
+    /// wrapping and display widths, then keeps the body above the footer.
     #[allow(clippy::too_many_arguments)]
-    fn render_with_size(
+    fn render_with_width(
         frame: &mut Frame<'_>,
         host: Rect,
         title: &str,
@@ -786,24 +766,27 @@ impl Dialog {
         style: Style,
         profile: StyleProfile,
         width: u16,
-        height: u16,
     ) {
+        let body = Paragraph::new(body).wrap(Wrap { trim: true });
+        // Borders and padding take four columns; borders, a blank line, and the
+        // footer take four rows.
+        let rows = body.line_count(width.min(host.width).saturating_sub(4));
+        let height = u16::try_from(rows).map_or(u16::MAX, |rows| rows.saturating_add(4));
         let area = centered(host, width, height);
         frame.render_widget(Clear, area);
         let block = Paper::block(title, profile).border_style(style);
-        frame.render_widget(
-            Paragraph::new(body)
-                .block(block)
-                .wrap(Wrap { trim: true })
-                .alignment(Alignment::Left),
-            area,
-        );
-        let footer_area = Rect::new(
-            area.x.saturating_add(2),
-            area.bottom().saturating_sub(2),
-            area.width.saturating_sub(4),
-            1,
-        );
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        // A blank row sets the footer apart only when the body still fits; a
+        // body too tall for the host is cut off instead of running under it.
+        let gap = u16::from(usize::from(inner.height) >= rows.saturating_add(2));
+        let [body_area, _, footer_area] = Layout::vertical([
+            Constraint::Min(0),
+            Constraint::Length(gap),
+            Constraint::Length(1),
+        ])
+        .areas(inner);
+        frame.render_widget(body, body_area);
         frame.render_widget(
             Paragraph::new(footer)
                 .style(StyleProfile::muted())
@@ -822,10 +805,6 @@ impl HelpPanel {
         message: &[super::text::SafeText],
         profile: StyleProfile,
     ) {
-        let height = u16::try_from(message.len())
-            .unwrap_or(u16::MAX)
-            .saturating_add(4)
-            .min(area.height);
         let lines = message
             .iter()
             .map(|line| match line.as_str() {
@@ -838,7 +817,7 @@ impl HelpPanel {
                 _ => Line::from(line.as_str().to_owned()),
             })
             .collect::<Vec<_>>();
-        Dialog::render_with_size(
+        Dialog::render_with_width(
             frame,
             area,
             "Keyboard help",
@@ -847,7 +826,6 @@ impl HelpPanel {
             profile.border(),
             profile,
             78,
-            height,
         );
     }
 }
@@ -1078,10 +1056,9 @@ mod tests {
 
     #[test]
     fn home_notes_fit_beneath_the_menu_at_the_preferred_minimum() {
-        assert_eq!(wrapped_rows("one two three", 7), 2);
-        assert_eq!(wrapped_rows("one two", 7), 1);
+        // The 80-by-24 home layout leaves a 28-column card and three note rows.
         for note in BRANCH_CHOICE_NOTES {
-            assert!(wrapped_rows(note, 28) <= 2, "{note}");
+            assert!(branch_note(note).line_count(28) <= 2, "{note}");
         }
     }
 
@@ -1096,6 +1073,52 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(bold, ["Enter", "?", "Tab"]);
         assert_eq!(line.to_string(), "Enter open · ? help · Tab");
+    }
+
+    #[test]
+    fn a_wide_keepsake_title_keeps_every_line_and_the_footer_apart() {
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        let lines = [
+            format!("Orifude - {}", "界".repeat(80)),
+            "Solved in 0 folds and 1 stroke.".to_owned(),
+            "No solution actions included.".to_owned(),
+        ]
+        .map(|line| super::super::text::SafeText::external_display(&line, 160, GlyphMode::Unicode));
+        for (width, height) in [(56, 13), (76, 17), (96, 23)] {
+            let backend = TestBackend::new(width, height);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            terminal
+                .draw(|frame| {
+                    DialogLayer::render(
+                        frame,
+                        Rect::new(0, 0, width, height),
+                        &Overlay::Export(lines.clone()),
+                        profile,
+                    );
+                })
+                .expect("export dialog renders");
+            let rows = (0..height)
+                .map(|row| {
+                    (0..width).fold(String::new(), |mut text, column| {
+                        text.push_str(terminal.backend().buffer()[(column, row)].symbol());
+                        text
+                    })
+                })
+                .collect::<Vec<_>>();
+            let has_row = |needle: &str| rows.iter().any(|row| row.contains(needle));
+            assert!(
+                has_row("Solved in 0 folds and 1 stroke."),
+                "{width}x{height}: {rows:#?}"
+            );
+            assert!(
+                has_row("No solution actions included."),
+                "{width}x{height}: {rows:#?}"
+            );
+            assert!(
+                has_row("Copy the text, then Enter or Esc returns"),
+                "{width}x{height}: {rows:#?}"
+            );
+        }
     }
 
     fn braille_dot_count(lines: &[Line<'_>]) -> u32 {
