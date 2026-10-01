@@ -184,14 +184,14 @@ in the nixpkgs collection.
 With Nix and flakes enabled, play an exact release or install it in your profile:
 
 ```sh
-nix run github:nuggocto/orifude/v1.1.0
-nix profile add github:nuggocto/orifude/v1.1.0
+nix run github:nuggocto/orifude/v1.1.1
+nix profile add github:nuggocto/orifude/v1.1.1
 ```
 
 For a NixOS configuration that already uses flakes, add an input:
 
 ```nix
-inputs.orifude.url = "github:nuggocto/orifude/v1.1.0";
+inputs.orifude.url = "github:nuggocto/orifude/v1.1.1";
 ```
 
 Pass the input into your modules through `specialArgs`, or use it in an inline

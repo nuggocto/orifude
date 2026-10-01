@@ -5,6 +5,10 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+## 1.1.1 - 2026-10-01
+
+Keep every line readable when a pack title uses wide characters.
+
 ### Fixed
 
 - Long pack titles in wide scripts such as Chinese or Japanese no longer hide
