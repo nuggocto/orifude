@@ -23,6 +23,7 @@ still apply.
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/36897653877) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/36898453785) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/36897504188) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.1.0 in the pinned Nix container and resolved to the release commit. |
+| Website | [Frontend 0d620a9](https://github.com/nuggocto/orifude-front/commit/0d620a94d99481bec6aa3b7437bc6d364ea5c441) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/36909338757), including 39 Linux and 26 Windows browser cases. Cloudflare deployment succeeded. |
 
 The first CI run for the release commit waited behind the superseded run for its
 parent commit, which was cancelled; the release commit's own run passed every job.
@@ -50,9 +51,42 @@ progress were preserved.
 
 The Linux musl executable has SHA-256
 `97a95d3379a5b81263dcdfad0711984aefeea9ee7fb761026565f3b72287843f`.
-It is 5,703,224 bytes; its archive is 2,385,987 bytes. Startup, input, memory, and
-storage timings were not remeasured for this release; the 1.0.4 measurements are
-not evidence for this binary.
+It is 5,703,224 bytes; its archive is 2,385,987 bytes. On Linux 7.2.5 x86_64 with
+a Ryzen AI MAX+ 395, twenty-five fresh and twenty-five returning startup samples
+gave p95 values of 58.224 and 39.366 ms. One hundred samples each gave input p95
+5.268 ms, fold p95 5.432 ms, and brush p95 5.558 ms. Ordinary play used 4,792 KiB
+RSS; the journey solver used 7,276 KiB. Measured idle CPU was 0% over three
+seconds. Five storage processes, each measuring 500 fresh and 500 populated
+completion writes, had p95 between 21.234 and 27.657 ms. All configured budgets
+passed.
+
+These warm-filesystem desktop measurements include tmux and frame observation, and
+background load was not controlled. Fresh startup is lower than the 1.0.4 record,
+but the two runs did not share conditions, so they establish no speedup. Player
+timing used the published musl binary; solver and storage helpers used the local
+GNU release build. The returning-startup measurement first timed out because it
+waited for the home title that 1.1.0 replaced; commit
+[3f4bd40](https://github.com/nuggocto/orifude/commit/3f4bd40060158bb1c35386617f998984d15b49eb) waits for the current
+title, and the measurement then completed. Results remain in
+`target/release-measurement-1.1.0`.
+
+The website publishes the 1.1.0 record in
+[2a3959c](https://github.com/nuggocto/orifude-front/commit/2a3959c017ec50ab00b893d48fd05221fe9ea1fc)
+and a terminal still recaptured from the published 1.1.0 binary in
+[24f60ce](https://github.com/nuggocto/orifude-front/commit/24f60ce339bb170728eb3bf687422384babd0dc3).
+Its Linux browser job first ran out of time three times while an Ubuntu mirror
+served browser system packages at about 70 KB/s; tests that had started all
+passed. The job now runs in Microsoft's Playwright image pinned by digest, and the
+same 39 cases passed in that image locally as an unprivileged user.
+
+Live production checks verified all four routes, the new version and all eleven
+changelog bullets, security headers, eight exact clipboard pastes, and layouts
+without horizontal scrolling at 1440, 390, and 320 pixels. The installation page
+and landing page worked with JavaScript disabled.
+
+The production-copied POSIX command installed and reinstalled 1.1.0 as an
+unprivileged user in a disposable Arch container. It preserved a saved-data
+sentinel, removed temporary files, and produced the exact musl executable above.
 
 ## 1.0.4 publication decision on 2026-09-15
 
