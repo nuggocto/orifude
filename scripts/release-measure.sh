@@ -189,14 +189,14 @@ cargo run --quiet --locked --release --example storage_measure -- --prepare "$st
 for ((run = 1; run <= startup_runs; run += 1)); do
     started="$(now_ns)"
     start_session "$state"
-    wait_for_text "Saved yes" 5000
+    wait_for_text "Home · Journey" 5000
     ended="$(now_ns)"
     printf 'returning_startup,%s,%s\n' "$run" "$(((ended - started) / 1000))" >>"$raw"
     stop_session
 done
 
 start_session "$state"
-wait_for_text "Saved yes" 5000
+wait_for_text "Home · Journey" 5000
 tmux -L "$socket" send-keys -t "$session" -l 'jjj'
 tmux -L "$socket" send-keys -t "$session" Enter
 wait_for_text "Installed puzzle packs" 2000
