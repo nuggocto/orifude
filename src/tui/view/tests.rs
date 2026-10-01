@@ -44,7 +44,7 @@ fn engine_session_renders_target_folded_paper_and_stack() {
         .expect("view renders");
     let text = rendered_text(&terminal);
     assert!(text.contains("Pattern to match"));
-    assert!(text.contains("FOLDED PAPER"));
+    assert!(text.contains("Folded paper"));
     assert!(!text.contains("[ACTIVE]"));
     assert!(text.contains("Stack, bottom to top"));
     assert!(text.contains('+'));
@@ -117,7 +117,7 @@ fn ascii_profile_keeps_branch_and_player_buffers_ascii_only() {
         .expect("branch renders");
     let branch = rendered_text(&terminal);
     assert!(branch.is_ascii());
-    assert!(branch.contains("Home | Journey 0/40 | Saved no"));
+    assert!(branch.contains("Home | Journey 0/40"));
 
     press(&mut app, KeyCode::Enter, now);
     press(&mut app, KeyCode::Enter, now);
@@ -128,7 +128,7 @@ fn ascii_profile_keeps_branch_and_player_buffers_ascii_only() {
 }
 
 #[test]
-fn branch_card_keeps_the_saved_status_complete() {
+fn branch_card_title_names_complete_journey_progress() {
     let now = Instant::now();
     let settings = Settings {
         lesson_complete: true,
@@ -157,7 +157,7 @@ fn branch_card_keeps_the_saved_status_complete() {
     );
 
     let text = menu_text(&app, now, 100, 30);
-    assert!(text.contains("Home | Journey 40/40 | Saved yes"));
+    assert!(text.contains("Home · Journey 40/40"));
 }
 
 #[test]
@@ -194,8 +194,9 @@ fn completed_branch_is_readable_in_every_visual_profile_without_a_resident_squir
             .draw(|frame| render(frame, &app, profile, now))
             .expect("completed branch renders");
         let text = rendered_text(&terminal);
-        assert!(text.contains("the full canopy. [8/8]"));
-        assert!(text.contains("Home | Journey 40/40"));
+        assert!(text.contains("the full canopy."));
+        assert!(text.contains("8 of 8"));
+        assert!(text.contains("Journey 40/40"));
         assert!(!text.contains("/)_/)"));
         if glyphs == GlyphMode::Ascii {
             assert!(text.is_ascii());
@@ -217,8 +218,8 @@ fn preferred_minimum_keeps_branch_progress_and_stack_heading_complete() {
         .collect::<Vec<_>>()
         .join(" ");
     assert!(branch.contains("The branch is waiting for its first leaf."));
-    assert!(branch.contains("[0/8]"));
-    assert!(branch.contains("Home | Journey 0/40"));
+    assert!(branch.contains("0 of 8"));
+    assert!(branch.contains("Home · Journey 0/40"));
 
     press(&mut app, KeyCode::Enter, now);
     press(&mut app, KeyCode::Enter, now);
@@ -252,7 +253,7 @@ fn minimum_player_layout_keeps_the_ready_tool_and_first_paper_cue_visible() {
     assert!(text.contains("Ready: Dot brush"));
     assert!(text.contains(&cue_prefix));
     assert!(!text.contains("Actions: none"));
-    assert!(text.contains("PAPER"));
+    assert!(text.contains("Folded paper"));
     assert!(!text.contains("[ACTIVE]"));
     assert!(text.contains("Low to high"));
     assert!(text.contains("q quit"));
@@ -356,11 +357,12 @@ fn compact_maximum_board_keeps_the_cursor_visible_and_switches_to_the_target() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("compact paper renders");
     let paper = rendered_text(&terminal);
-    assert!(paper.contains("FOLDED PAPER rows"));
+    assert!(paper.contains("Folded paper rows"));
     assert!(paper.contains("-12/12"));
     assert!(paper.contains('@'));
     assert!(!paper.contains("PATTERN TO MATCH"));
@@ -382,11 +384,12 @@ fn compact_maximum_board_keeps_the_cursor_visible_and_switches_to_the_target() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("compact target renders");
     let target = rendered_text(&terminal);
-    assert!(target.contains("PATTERN TO MATCH rows"));
+    assert!(target.contains("Pattern to match rows"));
     assert!(target.contains("-12/12"));
     assert!(!target.contains("FOLDED PAPER"));
 }
@@ -438,12 +441,13 @@ fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("failed result renders");
     let first_result = rendered_text(&terminal);
     let first_stack = rendered_area_text(&terminal, stack_area);
-    assert!(first_result.contains("OPENED COMPARISON rows 1-5/8"));
+    assert!(first_result.contains("Opened comparison rows 1-5/8"));
 
     for _ in 0..7 {
         session.handle_key(
@@ -464,6 +468,7 @@ fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("scrolled failed result renders");
@@ -471,7 +476,7 @@ fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
-    assert!(result.contains("OPENED COMPARISON rows 4-8/8"));
+    assert!(result.contains("Opened comparison rows 4-8/8"));
     assert_eq!(rendered_area_text(&terminal, stack_area), first_stack);
     assert!(result.contains("Up/Down inspect rows"));
 }
@@ -542,7 +547,7 @@ fn minimum_settings_capture_keeps_the_selected_binding_and_prompt_visible() {
     press(&mut app, KeyCode::Enter, now);
 
     let text = menu_text(&app, now, 60, 20);
-    assert!(text.contains("› Quit key: q"));
+    assert!(text.contains("› Quit            q"));
     assert!(text.contains("Press one unused key"));
 }
 
@@ -609,7 +614,6 @@ fn minimum_saved_result_keeps_next_return_and_export_controls_visible() {
         rendered_text(&terminal)
     };
     let text = render_compact(&app);
-    assert!(text.contains("Paper complete"));
     assert!(text.contains("Paper complete"));
     assert!(text.contains("0 folds and 1 stroke"));
     assert!(text.contains("Tab next"));
@@ -711,6 +715,7 @@ fn above_reference_success_shows_the_result_and_reference_score() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("above-reference result renders");
@@ -748,11 +753,12 @@ fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("saved replay renders");
     let text = rendered_text(&terminal);
-    assert!(text.contains("FOLDED PAPER"));
+    assert!(text.contains("Folded paper"));
     assert!(text.contains("Replay ready: fresh paper."));
     assert!(!text.contains("OPENED COMPARISON"));
     assert!(replay_status_text(&session, KeyBindings::default(), " · ", 60).contains("Left/Right"));
@@ -780,11 +786,12 @@ fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
                 now,
                 None,
                 false,
+                true,
             );
         })
         .expect("completed replay renders");
     let text = rendered_text(&terminal);
-    assert!(text.contains("OPENED COMPARISON"));
+    assert!(text.contains("Opened comparison"));
     assert!(text.contains("Replay complete."));
     assert!(!text.contains("Paper complete"));
     assert!(!text.contains("Congratulations"));
@@ -823,6 +830,7 @@ fn replay_without_actions_explains_that_enter_opens_the_paper() {
                 Instant::now(),
                 None,
                 false,
+                true,
             );
         })
         .expect("empty replay renders");
@@ -924,6 +932,7 @@ fn applied_fold_keeps_static_feedback_without_covering_the_paper() {
                 started,
                 None,
                 false,
+                true,
             );
         })
         .expect("fold feedback renders");
@@ -942,6 +951,7 @@ fn applied_fold_keeps_static_feedback_without_covering_the_paper() {
                 started + std::time::Duration::from_secs(2),
                 None,
                 false,
+                true,
             );
         })
         .expect("static feedback renders later");
@@ -995,14 +1005,16 @@ fn placed_ink_stays_visible_in_the_paper_and_stack() {
                 started,
                 None,
                 false,
+                true,
             );
         })
         .expect("ink state renders");
     let text = rendered_text(&terminal);
     assert!(text.contains('◉'));
     assert!(text.contains("Ready: Open paper"));
-    assert!(text.contains("0: cell 6 ink"));
-    assert!(text.contains("1: cell 5 ink"));
+    // Both inked layers name where they began on the open sheet.
+    assert!(text.contains("1 ● r2 c3"));
+    assert!(text.contains("2 ● r2 c2"), "{text}");
 }
 
 #[test]
@@ -1035,6 +1047,213 @@ fn how_to_frames_show_the_fold_stack_ink_and_comparison_states() {
             press(&mut app, KeyCode::Right, now);
         }
     }
+}
+
+#[test]
+fn boards_number_rows_and_columns_used_by_written_positions() {
+    let now = Instant::now();
+    let mut app = App::new(Settings::default(), now);
+    press(&mut app, KeyCode::Enter, now);
+    press(&mut app, KeyCode::Enter, now);
+    for code in [KeyCode::Down, KeyCode::Right, KeyCode::Right] {
+        press(&mut app, code, now);
+    }
+
+    let text = menu_text(&app, now, 100, 30);
+    // Both grids carry the column ruler and the coach's "row 2" label.
+    assert_eq!(text.matches("1 2 3 4").count(), 2, "{text}");
+    assert!(text.contains(" 2 . # # ."), "{text}");
+    // After the fold, the stack names where each of its layers began.
+    assert!(text.contains("Row 2, column 3"), "{text}");
+    assert!(text.contains("2 layers began at:"), "{text}");
+    assert!(text.contains("1 ○ row 2, col 3"), "{text}");
+    assert!(text.contains("2 ○ row 2, col 2"), "{text}");
+    assert!(!text.contains("cell 6"), "{text}");
+}
+
+#[test]
+fn completion_card_leaves_the_opened_paper_visible() {
+    let now = Instant::now();
+    let mut app = App::new(
+        Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        },
+        now,
+    );
+    for code in [
+        KeyCode::Enter,
+        KeyCode::Enter,
+        KeyCode::Down,
+        KeyCode::Right,
+        KeyCode::Enter,
+        KeyCode::Enter,
+    ] {
+        press(&mut app, code, now);
+    }
+    let paper = &crate::content::journey()[0];
+    app.completion_saved(PuzzleProgress {
+        pack_id: paper.puzzle().identity().pack_id().into(),
+        puzzle_id: paper.puzzle().identity().puzzle_id().into(),
+        attempt_count: 1,
+        best_folds: 0,
+        best_strokes: 1,
+        best_replay_id: 1,
+        updated_at_unix_seconds: 1,
+    });
+
+    let text = menu_text(&app, now, 100, 30);
+    assert!(text.contains("Paper complete"), "{text}");
+    // The bottom row appears in the target and again in the opened paper.
+    assert_eq!(text.matches(" 4 . . . .").count(), 2, "{text}");
+}
+
+#[test]
+fn lesson_completion_does_not_promise_a_keepsake() {
+    let now = Instant::now();
+    let mut app = App::new(
+        Settings {
+            reduced_motion: true,
+            ..Settings::default()
+        },
+        now,
+    );
+    for code in [
+        KeyCode::Enter,
+        KeyCode::Enter,
+        KeyCode::Down,
+        KeyCode::Right,
+        KeyCode::Right,
+        KeyCode::Enter,
+        KeyCode::Enter,
+    ] {
+        press(&mut app, code, now);
+    }
+    app.settings_saved(app.settings());
+
+    let text = menu_text(&app, now, 100, 30);
+    assert!(
+        text.contains("Congratulations, your first paper matches."),
+        "{text}"
+    );
+    assert!(
+        text.contains("The journey's first paper is waiting."),
+        "{text}"
+    );
+    assert!(!text.contains("keepsake is saved"), "{text}");
+}
+
+#[test]
+fn journey_groups_papers_under_chapters_with_their_gifts() {
+    let now = Instant::now();
+    let mut done = vec![false; crate::content::journey().len()];
+    done[..5].fill(true);
+    let app = App::with_state(
+        Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        },
+        ProgressPage {
+            entries: Vec::new(),
+            has_more: false,
+        },
+        Vec::new(),
+        done,
+        CalendarDate::new(2026, 9, 3).expect("valid date"),
+        1,
+        now,
+    );
+    let mut app = app;
+    press(&mut app, KeyCode::Enter, now);
+    for _ in 0..5 {
+        press(&mut app, KeyCode::Down, now);
+    }
+
+    let text = menu_text(&app, now, 100, 30);
+    assert!(text.contains("1  Ink on paper  ◆ a first leaf"), "{text}");
+    assert!(
+        text.contains("2  Across the crease  · a pair of leaves"),
+        "{text}"
+    );
+    assert!(text.contains("● 1.5  Small sprig"), "{text}");
+    assert!(text.contains("› ○ 2.1  Folded pair"), "{text}");
+    assert!(text.contains("· 2.2  Low reflection"), "{text}");
+}
+
+#[test]
+fn keepsakes_use_the_names_players_saw() {
+    let now = Instant::now();
+    let progress = |pack_id: &str, puzzle_id: &str| PuzzleProgress {
+        pack_id: pack_id.into(),
+        puzzle_id: puzzle_id.into(),
+        attempt_count: 1,
+        best_folds: 1,
+        best_strokes: 2,
+        best_replay_id: 1,
+        updated_at_unix_seconds: 1,
+    };
+    let mut app = App::with_state(
+        Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        },
+        ProgressPage {
+            entries: vec![
+                progress("orifude-journey", "first-drop"),
+                progress("orifude-daily", "paper-v1-d049608d2164f808-0"),
+                progress("removed-pack", "berry"),
+            ],
+            has_more: false,
+        },
+        Vec::new(),
+        vec![false; crate::content::journey().len()],
+        CalendarDate::new(2026, 9, 3).expect("valid date"),
+        1,
+        now,
+    );
+    for _ in 0..4 {
+        press(&mut app, KeyCode::Down, now);
+    }
+    press(&mut app, KeyCode::Enter, now);
+
+    let text = menu_text(&app, now, 100, 30);
+    assert!(text.contains("Journey 1.1  First drop"), "{text}");
+    assert!(text.contains("1 fold, 2 strokes"), "{text}");
+    assert!(text.contains("Daily paper"), "{text}");
+    assert!(text.contains("removed-pack  berry"), "{text}");
+    assert!(text.contains("pack removed; replay kept"), "{text}");
+    assert!(!text.contains("orifude-journey"), "{text}");
+}
+
+#[test]
+fn empty_keepsakes_explain_themselves_and_offer_the_way_back() {
+    let now = Instant::now();
+    let mut app = App::new(
+        Settings {
+            lesson_complete: true,
+            reduced_motion: true,
+            ..Settings::default()
+        },
+        now,
+    );
+    for _ in 0..4 {
+        press(&mut app, KeyCode::Down, now);
+    }
+    press(&mut app, KeyCode::Enter, now);
+    app.keepsakes_loaded(
+        ProgressPage {
+            entries: Vec::new(),
+            has_more: false,
+        },
+        0,
+    );
+
+    let text = menu_text(&app, now, 60, 20);
+    assert!(text.contains("No keepsakes yet."), "{text}");
+    assert!(text.contains("› Back to the branch"), "{text}");
 }
 
 fn rendered_text(terminal: &Terminal<TestBackend>) -> String {

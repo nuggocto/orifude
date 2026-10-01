@@ -225,6 +225,17 @@ impl EventNotifier {
             shared: Arc::new(SharedQueue::new()),
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn wait_for_work_ready(&self, timeout: Duration) -> Option<u64> {
+        let state = self.shared.state.lock().ok()?;
+        let (mut state, _) = self
+            .shared
+            .not_empty
+            .wait_timeout_while(state, timeout, |state| state.work_ready.is_none())
+            .ok()?;
+        state.work_ready.take()
+    }
 }
 
 impl EventPump {

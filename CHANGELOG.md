@@ -5,6 +5,35 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+### Fixed
+
+- Keys pressed while the terminal is below the minimum size no longer change
+  the hidden paper, menus, or dialogs. Ctrl+C still quits, and the resize
+  message now says so.
+- If paper generation stops unexpectedly, Orifude reports the error and
+  restores the terminal instead of waiting on the loading screen.
+- Startup no longer fails when the unused configuration or cache directory
+  cannot be created.
+- The lesson's completion card no longer says a keepsake was saved; the lesson
+  leaves none.
+
+### Changed
+
+- Every board numbers its rows and columns, so hints such as "row 2, column 3"
+  point to a visible place on the paper.
+- The stack panel shows where each layer began on the open sheet instead of
+  internal cell numbers.
+- The completion card sits below the opened paper when there is room, so the
+  matched result stays visible.
+- The journey groups its papers under their eight chapters, marks finished,
+  open, and locked papers, and shows the gift each chapter brings home.
+- Keepsakes use the paper names you played, such as "Journey 1.1 First drop",
+  and explain the empty list.
+- Home shows the chapter gifts collected so far and a short note for the
+  selected choice. Settings and key bindings line up in two sections.
+- Panel titles and text keep clear of the borders, dialogs fit their message,
+  and the key hints at the bottom show each key in bold.
+
 ## 1.0.4 - 2026-09-15
 
 Make puzzle-pack errors easier to fix and the codebase easier to maintain.

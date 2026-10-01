@@ -1,6 +1,6 @@
 use orifude::domain::attempt::{ActionError, Attempt};
 use orifude::domain::paper::{
-    BrushRule, CellId, Coordinate, Fold, FoldCount, FoldDirection, InkPattern, LineStroke,
+    BrushRule, CellId, Coordinate, Face, Fold, FoldCount, FoldDirection, InkPattern, LineStroke,
     MAX_ACTIONS, MAX_PHYSICAL_CELLS, PaperAction, PaperError, Row, StackView, StrokeAxis,
     StrokeCount,
 };
@@ -834,7 +834,7 @@ fn replay_rejects_oversized_incompatible_and_foreign_data() {
 }
 
 #[test]
-fn replay_reports_the_failing_action_without_touching_a_live_attempt() {
+fn replay_reports_the_index_and_cause_of_the_failing_action() {
     let puzzle = ink_puzzle(4, 4, Vec::new(), vec![BrushRule::Dot], 1);
     let coordinate = coordinate(&puzzle, 0, 0);
     let replay = Replay::new(
@@ -842,8 +842,6 @@ fn replay_reports_the_failing_action_without_touching_a_live_attempt() {
         vec![PaperAction::Dot(coordinate), PaperAction::Dot(coordinate)],
     )
     .expect("the replay is within its static bound");
-    let live = puzzle.start();
-    let before = live.state_key();
 
     assert_eq!(
         replay.execute(&puzzle),
@@ -854,12 +852,12 @@ fn replay_reports_the_failing_action_without_touching_a_live_attempt() {
             }),
         })
     );
-    assert_eq!(live.state_key(), before);
 }
 
 #[test]
-fn fold_and_failed_action_properties_hold_across_every_board_boundary() {
+fn fresh_folds_succeed_exactly_when_the_moving_side_fits_across_the_crease() {
     let mut case_count = 0_usize;
+    let mut legal_count = 0_usize;
     for width in 4..=12 {
         for height in 4..=12 {
             for direction in [
@@ -878,19 +876,70 @@ fn fold_and_failed_action_properties_hold_across_every_board_boundary() {
                     let puzzle = fold_puzzle(width, height, vec![fold], 1);
                     let mut attempt = puzzle.start();
                     let before = attempt.state_key();
-                    match attempt.fold(fold) {
-                        Ok(()) => {
-                            assert_observable_invariants(&attempt);
-                            attempt.undo().expect("every legal fold should undo");
-                            assert_eq!(attempt.state_key(), before);
-                        }
-                        Err(_) => assert_eq!(attempt.state_key(), before),
+                    let moving_extent = match direction {
+                        FoldDirection::Left | FoldDirection::Up => extent - crease,
+                        FoldDirection::Right | FoldDirection::Down => crease,
+                    };
+                    let result = attempt.fold(fold);
+
+                    if moving_extent > extent - moving_extent {
+                        assert!(
+                            matches!(
+                                result,
+                                Err(ActionError::Paper(PaperError::FoldLeavesPaper { .. }))
+                            ),
+                            "{width}x{height} {direction:?} {crease} must leave the paper"
+                        );
+                        assert_eq!(attempt.state_key(), before);
+                        continue;
                     }
+                    result.unwrap_or_else(|error| {
+                        panic!("{width}x{height} {direction:?} {crease} must fold: {error:?}")
+                    });
+                    legal_count += 1;
+                    assert_observable_invariants(&attempt);
+                    assert_fresh_fold_positions(&puzzle, &attempt, fold);
+                    attempt.undo().expect("every legal fold should undo");
+                    assert_eq!(attempt.state_key(), before);
                 }
             }
         }
     }
     assert_eq!(case_count, 2_268);
+    // Each extent e allows floor(e / 2) creases per direction.
+    assert_eq!(legal_count, 1_224);
+}
+
+/// Checks every cell against a mirror image of the fresh sheet: moved cells
+/// land beside the crease in reverse order, face down, on top of the stack.
+fn assert_fresh_fold_positions(puzzle: &Puzzle, attempt: &Attempt, fold: Fold) {
+    let width = puzzle.dimensions().width().get();
+    let height = puzzle.dimensions().height().get();
+    let crease = fold.crease();
+    let mirror = |index: u8| 2 * crease - 1 - index;
+    for id in 0..width * height {
+        let (row, column) = (id / width, id % width);
+        let (expected_row, expected_column, moved) = match fold.direction() {
+            FoldDirection::Left if column >= crease => (row, mirror(column), true),
+            FoldDirection::Right if column < crease => (row, mirror(column), true),
+            FoldDirection::Up if row >= crease => (mirror(row), column, true),
+            FoldDirection::Down if row < crease => (mirror(row), column, true),
+            _ => (row, column, false),
+        };
+        let physical = attempt
+            .physical_cell(cell(id))
+            .expect("every fresh cell identity should resolve");
+        assert_eq!(
+            physical.coordinate(),
+            coordinate(puzzle, expected_row, expected_column),
+            "{width}x{height} {fold:?} moved cell {id} to the wrong position"
+        );
+        assert_eq!(physical.layer().get(), u8::from(moved));
+        assert_eq!(
+            physical.face(),
+            if moved { Face::Back } else { Face::Front }
+        );
+    }
 }
 
 #[test]

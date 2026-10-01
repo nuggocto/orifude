@@ -238,9 +238,9 @@ impl Storage {
     /// Returns a typed lock, corruption, schema, capacity, permission, pack
     /// recovery, or underlying I/O error. Existing data is never reset.
     pub fn open(paths: AppPaths) -> Result<Self, StorageError> {
+        // Settings live in the database. Leave configuration and cache
+        // directories to the first feature that writes to them.
         create_private_directory(paths.data())?;
-        create_private_directory(paths.config())?;
-        create_private_directory(paths.cache())?;
         create_managed_directory(&paths.managed_packs())?;
 
         let lock = OpenOptions::new()

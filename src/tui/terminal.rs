@@ -275,6 +275,11 @@ impl TerminalSession {
         Ok(())
     }
 
+    /// Returns the area every frame is drawn into.
+    pub(crate) const fn viewport(&self) -> Rect {
+        self.viewport
+    }
+
     pub(crate) fn draw(&mut self, render: impl FnOnce(&mut ratatui::Frame<'_>)) -> io::Result<()> {
         self.terminal.draw(render).map(|_| ())
     }

@@ -86,9 +86,11 @@ unwinding; expected I/O and validation failures return errors.
 
 Linux falls back to `~/.local/share`, `~/.config`, and `~/.cache`. The data
 directory holds `orifude.sqlite3`, `orifude.lock`, managed packs, and staging.
-Settings currently live in SQLite. One process lock protects one connection;
-schema checks and migrations run before terminal entry. Corrupt or unsupported
-data must produce a recovery error rather than silently resetting progress.
+Settings currently live in SQLite, so startup creates only the data directory;
+create the configuration or cache directory when a feature first writes there.
+One process lock protects one connection; schema checks and migrations run
+before terminal entry. Corrupt or unsupported data must produce a recovery
+error rather than silently resetting progress.
 
 A completion commits its replay, best result, history, and progress together.
 Replays carry the exact gameplay revision; cosmetic text changes keep them
@@ -120,8 +122,12 @@ Avoid assertions on decorative layout or facts guaranteed by Rust's type system.
 
 Use `mise run property-check` for deterministic independent models,
 `mise run release-check` for optimized checks, and `mise run fuzz-campaign` for
-bounded sanitizer campaigns. `mise run release-measure` measures release startup,
-input, memory, and storage against the budgets in [release QA](docs/release-qa.md).
+bounded sanitizer campaigns. Each campaign starts from seeds that
+[fuzz_seeds](examples/fuzz_seeds.rs) builds from the current packs and replay
+encoder. `mise run lifecycle-check BASELINE CANDIDATE` saves a completion with
+the baseline binary, then replays it through the candidate and again after
+rollback. `mise run release-measure` measures release startup, input, memory,
+and storage against the budgets in [release QA](docs/release-qa.md).
 Record the tested commit, artifact, environment, and meaningful limitations.
 
 For packs, follow the [authoring guide](docs/puzzle-authoring.md). For release

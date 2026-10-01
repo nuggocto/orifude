@@ -427,21 +427,18 @@ impl Face {
     }
 }
 
+/// Which way a cell's top edge points. Cells start North, and only horizontal
+/// folds turn a cell upside down.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Orientation {
     North,
-    East,
     South,
-    West,
 }
 
 impl Orientation {
     const fn folded_across(self, axis: FoldAxis) -> Self {
         match (axis, self) {
-            (FoldAxis::Vertical, Self::North | Self::South)
-            | (FoldAxis::Horizontal, Self::East | Self::West) => self,
-            (FoldAxis::Vertical, Self::East) => Self::West,
-            (FoldAxis::Vertical, Self::West) => Self::East,
+            (FoldAxis::Vertical, _) => self,
             (FoldAxis::Horizontal, Self::North) => Self::South,
             (FoldAxis::Horizontal, Self::South) => Self::North,
         }

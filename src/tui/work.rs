@@ -58,10 +58,18 @@ impl WorkManager {
         pack_id: &'static str,
         seed: GenerationSeed,
     ) -> Result<u64, WorkError> {
+        let generator = content::generator(pack_id).map_err(|_| WorkError::InvalidPolicy)?;
+        self.spawn(notifier, move |cancel| generator.generate(seed, cancel))
+    }
+
+    fn spawn(
+        &mut self,
+        notifier: EventNotifier,
+        job: impl FnOnce(&CancellationFlag) -> GenerationOutcome + Send + 'static,
+    ) -> Result<u64, WorkError> {
         if self.active.is_some() {
             return Err(WorkError::Busy);
         }
-        let generator = content::generator(pack_id).map_err(|_| WorkError::InvalidPolicy)?;
         let id = self.next_id;
         self.next_id = self.next_id.checked_add(1).unwrap_or(1);
         let cancel = Arc::new(CancellationFlag::new());
@@ -71,11 +79,11 @@ impl WorkManager {
         let worker = thread::Builder::new()
             .name("orifude-paper-generator".to_owned())
             .spawn(move || {
-                let outcome = generator.generate(seed, worker_cancel.as_ref());
+                let _completion = CompletionNotice { notifier, id };
+                let outcome = job(worker_cancel.as_ref());
                 if let Ok(mut slot) = worker_result.lock() {
                     *slot = Some(outcome);
                 }
-                let _notification = notifier.work_ready(id);
             })
             .map_err(|_| WorkError::StartFailed)?;
         self.active = Some(ActiveJob {
@@ -117,6 +125,19 @@ impl WorkManager {
     }
 }
 
+/// Wakes the shell when the worker ends, including by panic, so the owner
+/// joins it and reports the failure instead of waiting on the loading screen.
+struct CompletionNotice {
+    notifier: EventNotifier,
+    id: u64,
+}
+
+impl Drop for CompletionNotice {
+    fn drop(&mut self) {
+        let _notification = self.notifier.work_ready(self.id);
+    }
+}
+
 impl Drop for WorkManager {
     fn drop(&mut self) {
         if let Some(active) = self.active.take() {
@@ -128,6 +149,8 @@ impl Drop for WorkManager {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use crate::generator::{GenerationOutcome, GenerationSeed};
 
     use super::*;
@@ -156,6 +179,26 @@ mod tests {
             )
             .expect("manager accepts another job after join");
         assert!(work.finish(second).expect("second worker joins").is_some());
+    }
+
+    #[test]
+    fn a_panicking_job_still_notifies_and_reports_the_panic() {
+        let notifier = EventNotifier::isolated();
+        let mut work = WorkManager::new();
+        let id = work
+            .spawn(notifier.clone(), |_| panic!("injected generator failure"))
+            .expect("job starts");
+
+        assert_eq!(
+            notifier.wait_for_work_ready(Duration::from_secs(10)),
+            Some(id)
+        );
+        assert_eq!(work.finish(id), Err(WorkError::WorkerPanicked));
+        assert!(
+            work.start(notifier, "orifude-endless", GenerationSeed::current(7))
+                .is_ok(),
+            "the joined failure leaves the manager free for another job"
+        );
     }
 
     #[test]

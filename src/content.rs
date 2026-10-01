@@ -220,7 +220,7 @@ fn coordinate(row: u8, column: u8) -> Coordinate {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GenerationOutcome, GenerationSeed};
+    use crate::generator::{CalendarDate, GenerationOutcome, GenerationSeed};
     use crate::solver::NeverCancel;
 
     use super::*;
@@ -240,6 +240,75 @@ mod tests {
             groups.last().unwrap().first_paper + groups.last().unwrap().paper_count,
             papers.len()
         );
+    }
+
+    #[test]
+    fn daily_papers_for_fixed_dates_match_their_preserved_output() {
+        let cases = [
+            (
+                (2026, 9, 1),
+                "paper-v1-d049608d2164f808-0",
+                [(1, 0), (2, 0)],
+                [
+                    PaperAction::Fold(Fold::new(FoldDirection::Up, 2)),
+                    PaperAction::Dot(coordinate(1, 0)),
+                ],
+            ),
+            (
+                (2027, 2, 28),
+                "paper-v1-a666df9c48dacfc1-0",
+                [(3, 1), (3, 2)],
+                [
+                    PaperAction::Fold(Fold::new(FoldDirection::Left, 2)),
+                    PaperAction::Dot(coordinate(3, 1)),
+                ],
+            ),
+        ];
+        let generator = generator("orifude-daily").expect("daily generation policy");
+
+        for ((year, month, day), puzzle_id, target, solution) in cases {
+            let date = CalendarDate::new(year, month, day).expect("golden date");
+            let GenerationOutcome::Generated { puzzle: daily, .. } =
+                generator.generate(GenerationSeed::for_date(date), &NeverCancel)
+            else {
+                panic!("the daily paper for {year}-{month}-{day} should generate");
+            };
+            let dimensions = daily.puzzle().dimensions();
+            let expected = Puzzle::new(
+                PuzzleSpec::new(
+                    PuzzleIdentity::new("orifude-daily", puzzle_id).expect("golden identity"),
+                    4,
+                    4,
+                )
+                .with_target_cells(
+                    target
+                        .iter()
+                        .map(|&(row, column)| {
+                            dimensions
+                                .cell_id(coordinate(row, column))
+                                .expect("golden target cell")
+                        })
+                        .collect(),
+                )
+                .with_allowed_folds(vec![
+                    Fold::new(FoldDirection::Left, 2),
+                    Fold::new(FoldDirection::Right, 2),
+                    Fold::new(FoldDirection::Up, 2),
+                    Fold::new(FoldDirection::Down, 2),
+                ])
+                .with_allowed_brushes(vec![BrushRule::Dot])
+                .with_budgets(2, 1)
+                .with_par(Par::new(
+                    FoldCount::new(1).expect("golden fold par"),
+                    StrokeCount::new(1).expect("golden stroke par"),
+                )),
+            )
+            .expect("golden puzzle");
+
+            assert_eq!(daily.puzzle().identity(), expected.identity());
+            assert_eq!(daily.puzzle().revision(), expected.revision());
+            assert_eq!(daily.solution().replay().actions(), solution);
+        }
     }
 
     #[test]

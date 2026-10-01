@@ -450,6 +450,30 @@ fn failed_initial_migration_rolls_back_and_retries_without_partial_schema() {
     assert!(matches!(Storage::open(paths), Err(StorageError::Sqlite(_))));
 }
 
+#[test]
+fn unusable_configuration_and_cache_paths_do_not_block_saved_progress() {
+    let root = test_directory("unused-directories");
+    let paths = app_paths(root.path());
+    fs::write(paths.config(), b"not a directory").unwrap();
+    fs::write(paths.cache(), b"not a directory").unwrap();
+
+    let mut storage = Storage::open(paths.clone()).unwrap();
+    let (puzzle, replay) = solved_replay("unused-directories");
+    storage
+        .record_completion(&puzzle, &replay, 1, 0, false)
+        .unwrap();
+    drop(storage);
+
+    assert!(paths.config().is_file() && paths.cache().is_file());
+    assert!(
+        Storage::open(paths)
+            .unwrap()
+            .progress("unused-directories", puzzle.identity().puzzle_id())
+            .unwrap()
+            .is_some()
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn read_only_storage_path_has_a_recoverable_typed_error() {

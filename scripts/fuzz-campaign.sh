@@ -42,6 +42,11 @@ fi
 mkdir -p "$output_root"
 export CARGO_FROZEN=true
 
+# Regenerate structured starting inputs from the current formats. libFuzzer
+# writes new findings only to the first corpus directory.
+readonly seed_root="$output_root/seeds"
+cargo run --quiet --locked --release --example fuzz_seeds -- "$seed_root"
+
 run_target() {
     local target="$1"
     local maximum="$2"
@@ -50,7 +55,7 @@ run_target() {
     mkdir -p "$corpus" "$artifacts"
     printf 'fuzz_target=%s seed=%s seconds=%s max_bytes=%s\n' \
         "$target" "$seed" "$seconds" "$maximum"
-    cargo "+$toolchain" fuzz run "$target" "$corpus" \
+    cargo "+$toolchain" fuzz run "$target" "$corpus" "$seed_root/$target" \
         --fuzz-dir fuzz \
         -- \
         "-artifact_prefix=$artifacts/" \

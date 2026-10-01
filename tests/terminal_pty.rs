@@ -301,7 +301,8 @@ fn shipped_player_exercises_preview_undo_reset_and_saved_result_navigation() {
     let steps = [
         PtyStep {
             input: b"\r\r ",
-            wait_for: b"UNFOL",
+            // The redraw skips letters shared with "Folded paper".
+            wait_for: b"Unfol",
         },
         PtyStep {
             input: b"jlb\rub\rr",
@@ -320,7 +321,7 @@ fn shipped_player_exercises_preview_undo_reset_and_saved_result_navigation() {
         "complete control journey exits cleanly"
     );
     assert!(
-        find(&output.bytes, b"UNFOL").is_some() && find(&output.bytes, b"REVIEW").is_some(),
+        find(&output.bytes, b"Unfol").is_some() && find(&output.bytes, b"review").is_some(),
         "Space opens the documented preview"
     );
     assert!(
@@ -346,7 +347,7 @@ fn injected_daily_paper_is_stable_in_the_shipped_binary() {
         let paths = configured_returning_player(state.path());
         let steps = [PtyStep {
             input: b"j\r",
-            wait_for: b"FOLDED",
+            wait_for: b"Folded",
         }];
         let output = run_in_native_pty_scripted(binary, state.path(), &steps, b"qy");
         assert!(output.status_success, "daily journey exits cleanly");
@@ -433,6 +434,39 @@ fn shipped_binary_recovers_after_starting_below_the_minimum_size() {
         find(&output.bytes, b"Match").is_some(),
         "interactive content returns after resize"
     );
+}
+
+#[test]
+fn keys_below_the_minimum_size_cannot_change_hidden_state() {
+    let _journey = native_journey();
+    let state = tempfile::tempdir().expect("isolated resize state");
+    let paths = configured_returning_player(state.path());
+    let before = Storage::open(paths.clone())
+        .expect("player state opens")
+        .settings()
+        .expect("settings load");
+    // At a supported size these keys open Settings, save a new color mode, and
+    // confirm quitting. Below it, only Ctrl+C may act.
+    let output = run_in_native_pty_undersized(
+        Path::new(env!("CARGO_BIN_EXE_orifude")),
+        state.path(),
+        b"k\rlqy\x03",
+    );
+
+    assert!(
+        output.status_success,
+        "Ctrl+C exits cleanly while undersized"
+    );
+    assert!(
+        find(&output.bytes, b"Ctrl+C").is_some(),
+        "the resize message names the exit shortcut"
+    );
+    assert!(find(&output.bytes, LEAVE_ALTERNATE_SCREEN).is_some());
+    let after = Storage::open(paths)
+        .expect("player state reopens")
+        .settings()
+        .expect("settings reload");
+    assert_eq!(after, before, "hidden keys left saved settings unchanged");
 }
 
 #[cfg(target_os = "linux")]
@@ -525,6 +559,7 @@ enum PtyPlan<'a> {
         final_input: &'a [u8],
     },
     Resize,
+    Undersized(&'a [u8]),
 }
 
 struct OutputLog {
@@ -621,12 +656,17 @@ fn run_in_native_pty_resize(binary: &Path, state: &Path) -> PtyOutput {
 }
 
 #[cfg(unix)]
+fn run_in_native_pty_undersized(binary: &Path, state: &Path, input: &[u8]) -> PtyOutput {
+    run_in_native_pty_with_plan(binary, state, PtyPlan::Undersized(input))
+}
+
+#[cfg(unix)]
 fn run_in_native_pty_with_plan(binary: &Path, state: &Path, plan: PtyPlan<'_>) -> PtyOutput {
     use std::io::Read;
     use std::sync::Arc;
     use std::thread;
 
-    let mut command = unix_pty_command(binary, state, matches!(plan, PtyPlan::Resize));
+    let mut command = unix_pty_command(binary, state, plan);
     let mut child = command.spawn().expect("native script PTY starts");
     let mut stdout = child.stdout.take().expect("PTY output");
     let mut stderr = child.stderr.take().expect("PTY errors");
@@ -738,13 +778,17 @@ fn wait_for_unix_child(
 }
 
 #[cfg(unix)]
-fn unix_pty_command(binary: &Path, state: &Path, start_small: bool) -> std::process::Command {
+fn unix_pty_command(binary: &Path, state: &Path, plan: PtyPlan<'_>) -> std::process::Command {
     use std::process::{Command, Stdio};
 
-    let launch = if start_small {
-        "stty cols 59 rows 19; (attempt=0; while [ ! -e \"$ORIFUDE_RESIZE_SIGNAL\" ] && [ \"$attempt\" -lt 500 ]; do sleep 0.01; attempt=$((attempt + 1)); done; if [ -e \"$ORIFUDE_RESIZE_SIGNAL\" ]; then stty cols 100 rows 30 </dev/tty; fi) & exec \"$ORIFUDE_SMOKE_BINARY\""
-    } else {
-        "stty cols 100 rows 30; exec \"$ORIFUDE_SMOKE_BINARY\""
+    let launch = match plan {
+        PtyPlan::Resize => {
+            "stty cols 59 rows 19; (attempt=0; while [ ! -e \"$ORIFUDE_RESIZE_SIGNAL\" ] && [ \"$attempt\" -lt 500 ]; do sleep 0.01; attempt=$((attempt + 1)); done; if [ -e \"$ORIFUDE_RESIZE_SIGNAL\" ]; then stty cols 100 rows 30 </dev/tty; fi) & exec \"$ORIFUDE_SMOKE_BINARY\""
+        }
+        PtyPlan::Undersized(_) => "stty cols 59 rows 19; exec \"$ORIFUDE_SMOKE_BINARY\"",
+        PtyPlan::Immediate(_) | PtyPlan::Scripted { .. } => {
+            "stty cols 100 rows 30; exec \"$ORIFUDE_SMOKE_BINARY\""
+        }
     };
     let mut command = Command::new("script");
     #[cfg(target_os = "linux")]
@@ -799,6 +843,11 @@ fn run_in_native_pty_resize(binary: &Path, state: &Path) -> PtyOutput {
 }
 
 #[cfg(windows)]
+fn run_in_native_pty_undersized(binary: &Path, state: &Path, input: &[u8]) -> PtyOutput {
+    run_in_native_pty_with_plan(binary, state, PtyPlan::Undersized(input))
+}
+
+#[cfg(windows)]
 fn run_in_native_pty_with_plan(binary: &Path, state: &Path, plan: PtyPlan<'_>) -> PtyOutput {
     use std::io::Read;
     use std::sync::Arc;
@@ -815,7 +864,7 @@ fn run_in_native_pty_with_plan(binary: &Path, state: &Path, plan: PtyPlan<'_>) -
         .env("ORIFUDE_TEST_UNIX_SECONDS", "1788307200")
         .env("APPDATA", state.join("config"))
         .env("LOCALAPPDATA", state.join("data"));
-    let size = if matches!(plan, PtyPlan::Resize) {
+    let size = if matches!(plan, PtyPlan::Resize | PtyPlan::Undersized(_)) {
         Size::try_new(59, 19)
     } else {
         Size::try_new(80, 24)
@@ -939,6 +988,10 @@ fn drive_plan(
         PtyPlan::Resize => {
             resize()?;
             write_input(writer, b"qy")
+        }
+        PtyPlan::Undersized(input) => {
+            output.wait_for(b"Resize")?;
+            write_input(writer, input)
         }
     }
 }

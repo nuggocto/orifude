@@ -50,8 +50,8 @@ impl BoardView<'_> {
         }
         let regions = wide_regions(area);
         let dimensions = self.puzzle.dimensions();
-        let grid_width = u16::from(dimensions.width().get()) * 2 + 2;
-        let grid_height = u16::from(dimensions.height().get()) + 2;
+        let grid_width = u16::from(dimensions.width().get()) * 2 + RULER_WIDTH + 4;
+        let grid_height = u16::from(dimensions.height().get()) + 3;
         regions[0].width < grid_width || regions[1].width < grid_width || area.height < grid_height
     }
 
@@ -61,7 +61,7 @@ impl BoardView<'_> {
             .constraints([Constraint::Percentage(72), Constraint::Percentage(28)])
             .split(area);
         let (title, grid) = if self.target_visible {
-            ("PATTERN TO MATCH", target_grid(self.puzzle, profile))
+            ("Pattern to match", target_grid(self.puzzle, profile))
         } else {
             (self.title(true, false), self.grid(profile))
         };
@@ -94,6 +94,8 @@ impl BoardView<'_> {
             regions[0],
             target_title,
             target_grid(self.puzzle, profile),
+            0,
+            true,
             false,
             profile,
         );
@@ -104,6 +106,8 @@ impl BoardView<'_> {
             regions[1],
             title,
             self.grid(profile),
+            0,
+            true,
             active,
             profile,
         );
@@ -111,17 +115,16 @@ impl BoardView<'_> {
         regions[0]
     }
 
+    // The active board is marked by its highlighted title, not by capitals.
     fn title(&self, active: bool, short: bool) -> &'static str {
         match (&self.mode, active, short) {
-            (BoardMode::Folded, true, true) => "PAPER",
-            (BoardMode::Folded, true, false) => "FOLDED PAPER",
-            (BoardMode::Folded, false, _) => "Folded paper",
-            (BoardMode::Unfolded, true, true) => "PREVIEW",
-            (BoardMode::Unfolded, true, false) => "UNFOLDED PREVIEW",
+            (BoardMode::Folded, true, true) => "Paper",
+            (BoardMode::Folded, _, _) => "Folded paper",
+            (BoardMode::Unfolded, true, true) => "Preview",
+            (BoardMode::Unfolded, true, false) => "Unfolded preview",
             (BoardMode::Unfolded, false, _) => "Unfolded ink preview",
-            (BoardMode::Comparison(_), true, true) => "RESULT",
-            (BoardMode::Comparison(_), true, false) => "OPENED COMPARISON",
-            (BoardMode::Comparison(_), false, _) => "Opened comparison",
+            (BoardMode::Comparison(_), true, true) => "Result",
+            (BoardMode::Comparison(_), _, _) => "Opened comparison",
         }
     }
 
@@ -155,17 +158,23 @@ fn wide_regions(area: Rect) -> [Rect; 3] {
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Percentage(36),
-            Constraint::Percentage(40),
-            Constraint::Percentage(24),
+            Constraint::Percentage(38),
+            Constraint::Percentage(26),
         ])
         .areas(area)
 }
 
+/// Width of the row numbers and their gap at the start of each grid line.
+const RULER_WIDTH: u16 = 3;
+
+#[allow(clippy::too_many_arguments)]
 fn render_grid(
     frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
     rows: Vec<Line<'static>>,
+    first_row: u8,
+    column_ruler: bool,
     active: bool,
     profile: StyleProfile,
 ) {
@@ -175,11 +184,31 @@ fn render_grid(
         Paper::block(title, profile)
     };
     frame.render_widget(
-        Paragraph::new(rows)
+        Paragraph::new(with_rulers(rows, first_row, column_ruler))
             .block(block)
             .alignment(Alignment::Center),
         area,
     );
+}
+
+/// Numbers the columns above the grid and each row at its start, so written
+/// positions such as "row 2, column 3" can be found on the paper. Columns past
+/// nine show their last digit to keep one cell per number.
+fn with_rulers(rows: Vec<Line<'static>>, first_row: u8, column_ruler: bool) -> Vec<Line<'static>> {
+    let columns = rows.first().map_or(0, |row| row.spans.len() / 2);
+    let ruler = StyleProfile::muted();
+    let header = std::iter::once(Span::styled(" ".repeat(usize::from(RULER_WIDTH)), ruler))
+        .chain((1..=columns).map(|column| Span::styled(format!("{} ", column % 10), ruler)))
+        .collect::<Vec<_>>();
+    column_ruler
+        .then(|| Line::from(header))
+        .into_iter()
+        .chain(rows.into_iter().zip(first_row..).map(|(row, index)| {
+            let mut spans = vec![Span::styled(format!("{:>2} ", u16::from(index) + 1), ruler)];
+            spans.extend(row.spans);
+            Line::from(spans)
+        }))
+        .collect()
 }
 
 fn render_grid_window(
@@ -191,7 +220,13 @@ fn render_grid_window(
     active: bool,
     profile: StyleProfile,
 ) {
-    let visible = usize::from(area.height.saturating_sub(2)).min(rows.len());
+    // The column ruler takes the first line inside the border, unless the
+    // paper must scroll; then every line shows paper and row numbers orient.
+    let inner = usize::from(area.height.saturating_sub(2));
+    let column_ruler = inner > rows.len();
+    let visible = inner
+        .saturating_sub(usize::from(column_ruler))
+        .min(rows.len());
     let focus = usize::from(focus_row).min(rows.len().saturating_sub(1));
     let start = focus
         .saturating_add(1)
@@ -208,6 +243,8 @@ fn render_grid_window(
         area,
         &title,
         rows.into_iter().skip(start).take(visible).collect(),
+        u8::try_from(start).unwrap_or(u8::MAX),
+        column_ruler,
         active,
         profile,
     );
@@ -363,6 +400,13 @@ const fn ink_symbol(glyph_mode: GlyphMode) -> char {
     }
 }
 
+const fn blank_symbol(glyph_mode: GlyphMode) -> char {
+    match glyph_mode {
+        GlyphMode::Unicode => '○',
+        GlyphMode::Ascii => 'o',
+    }
+}
+
 const fn ink_cursor_symbol(glyph_mode: GlyphMode) -> char {
     match glyph_mode {
         GlyphMode::Unicode => '◉',
@@ -418,14 +462,6 @@ fn preview_footprint(
     }
 }
 
-pub(super) fn action_coordinate(action: PaperAction) -> Option<Coordinate> {
-    match action {
-        PaperAction::Dot(coordinate) => Some(coordinate),
-        PaperAction::Line(line) => Some(line.start()),
-        PaperAction::Fold(_) => None,
-    }
-}
-
 fn render_stack(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -435,26 +471,51 @@ fn render_stack(
     ink: InkPattern,
     profile: StyleProfile,
 ) {
+    // Inside the border and padding; long origin labels need 19 columns.
+    let roomy = area.width >= 23;
     let mut lines = Vec::new();
     if let Some(coordinate) = cursor {
         let mut stack = crate::domain::paper::StackView::new();
         attempt
             .stack_at(coordinate, &mut stack)
             .expect("cursor stack is inside the paper");
-        lines.push(Line::styled(
-            format!(
-                "row {}, column {}",
-                coordinate.row().get() + 1,
-                coordinate.column().get() + 1
-            ),
-            profile.title(),
-        ));
-        if stack.is_empty() {
-            lines.push(Line::from("empty"));
-        }
-        for (layer, id) in stack.cell_ids().iter().enumerate() {
-            let ink = if ink.contains(*id) { " ink" } else { "" };
-            lines.push(Line::from(format!("{layer}: cell {}{ink}", id.get())));
+        let (row, column) = (coordinate.row().get() + 1, coordinate.column().get() + 1);
+        let heading = if roomy {
+            format!("Row {row}, column {column}")
+        } else {
+            format!("Row {row}, col {column}")
+        };
+        lines.push(Line::styled(heading, profile.title()));
+        // Narrow panels are short too: the numbered layers show the count.
+        let layers = stack.cell_ids();
+        let caption = match layers.len() {
+            0 => "No paper here".to_owned(),
+            _ if !roomy => "Began at:".to_owned(),
+            1 => "1 layer began at:".to_owned(),
+            count => format!("{count} layers began at:"),
+        };
+        lines.push(Line::styled(caption, StyleProfile::muted()));
+        let dimensions = attempt.dimensions();
+        for (layer, id) in layers.iter().enumerate() {
+            let (mark, style) = if ink.contains(*id) {
+                (ink_symbol(profile.glyph_mode()), profile.ink_mark())
+            } else {
+                (blank_symbol(profile.glyph_mode()), profile.ink())
+            };
+            let origin = dimensions
+                .original_coordinate(*id)
+                .expect("a stacked cell belongs to the paper");
+            let (row, column) = (origin.row().get() + 1, origin.column().get() + 1);
+            let place = if roomy {
+                format!("row {row}, col {column}")
+            } else {
+                format!("r{row} c{column}")
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{} ", layer + 1), StyleProfile::muted()),
+                Span::styled(mark.to_string(), style),
+                Span::styled(format!(" {place}"), profile.ink()),
+            ]));
         }
     } else {
         lines.push(Line::from("Select a cell to inspect its layers."));
@@ -463,15 +524,19 @@ fn render_stack(
         lines.push(Line::from(""));
         lines.push(Line::styled(fold_label(fold), profile.paper()));
     }
-    let title = if area.width < 22 {
+    // The padded title needs its length plus two corners and one border dash.
+    let title = if area.width < 25 {
         "Low to high"
     } else {
         "Stack, bottom to top"
     };
+    let block = if roomy {
+        Paper::block(title, profile)
+    } else {
+        Paper::block(title, profile).padding(ratatui::widgets::Padding::left(1))
+    };
     frame.render_widget(
-        Paragraph::new(lines)
-            .block(Paper::block(title, profile))
-            .wrap(Wrap { trim: true }),
+        Paragraph::new(lines).block(block).wrap(Wrap { trim: true }),
         area,
     );
 }

@@ -19,6 +19,7 @@ use app::{App, AppAction};
 use clock::{Clock, ClockError};
 pub use event::EventError;
 use event::{EventPump, RuntimeEvent};
+use layout::LayoutMode;
 use style::{StyleProfile, TerminalEnvironment, detect_color};
 use terminal::TerminalSession;
 use work::{WorkError, WorkManager};
@@ -191,6 +192,11 @@ impl Shell<'_> {
     fn dispatch_event(&mut self, event: RuntimeEvent, now: Instant) -> Result<AppAction, TuiError> {
         Ok(match event {
             RuntimeEvent::Key(key) => {
+                // Rendering shows only the resize message for this viewport, so
+                // keys must not reach the hidden board or dialogs.
+                if LayoutMode::for_area(self.terminal.viewport()) == LayoutMode::ResizeMessage {
+                    return Ok(app::hidden_screen_key(key));
+                }
                 let snapshot = self.clock.now().map_err(TuiError::Clock)?;
                 self.app.set_local_date(snapshot.date);
                 self.app.handle_key(key, now)

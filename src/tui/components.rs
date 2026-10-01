@@ -1,9 +1,9 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::symbols::border;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
 use crate::storage::GlyphMode;
 use crate::{content, content::JourneyGroup};
@@ -147,6 +147,15 @@ const BRANCH_ASCII_GIFT_SLOTS: [(usize, usize); 8] = [
 ];
 const BRANCH_UNICODE_GIFTS: [char; 8] = ['◆', '◇', '●', '△', '▾', '◇', '●', '◆'];
 const BRANCH_ASCII_GIFTS: [char; 8] = ['*', '#', 'o', 'A', 'v', '*', 'o', '#'];
+const BRANCH_CHOICE_NOTES: [&str; 7] = [
+    "Forty papers. Each chapter sends a gift home.",
+    "Today's paper, the same for everyone on this date.",
+    "Freshly folded papers, as many as you like.",
+    "Papers from community packs you installed.",
+    "Replay the papers you have finished.",
+    "Six short frames on folds, stacks, and ink.",
+    "Colors, symbols, motion, and keys.",
+];
 const BRANCH_CHOICES: [&str; 7] = [
     "Continue the journey",
     "Today's paper",
@@ -179,10 +188,13 @@ impl Paper {
         title_style: Style,
         profile: StyleProfile,
     ) -> Block<'_> {
+        // A space on each side keeps the title off the border line, and one
+        // column of padding keeps text off the paper's edge.
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
-            .title(Span::styled(title, title_style));
+            .title(Span::styled(format!(" {title} "), title_style))
+            .padding(Padding::horizontal(1));
         match profile.glyph_mode() {
             GlyphMode::Unicode => block.border_set(border::ROUNDED),
             GlyphMode::Ascii => block.border_set(ASCII_BORDER),
@@ -225,7 +237,7 @@ impl<'a> FocusList<'a> {
 
 pub(crate) struct BranchChoices;
 
-pub(crate) const BRANCH_CARD_WIDTH: u16 = 36;
+const BRANCH_CARD_WIDTH: u16 = 36;
 
 impl BranchChoices {
     pub(crate) fn render(
@@ -237,7 +249,39 @@ impl BranchChoices {
     ) {
         let card = centered(area, BRANCH_CARD_WIDTH, 9);
         FocusList::new(&BRANCH_CHOICES, selected).render(frame, card, title, profile);
+        // Notes wrap to at most three lines under the card; skip one that
+        // would be cut off rather than show half a sentence.
+        let note_top = card.bottom().saturating_add(1);
+        let room = area.bottom().saturating_sub(note_top).min(3);
+        if let Some(note) = BRANCH_CHOICE_NOTES.get(selected)
+            && wrapped_rows(note, card.width) <= room
+        {
+            frame.render_widget(
+                Paragraph::new(*note)
+                    .style(StyleProfile::muted())
+                    .alignment(Alignment::Center)
+                    .wrap(Wrap { trim: true }),
+                Rect::new(card.x, note_top, card.width, room),
+            );
+        }
     }
+}
+
+/// Counts the rows a greedy word wrap needs for `text` at `width` columns.
+fn wrapped_rows(text: &str, width: u16) -> u16 {
+    let width = usize::from(width.max(1));
+    let mut rows = 1_u16;
+    let mut used = 0_usize;
+    for word in text.split_whitespace() {
+        let length = word.chars().count();
+        if used > 0 && used + 1 + length > width {
+            rows = rows.saturating_add(1);
+            used = length;
+        } else {
+            used += usize::from(used > 0) + length;
+        }
+    }
+    rows
 }
 
 pub(crate) struct BranchGrowth;
@@ -252,10 +296,12 @@ impl BranchGrowth {
         let completed_groups = completed_groups.min(content::journey_groups().len());
         if area.height < 16 || usize::from(area.width) < BRANCH_ART_WIDTH {
             frame.render_widget(
-                Paragraph::new(branch_caption(completed_groups))
-                    .style(profile.paper())
-                    .alignment(Alignment::Center)
-                    .wrap(Wrap { trim: true }),
+                Paragraph::new(vec![
+                    Line::styled(branch_caption(completed_groups), profile.paper()),
+                    gift_track(completed_groups, profile),
+                ])
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true }),
                 area,
             );
             return;
@@ -280,10 +326,12 @@ impl BranchGrowth {
             ),
         );
         frame.render_widget(
-            Paragraph::new(branch_caption(completed_groups))
-                .style(profile.title())
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true }),
+            Paragraph::new(vec![
+                Line::styled(branch_caption(completed_groups), profile.title()),
+                gift_track(completed_groups, profile),
+            ])
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true }),
             Rect::new(card.x, card.y.saturating_add(13), card.width, 3),
         );
     }
@@ -294,14 +342,42 @@ fn branch_caption(completed_groups: usize) -> String {
         .checked_sub(1)
         .and_then(|index| content::journey_groups().get(index))
         .map_or_else(
-            || "The branch is waiting for its first leaf. [0/8]".to_owned(),
-            |group| {
-                format!(
-                    "The branch holds {}. [{completed_groups}/8]",
-                    group.gift.label()
-                )
-            },
+            || "The branch is waiting for its first leaf.".to_owned(),
+            |group| format!("The branch holds {}.", group.gift.label()),
         )
+}
+
+/// Returns the mark the courier brings home for one journey chapter.
+pub(crate) fn gift_mark(group_index: usize, glyph_mode: GlyphMode) -> char {
+    let gifts = match glyph_mode {
+        GlyphMode::Unicode => &BRANCH_UNICODE_GIFTS,
+        GlyphMode::Ascii => &BRANCH_ASCII_GIFTS,
+    };
+    gifts.get(group_index).copied().unwrap_or('*')
+}
+
+/// One mark per journey chapter: the gift the courier brought home, or a
+/// dormant bud for a chapter still ahead. It replaces a bare count.
+fn gift_track(completed_groups: usize, profile: StyleProfile) -> Line<'static> {
+    let (gifts, dormant) = match profile.glyph_mode() {
+        GlyphMode::Unicode => (&BRANCH_UNICODE_GIFTS, '·'),
+        GlyphMode::Ascii => (&BRANCH_ASCII_GIFTS, '.'),
+    };
+    let marks = gifts.iter().enumerate().flat_map(|(index, gift)| {
+        let mark = if index < completed_groups {
+            Span::styled(gift.to_string(), profile.ink_mark())
+        } else {
+            Span::styled(dormant.to_string(), StyleProfile::muted())
+        };
+        [mark, Span::raw(" ")]
+    });
+    let mut spans = marks.collect::<Vec<_>>();
+    spans.pop();
+    spans.push(Span::styled(
+        format!("  {completed_groups} of {}", gifts.len()),
+        StyleProfile::muted(),
+    ));
+    Line::from(spans)
 }
 
 fn branch_art(completed: usize, glyph_mode: GlyphMode) -> Vec<String> {
@@ -630,19 +706,44 @@ pub(crate) struct StatusBar;
 
 impl StatusBar {
     pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, focused: bool, focused_text: &str) {
-        let text = if focused {
-            focused_text
+        let line = if focused {
+            key_hints(focused_text)
         } else {
-            "Terminal focus is elsewhere. Orifude is waiting."
+            Line::from("Terminal focus is elsewhere. Orifude is waiting.")
         };
         frame.render_widget(
-            Paragraph::new(text)
+            Paragraph::new(line)
                 .style(StyleProfile::muted())
                 .alignment(Alignment::Center),
             area,
         );
     }
 }
+
+/// Brightens the key that starts each hint, such as "Enter" in "Enter open",
+/// and leaves the action and separators dim.
+fn key_hints(text: &str) -> Line<'static> {
+    let separator = if text.contains(" · ") { " · " } else { " | " };
+    let key = Style::default()
+        .add_modifier(Modifier::BOLD)
+        .remove_modifier(Modifier::DIM);
+    let mut spans = Vec::new();
+    for (index, hint) in text.split(separator).enumerate() {
+        if index > 0 {
+            spans.push(Span::raw(separator));
+        }
+        match hint.split_once(' ') {
+            Some((name, action)) => {
+                spans.push(Span::styled(name.to_owned(), key));
+                spans.push(Span::raw(format!(" {action}")));
+            }
+            None => spans.push(Span::styled(hint.to_owned(), key)),
+        }
+    }
+    Line::from(spans)
+}
+
+const DIALOG_WIDTH: u16 = 56;
 
 pub(crate) struct Dialog;
 
@@ -656,7 +757,23 @@ impl Dialog {
         style: Style,
         profile: StyleProfile,
     ) {
-        Self::render_with_size(frame, host, title, body, footer, style, profile, 56, 10);
+        // Borders, a blank line, and the footer surround the wrapped body.
+        let inner = DIALOG_WIDTH.min(host.width).saturating_sub(4);
+        let height = body
+            .iter()
+            .map(|line| wrapped_rows(&line.to_string(), inner))
+            .fold(4_u16, u16::saturating_add);
+        Self::render_with_size(
+            frame,
+            host,
+            title,
+            body,
+            footer,
+            style,
+            profile,
+            DIALOG_WIDTH,
+            height,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -767,7 +884,7 @@ impl DialogLayer {
                 area,
                 "Leave Orifude?",
                 vec![Line::from(
-                    "Saved progress is safe. An unfinished paper is not saved. Leave Orifude?",
+                    "Saved progress is safe. An unfinished paper is not saved.",
                 )],
                 "y or Enter leaves; n or Esc stays",
                 profile.border(),
@@ -885,6 +1002,11 @@ mod tests {
                 .all(|line| line.is_ascii())
         );
         assert!(branch_caption(8).contains("the full canopy"));
+        let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+        assert_eq!(
+            gift_track(3, profile).to_string(),
+            "◆ ◇ ● · · · · ·  3 of 8"
+        );
         assert_eq!(
             branch_art(0, GlyphMode::Unicode)
                 .concat()
@@ -917,7 +1039,8 @@ mod tests {
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");
-        assert!(text.contains("The branch is waiting for its first leaf. [0/8]"));
+        assert!(text.contains("The branch is waiting for its first leaf."));
+        assert!(text.contains("· · · · · · · · 0 of 8"));
     }
 
     #[test]
@@ -951,6 +1074,28 @@ mod tests {
             assert!(text.contains("Enter returns"));
             assert!(text.is_ascii());
         }
+    }
+
+    #[test]
+    fn home_notes_fit_beneath_the_menu_at_the_preferred_minimum() {
+        assert_eq!(wrapped_rows("one two three", 7), 2);
+        assert_eq!(wrapped_rows("one two", 7), 1);
+        for note in BRANCH_CHOICE_NOTES {
+            assert!(wrapped_rows(note, 28) <= 2, "{note}");
+        }
+    }
+
+    #[test]
+    fn status_hints_emphasize_each_key_and_keep_actions_dim() {
+        let line = key_hints("Enter open · ? help · Tab");
+        let bold = line
+            .spans
+            .iter()
+            .filter(|span| span.style.add_modifier.contains(Modifier::BOLD))
+            .map(|span| span.content.as_ref())
+            .collect::<Vec<_>>();
+        assert_eq!(bold, ["Enter", "?", "Tab"]);
+        assert_eq!(line.to_string(), "Enter open · ? help · Tab");
     }
 
     fn braille_dot_count(lines: &[Line<'_>]) -> u32 {

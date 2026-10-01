@@ -306,7 +306,7 @@ impl App {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, now: Instant) -> AppAction {
         let reveal_cancelled = self.reveal_started.take().is_some();
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if is_exit_shortcut(key) {
             return AppAction::Exit;
         }
         if self.binding_capture.is_some() {
@@ -999,7 +999,7 @@ impl App {
                 "Move and act".to_owned(),
                 "Arrows / h j k l   Move @ or choose a fold".to_owned(),
                 "Enter              Use the ready tool or open".to_owned(),
-                "Tab / Shift+Tab   Change tool; Esc readies Open".to_owned(),
+                "Tab / Shift+Tab    Change tool; Esc readies Open".to_owned(),
                 "Goal, tools, and result".to_owned(),
                 "Pattern to match   The opened result, not the moves".to_owned(),
                 format!("{} Fold    + crosses a crease and stacks on top", keys.fold),
@@ -1038,6 +1038,21 @@ impl App {
             ],
         }
     }
+}
+
+/// Handles a key while the resize message hides the screen.
+///
+/// The board and every dialog are invisible, so only the exit shortcut acts.
+pub(crate) fn hidden_screen_key(key: KeyEvent) -> AppAction {
+    if is_exit_shortcut(key) {
+        AppAction::Exit
+    } else {
+        AppAction::None
+    }
+}
+
+fn is_exit_shortcut(key: KeyEvent) -> bool {
+    key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c'))
 }
 
 pub(crate) fn key_label(key: char) -> String {

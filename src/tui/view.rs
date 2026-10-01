@@ -3,25 +3,25 @@ use std::time::Instant;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Clear, List, ListItem, ListState, Padding, Paragraph, Wrap};
 
 use crate::domain::attempt::Attempt;
 use crate::domain::paper::{Coordinate, Row};
 use crate::storage::{BindingSlot, ColorMode, GlyphMode, KeyBindings};
 
-use super::app::{App, Overlay, Screen, action_label, key_label};
+use super::app::{App, Screen, action_label, key_label};
 use super::components::{
-    BRANCH_CARD_WIDTH, BranchChoices, BranchGrowth, CompletionCourier, DialogLayer, Paper,
-    StatusBar, TerminalMark, courier_art,
+    BranchChoices, BranchGrowth, CompletionCourier, DialogLayer, Paper, StatusBar, TerminalMark,
+    courier_art, gift_mark,
 };
 use super::layout::{LayoutMode, MINIMUM_HEIGHT, MINIMUM_WIDTH, ShellLayout, centered};
-use super::session::{Draft, PlaySession, PlaySource};
+use super::session::{Draft, PlaySession, PlaySource, action_coordinate};
 use super::style::StyleProfile;
 use super::text::SafeText;
 
 mod boards;
 
-use boards::{BoardMode, BoardView, action_coordinate};
+use boards::{BoardMode, BoardView};
 
 pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, now: Instant) {
     let area = frame.area();
@@ -50,18 +50,14 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
             let completed = (0..app.journey().len())
                 .filter(|index| app.journey_complete(*index))
                 .count();
-            let saved = if app.recent().is_empty() { "no" } else { "yes" };
-            let detailed_title = format!(
-                "Home | Journey {completed}/{} | Saved {saved}",
+            let separator = match profile.glyph_mode() {
+                GlyphMode::Unicode => "·",
+                GlyphMode::Ascii => "|",
+            };
+            let title = format!(
+                "Home {separator} Journey {completed}/{}",
                 app.journey().len()
             );
-            let card_width = shell.branch.width.min(BRANCH_CARD_WIDTH);
-            let title =
-                if detailed_title.chars().count().saturating_add(2) <= usize::from(card_width) {
-                    detailed_title
-                } else {
-                    format!("Home | Journey {completed}/{}", app.journey().len())
-                };
             BranchChoices::render(frame, shell.branch, app.selection(), &title, profile);
         }
         Screen::Journey => render_journey(frame, content, app, profile),
@@ -76,6 +72,7 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
                     now,
                     app.group_completion(),
                     app.next_journey_index().is_some(),
+                    app.overlay().is_none(),
                 );
             }
         }
@@ -89,7 +86,9 @@ pub(crate) fn render(frame: &mut Frame<'_>, app: &App, profile: StyleProfile, no
     let status = status_text(app, profile.glyph_mode(), shell.status.width);
     StatusBar::render(frame, shell.status, app.focused(), &status);
     if let Some(overlay) = app.overlay() {
-        let overlay_area = if app.screen() == Screen::Play && matches!(overlay, Overlay::Help(_)) {
+        // During play a dialog centers over the boards; elsewhere it covers
+        // the artwork and leaves the menu in view.
+        let overlay_area = if app.screen() == Screen::Play {
             content
         } else if mode == LayoutMode::Preferred {
             shell.mark
@@ -134,58 +133,115 @@ fn render_capabilities(frame: &mut Frame<'_>, area: Rect, profile: StyleProfile)
             Line::styled("Enter starts the lesson. Esc leaves.", profile.paper()),
         ]
     };
+    // Fit the card to its words so the welcome does not float in empty space.
+    // Small terminals keep every line and give up the extra margin instead.
+    let line_count = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+    let roomy = area.width >= 80 && area.height >= line_count.saturating_add(4);
+    let (block, card) = if roomy {
+        (
+            Paper::block("How this paper works", profile).padding(Padding::new(2, 2, 1, 1)),
+            centered(area, 78, line_count.saturating_add(4)),
+        )
+    } else {
+        (Paper::block("How this paper works", profile), area)
+    };
     frame.render_widget(
-        Paragraph::new(lines)
-            .block(Paper::block("How this paper works", profile))
-            .wrap(Wrap { trim: true }),
-        area,
+        Paragraph::new(lines).block(block).wrap(Wrap { trim: true }),
+        card,
     );
 }
 
 fn render_journey(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleProfile) {
-    let mut choices = app
-        .journey()
-        .iter()
-        .enumerate()
-        .map(|(index, paper)| {
-            let state = if app.journey_complete(index) {
-                "complete"
-            } else if app.journey_unlocked(index) {
-                "open"
-            } else {
-                "locked"
-            };
-            let (group_number, paper_number) = crate::content::journey_group(index)
-                .map_or((0, 0), |(group_index, group)| {
-                    (group_index + 1, index - group.first_paper + 1)
-                });
-            format!(
-                "{group_number}.{paper_number}  {}  [{state}]",
-                paper.title()
-            )
-        })
-        .collect::<Vec<_>>();
-    choices.push("Back to the branch".to_owned());
-    let Some((group_index, group)) = crate::content::journey_group(app.selection()) else {
-        render_owned_focus(frame, area, "Journey", &choices, app.selection(), profile);
-        return;
+    let (done, open, locked) = match profile.glyph_mode() {
+        GlyphMode::Unicode => ('●', '○', '·'),
+        GlyphMode::Ascii => ('*', 'o', '.'),
     };
+    // Chapter headings sit between the papers but are never selectable, so
+    // remember where each selectable row landed.
+    let mut items = Vec::new();
+    let mut rows = Vec::new();
+    for (group_index, group) in crate::content::journey_groups().iter().enumerate() {
+        if group_index > 0 {
+            items.push(ListItem::new(""));
+        }
+        let papers = group.first_paper..group.first_paper + group.paper_count;
+        let mut heading = vec![Span::styled(
+            format!("{}  {}", group_index + 1, group.title),
+            profile.title(),
+        )];
+        // The chapter's gift stays a dormant bud until every paper is done.
+        let gift = if papers.clone().all(|index| app.journey_complete(index)) {
+            Span::styled(
+                format!("  {}", gift_mark(group_index, profile.glyph_mode())),
+                profile.ink_mark(),
+            )
+        } else {
+            Span::styled(format!("  {locked}"), StyleProfile::muted())
+        };
+        heading.push(gift);
+        heading.push(Span::styled(
+            format!(" {}", group.gift.label()),
+            StyleProfile::muted(),
+        ));
+        items.push(ListItem::new(Line::from(heading)));
+        for index in papers {
+            let Some(paper) = app.journey().get(index) else {
+                continue;
+            };
+            let (mark, style) = if app.journey_complete(index) {
+                (done, profile.ink_mark())
+            } else if app.journey_unlocked(index) {
+                (open, profile.ink())
+            } else {
+                (locked, StyleProfile::muted())
+            };
+            let label = format!(
+                "{}.{}  {}",
+                group_index + 1,
+                index - group.first_paper + 1,
+                paper.title()
+            );
+            rows.push(items.len());
+            items.push(ListItem::new(choice_line(
+                index == app.selection(),
+                vec![
+                    Span::styled(mark.to_string(), style),
+                    Span::styled(format!(" {label}"), style),
+                ],
+                profile,
+            )));
+        }
+    }
+    items.push(ListItem::new(""));
+    rows.push(items.len());
+    items.push(ListItem::new(choice_line(
+        app.selection() == app.journey().len(),
+        vec![Span::styled("Back to the branch", profile.ink())],
+        profile,
+    )));
+
+    let title = crate::content::journey_group(app.selection()).map_or_else(
+        || "Journey".to_owned(),
+        |(group_index, group)| format!("Journey {}: {}", group_index + 1, group.title),
+    );
+    let mechanic = crate::content::journey_group(app.selection())
+        .map_or("Return to the branch.", |(_, group)| group.mechanic);
     let regions = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(2), Constraint::Min(1)])
         .split(area);
     frame.render_widget(
-        Paragraph::new(group.mechanic)
+        Paragraph::new(mechanic)
             .style(StyleProfile::muted())
             .wrap(Wrap { trim: true }),
         regions[0],
     );
-    let title = format!("Journey {}: {}", group_index + 1, group.title);
-    render_owned_focus(
+    render_rows(
         frame,
         regions[1],
         &title,
-        &choices,
+        items,
+        &rows,
         app.selection(),
         profile,
     );
@@ -238,37 +294,60 @@ fn render_pack_papers(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
 }
 
 fn render_keepsakes(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleProfile) {
-    let installed = |pack_id: &str| app.packs().iter().any(|pack| pack.id.as_ref() == pack_id);
-    let mut choices = app
-        .recent()
-        .iter()
-        .map(|progress| {
-            let missing = if installed(&progress.pack_id)
-                || matches!(
-                    progress.pack_id.as_ref(),
-                    "orifude-journey" | "orifude-daily" | "orifude-endless"
-                ) {
-                ""
-            } else {
-                "  [pack missing; replay kept]"
-            };
+    // Border, padding, and the selection marker leave this many columns.
+    let width = usize::from(area.width.saturating_sub(6));
+    let mut items = Vec::new();
+    let mut rows = Vec::new();
+    let mut choice = |items: &mut Vec<ListItem<'static>>, label: String, detail: String| {
+        let index = rows.len();
+        rows.push(items.len());
+        let label = SafeText::external_display(&label, 160, profile.glyph_mode());
+        let gap = width
+            .saturating_sub(label.as_str().chars().count())
+            .saturating_sub(detail.chars().count())
+            .max(2);
+        items.push(ListItem::new(choice_line(
+            index == app.selection(),
+            vec![
+                Span::styled(label.as_str().to_owned(), profile.ink()),
+                Span::raw(" ".repeat(gap)),
+                Span::styled(detail, StyleProfile::muted()),
+            ],
+            profile,
+        )));
+    };
+
+    for progress in app.recent() {
+        let (label, missing) = keepsake_label(app, progress);
+        let detail = if missing {
+            "pack removed; replay kept".to_owned()
+        } else {
             format!(
-                "{}/{}  best {}F {}S{missing}",
-                progress.pack_id, progress.puzzle_id, progress.best_folds, progress.best_strokes
+                "{}, {}",
+                counted(progress.best_folds, "fold"),
+                counted(progress.best_strokes, "stroke")
             )
-        })
-        .collect::<Vec<_>>();
-    if choices.is_empty() && app.keepsake_offset() == 0 && !app.keepsake_has_more() {
-        choices.push("No keepsakes yet - Enter returns".to_owned());
+        };
+        choice(&mut items, label, detail);
+    }
+    let empty = app.recent().is_empty() && app.keepsake_offset() == 0 && !app.keepsake_has_more();
+    if empty {
+        items.push(ListItem::new(Line::styled(
+            "No keepsakes yet. Each finished paper waits here to be replayed.",
+            StyleProfile::muted(),
+        )));
+        items.push(ListItem::new(""));
     } else {
         if app.keepsake_has_more() {
-            choices.push("Older keepsakes".to_owned());
+            choice(&mut items, "Older keepsakes".to_owned(), String::new());
         }
         if app.keepsake_offset() > 0 {
-            choices.push("Newer keepsakes".to_owned());
+            choice(&mut items, "Newer keepsakes".to_owned(), String::new());
         }
-        choices.push("Back to the branch".to_owned());
+        items.push(ListItem::new(""));
     }
+    choice(&mut items, "Back to the branch".to_owned(), String::new());
+
     let first = app.keepsake_offset().saturating_add(1);
     let last = app
         .keepsake_offset()
@@ -278,7 +357,43 @@ fn render_keepsakes(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Style
     } else {
         format!("Saved keepsakes {first}-{last}")
     };
-    render_owned_focus(frame, area, &title, &choices, app.selection(), profile);
+    render_rows(frame, area, &title, items, &rows, app.selection(), profile);
+}
+
+/// Names a saved paper the way the player met it, and reports whether its
+/// community pack has since been removed.
+fn keepsake_label(app: &App, progress: &crate::storage::PuzzleProgress) -> (String, bool) {
+    match progress.pack_id.as_ref() {
+        "orifude-journey" => {
+            let label = app
+                .journey()
+                .iter()
+                .position(|paper| paper.puzzle().identity().puzzle_id() == &*progress.puzzle_id)
+                .and_then(|index| {
+                    let (group_index, group) = crate::content::journey_group(index)?;
+                    Some(format!(
+                        "Journey {}.{}  {}",
+                        group_index + 1,
+                        index - group.first_paper + 1,
+                        app.journey()[index].title()
+                    ))
+                });
+            (
+                label.unwrap_or_else(|| format!("Journey  {}", progress.puzzle_id)),
+                false,
+            )
+        }
+        "orifude-daily" => ("Daily paper".to_owned(), false),
+        "orifude-endless" => ("Endless garden paper".to_owned(), false),
+        pack_id => app
+            .packs()
+            .iter()
+            .find(|pack| pack.id.as_ref() == pack_id)
+            .map_or_else(
+                || (format!("{pack_id}  {}", progress.puzzle_id), true),
+                |pack| (format!("{}  {}", pack.title, progress.puzzle_id), false),
+            ),
+    }
 }
 
 fn render_settings(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleProfile) {
@@ -293,17 +408,45 @@ fn render_settings(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleP
         GlyphMode::Unicode => "Unicode",
         GlyphMode::Ascii => "ASCII only",
     };
-    let mut choices = vec![
-        format!("Color: {color}"),
-        format!("Symbols: {glyphs}"),
-        format!("Reduced motion: {}", on_off(settings.reduced_motion)),
-        format!("Instant reveal: {}", on_off(settings.instant_reveal)),
+    let preferences = [
+        ("Color", color.to_owned()),
+        ("Symbols", glyphs.to_owned()),
+        ("Reduced motion", on_off(settings.reduced_motion).to_owned()),
+        ("Instant reveal", on_off(settings.instant_reveal).to_owned()),
     ];
-    choices.extend(
-        BindingSlot::ALL
-            .map(|slot| format!("{} key: {}", slot.label(), key_label(bindings.key(slot)))),
-    );
-    choices.push("Back to the branch".to_owned());
+    let keys = BindingSlot::ALL.map(|slot| (slot.label(), key_label(bindings.key(slot))));
+    let mut items = Vec::new();
+    let mut rows = Vec::new();
+    let mut choice = |items: &mut Vec<ListItem<'static>>, label: &str, value: String| {
+        let selected = rows.len() == app.selection();
+        rows.push(items.len());
+        items.push(ListItem::new(choice_line(
+            selected,
+            vec![
+                Span::styled(format!("{label:<16}"), profile.ink()),
+                Span::styled(value, profile.paper()),
+            ],
+            profile,
+        )));
+    };
+    items.push(ListItem::new(Line::styled(
+        "Display (Left/Right changes)",
+        profile.title(),
+    )));
+    for (label, value) in preferences {
+        choice(&mut items, label, value);
+    }
+    items.push(ListItem::new(""));
+    items.push(ListItem::new(Line::styled(
+        "Keys (Enter rebinds)",
+        profile.title(),
+    )));
+    for (label, value) in keys {
+        choice(&mut items, label, value);
+    }
+    items.push(ListItem::new(""));
+    choice(&mut items, "Back to the branch", String::new());
+
     let regions = if app.binding_capture().is_some() {
         Layout::default()
             .direction(Direction::Vertical)
@@ -315,11 +458,12 @@ fn render_settings(frame: &mut Frame<'_>, area: Rect, app: &App, profile: StyleP
             .constraints([Constraint::Min(5), Constraint::Length(0)])
             .split(area)
     };
-    render_owned_focus(
+    render_rows(
         frame,
         regions[0],
         "Settings and keys",
-        &choices,
+        items,
+        &rows,
         app.selection(),
         profile,
     );
@@ -415,10 +559,14 @@ fn render_walkthrough(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
     .render_wide(frame, regions[0], profile);
     frame.render_widget(
         Paragraph::new(vec![
-            Line::styled(
-                format!("Teaching frame {} of {total}", step + 1),
-                profile.title(),
-            ),
+            Line::from(vec![
+                Span::styled(
+                    format!("Teaching frame {} of {total}", step + 1),
+                    profile.title(),
+                ),
+                Span::raw("   "),
+                step_track(step, total, profile),
+            ]),
             Line::from(caption),
             Line::styled(
                 "Left/Right or Enter steps; Esc returns.",
@@ -431,6 +579,19 @@ fn render_walkthrough(frame: &mut Frame<'_>, area: Rect, app: &App, profile: Sty
     );
 }
 
+/// Filled marks for frames already shown, hollow marks for those ahead.
+fn step_track(step: usize, total: usize, profile: StyleProfile) -> Span<'static> {
+    let (seen, ahead) = match profile.glyph_mode() {
+        GlyphMode::Unicode => ('●', '○'),
+        GlyphMode::Ascii => ('*', 'o'),
+    };
+    let track = (0..total)
+        .map(|index| if index <= step { seen } else { ahead }.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Span::styled(track, profile.paper())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_session(
     frame: &mut Frame<'_>,
@@ -441,6 +602,8 @@ fn render_session(
     now: Instant,
     group_completion: Option<&crate::content::JourneyGroup>,
     next_journey: bool,
+    // A dialog drawn on top replaces the completion card instead of stacking.
+    show_cards: bool,
 ) {
     let status_height = if area.width >= 80 { 7 } else { 6 };
     let regions = Layout::default()
@@ -487,12 +650,31 @@ fn render_session(
         .as_ref()
         .map(|reveal| (reveal.opened_folds, reveal.total_folds, reveal.complete));
     render_session_status(frame, regions[1], session, bindings, profile, reveal_state);
-    if reveal.as_ref().is_some_and(|reveal| reveal.complete) && session.saved() {
+    if show_cards && reveal.as_ref().is_some_and(|reveal| reveal.complete) && session.saved() {
+        let paper_height = session.puzzle().dimensions().height().get();
         if let Some(group) = group_completion {
-            CompletionCourier::render(frame, regions[0], group, profile, next_journey);
+            let host = below_grids(regions[0], paper_height, 12);
+            CompletionCourier::render(frame, host, group, profile, next_journey);
         } else if !matches!(session.source(), PlaySource::Keepsake) {
-            render_success_card(frame, regions[0], session, bindings, profile, next_journey);
+            let host = below_grids(regions[0], paper_height, 7);
+            render_success_card(frame, host, session, bindings, profile, next_journey);
         }
+    }
+}
+
+/// Returns the space under the board grids when a card of `card_height` fits
+/// there, so the opened paper stays visible; otherwise the whole board area.
+fn below_grids(area: Rect, paper_height: u8, card_height: u16) -> Rect {
+    // Each grid sits under its top border and column ruler.
+    let top = area
+        .y
+        .saturating_add(3)
+        .saturating_add(u16::from(paper_height));
+    let room = area.bottom().saturating_sub(1).saturating_sub(top);
+    if room >= card_height {
+        Rect::new(area.x, top, area.width, room)
+    } else {
+        area
     }
 }
 
@@ -546,7 +728,10 @@ fn render_success_card(
             ),
         }
     };
-    let encouragement = if result.meets_par() == Some(false) {
+    // The lesson only marks itself complete; it leaves no keepsake behind.
+    let encouragement = if matches!(session.source(), PlaySource::Lesson) {
+        "The journey's first paper is waiting."
+    } else if result.meets_par() == Some(false) {
         "A shorter path is still hiding, but this one is safely yours."
     } else {
         "Your keepsake is saved safely."
@@ -583,18 +768,20 @@ fn render_success_card(
     let height = area.height.min(preferred_height);
     let card = centered(area, 74, height);
     frame.render_widget(Clear, card);
-    let lines = [
+    let mut lines = vec![
         Line::styled(headline, profile.title()).alignment(Alignment::Center),
         Line::from(detail).alignment(Alignment::Center),
         Line::styled(encouragement, profile.paper()).alignment(Alignment::Center),
-    ]
-    .into_iter()
-    .chain(
+    ];
+    // Set the controls apart only when that cannot push one out of the card.
+    if usize::from(height) >= lines.len() + controls.len() + 3 {
+        lines.push(Line::from(""));
+    }
+    lines.extend(
         controls
             .into_iter()
             .map(|line| Line::styled(line, StyleProfile::muted()).alignment(Alignment::Center)),
-    )
-    .collect::<Vec<_>>();
+    );
     frame.render_widget(
         Paragraph::new(lines)
             .block(Paper::block("Paper complete", profile))
@@ -616,10 +803,12 @@ fn render_lesson_coach(
     const MINIMUM_COACH_HEIGHT: u16 = 7;
     const COACH_HEIGHT: u16 = 7;
 
-    let inner_width = target_area.width.saturating_sub(2);
+    // Stay inside the border and padding, which keeps the bubble off the edge.
+    let inner_width = target_area.width.saturating_sub(4);
+    // The border and the column ruler sit above the grid rows.
     let grid_bottom = target_area
         .y
-        .saturating_add(1)
+        .saturating_add(2)
         .saturating_add(u16::from(session.puzzle().dimensions().height().get()));
     let coach_top = grid_bottom.saturating_add(1);
     let inner_bottom = target_area.bottom().saturating_sub(1);
@@ -632,7 +821,7 @@ fn render_lesson_coach(
     }
 
     let coach_area = Rect::new(
-        target_area.x.saturating_add(1),
+        target_area.x.saturating_add(2),
         coach_top,
         inner_width,
         available_height.min(COACH_HEIGHT),
@@ -749,13 +938,24 @@ fn render_session_status(
                 .to_owned(),
             profile.title(),
         ),
-        Span::from(format!(
-            "  Folds {}/{}  Ink {}/{}",
-            session.attempt().fold_count().get(),
-            session.puzzle().fold_budget().get(),
-            session.attempt().stroke_count().get(),
-            session.puzzle().stroke_budget().get()
-        )),
+        Span::styled("   Folds ", StyleProfile::muted()),
+        Span::styled(
+            format!(
+                "{}/{}",
+                session.attempt().fold_count().get(),
+                session.puzzle().fold_budget().get()
+            ),
+            profile.ink(),
+        ),
+        Span::styled("   Ink ", StyleProfile::muted()),
+        Span::styled(
+            format!(
+                "{}/{}",
+                session.attempt().stroke_count().get(),
+                session.puzzle().stroke_budget().get()
+            ),
+            profile.ink(),
+        ),
     ])];
     if session.result().is_some() {
         lines.extend(result_status_lines(
@@ -1240,6 +1440,48 @@ fn render_owned_focus(
     );
 }
 
+/// Renders a list whose headings and blank lines cannot be selected.
+/// `choice_rows` holds the list row of each selectable choice, in order.
+fn render_rows(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    title: &str,
+    items: Vec<ListItem<'static>>,
+    choice_rows: &[usize],
+    selected: usize,
+    profile: StyleProfile,
+) {
+    let mut state = ListState::default();
+    state.select(choice_rows.get(selected).copied());
+    frame.render_stateful_widget(
+        List::new(items).block(Paper::block(title, profile)),
+        area,
+        &mut state,
+    );
+}
+
+/// A selectable row: the marked, highlighted form when selected, otherwise
+/// the given spans after the marker's width of space.
+fn choice_line(selected: bool, spans: Vec<Span<'static>>, profile: StyleProfile) -> Line<'static> {
+    let marker = match profile.glyph_mode() {
+        GlyphMode::Unicode => "›",
+        GlyphMode::Ascii => ">",
+    };
+    if selected {
+        let text = spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>();
+        Line::styled(format!("{marker} {text}"), profile.active())
+    } else {
+        Line::from(
+            std::iter::once(Span::raw("  "))
+                .chain(spans)
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
 fn on_off(value: bool) -> &'static str {
     if value { "On" } else { "Off" }
 }
@@ -1270,6 +1512,8 @@ fn render_resize_message(frame: &mut Frame<'_>, area: Rect, profile: StyleProfil
         Line::from(format!(
             "Resize this terminal to at least {MINIMUM_WIDTH} columns by {MINIMUM_HEIGHT} rows."
         )),
+        Line::from(""),
+        Line::from("Press Ctrl+C to quit."),
     ];
     frame.render_widget(
         Paragraph::new(lines)

@@ -576,9 +576,9 @@ impl PlaySession {
         [
             format!("Orifude - {}", self.title),
             format!(
-                "Solved in {} fold(s) and {} stroke(s).",
-                score.folds().get(),
-                score.strokes().get()
+                "Solved in {} and {}.",
+                counted(score.folds().get(), "fold"),
+                counted(score.strokes().get(), "stroke")
             ),
             "No solution actions included.".to_owned(),
         ]
@@ -697,12 +697,18 @@ fn brush_action(rule: BrushRule, cursor: Coordinate, puzzle: &Puzzle) -> Option<
     }
 }
 
-fn action_coordinate(action: PaperAction) -> Option<Coordinate> {
+/// Returns where a brush action starts; folds have no single position.
+pub(super) fn action_coordinate(action: PaperAction) -> Option<Coordinate> {
     match action {
         PaperAction::Dot(coordinate) => Some(coordinate),
         PaperAction::Line(line) => Some(line.start()),
         PaperAction::Fold(_) => None,
     }
+}
+
+fn counted(count: u8, noun: &str) -> String {
+    let suffix = if count == 1 { "" } else { "s" };
+    format!("{count} {noun}{suffix}")
 }
 
 fn replay_action_feedback(
