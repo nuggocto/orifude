@@ -4,6 +4,56 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.1.0 publication decision on 2026-10-01
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.0)
+uses signed source commit [eb2c309](https://github.com/nuggocto/orifude/commit/eb2c3094c2198bc3b29ad07087f24318e7035ab9)
+and a verified signed annotated tag. Boards number their rows and columns, the
+stack shows where each layer began, completion cards leave the opened paper
+visible, and the journey, keepsakes, home, and settings screens are reorganized.
+Keys no longer act behind the minimum-size message, a generator panic is reported
+instead of leaving the loading screen waiting, and startup creates only the data
+directory. Save schemas, content formats, generator compatibility, and dependency
+versions are unchanged. The [coverage limitations below](#coverage-and-limitations)
+still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/36896106352), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/36896151277), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/36896106340) passed. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/36897653877) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/36898453785) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
+| Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/36897504188) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.1.0 in the pinned Nix container and resolved to the release commit. |
+
+The first CI run for the release commit waited behind the superseded run for its
+parent commit, which was cancelled; the release commit's own run passed every job.
+
+Publication compared all eight draft assets with the candidate and verified the
+release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.1.0/SHA256SUMS)
+records the five archive hashes. The PowerShell script SHA-256 is
+`c9422b983e22b86b7b3b5b97a81445446c1efe1c054d423284547d15d85a5256`.
+
+Package updates are [Homebrew efd8bd7](https://github.com/nuggocto/homebrew-tap/commit/efd8bd78f69f998f8b62013c836dc81e2fec6545),
+[Scoop 8ce60ff](https://github.com/nuggocto/scoop-bucket/commit/8ce60ff0fe8225022275dae958ca1f0530af8b4f),
+and AUR commit `49d47fe87b8b6d173d3aad4c62decde50a4ad0f9`. Their public files match
+the verified generated metadata. AUR's `.SRCINFO` was regenerated and pushed with
+the dedicated `aur@sshmoi.com` SSH identity after GitHub publication. AUR's RPC
+first served 1.0.4 after the Git repository had updated, then reported `1.1.0-1`.
+
+Local optimized checks passed 262 tests and one doctest, with formatting, shell
+analysis, dependency policies, warning-denied Clippy, and independent-model
+checks. Five 60-second sanitizer campaigns with seed 424242 started from the new
+generated seed corpus and completed about 9.0 million executions without failures.
+The direct-binary lifecycle check installed the published 1.0.4 and 1.1.0 Linux
+musl archives in turn: 1.0.4 saved a completion through its own terminal, 1.1.0
+replayed it, 1.0.4 replayed it again after rollback, and installed packs and saved
+progress were preserved.
+
+The Linux musl executable has SHA-256
+`97a95d3379a5b81263dcdfad0711984aefeea9ee7fb761026565f3b72287843f`.
+It is 5,703,224 bytes; its archive is 2,385,987 bytes. Startup, input, memory, and
+storage timings were not remeasured for this release; the 1.0.4 measurements are
+not evidence for this binary.
+
 ## 1.0.4 publication decision on 2026-09-15
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.4)
