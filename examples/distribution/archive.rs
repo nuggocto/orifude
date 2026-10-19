@@ -259,7 +259,7 @@ pub fn files(path: &Path, target: &str) -> Result<Files> {
         )?;
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i)?;
-            let name = entry.name().to_owned();
+            let name = entry.name()?.into_owned();
             let regular = entry
                 .unix_mode()
                 .is_some_and(|mode| mode & 0o170_000 == 0o100_000);

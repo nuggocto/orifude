@@ -5,6 +5,19 @@ letter-exchange application is a separate product and is not an upgrade source.
 
 ## Unreleased
 
+### Changed
+
+- Simplify paper action counting, generation-worker results, pack loading, and
+  play-screen transitions without changing gameplay or saved-data formats.
+- Consolidate rendering test setup, remove redundant visual checks, and make
+  queue tests wait until a sender is blocked before testing wakeup behavior.
+
+### Security
+
+- Update the ZIP dependency to address extraction advisories. Orifude continues
+  to validate archive entries and write managed files without using the affected
+  extraction helpers.
+
 ## 1.1.1 - 2026-10-01
 
 Keep every line readable when a pack title uses wide characters.

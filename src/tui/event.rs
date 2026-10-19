@@ -71,6 +71,10 @@ impl std::error::Error for EventError {
 struct QueueState {
     events: VecDeque<RuntimeEvent>,
     work_ready: Option<u64>,
+    /// Counts entries into the full-queue wait so tests can act only after a
+    /// sender is actually blocked.
+    #[cfg(test)]
+    full_waits: usize,
 }
 
 impl QueueState {
@@ -78,6 +82,8 @@ impl QueueState {
         Self {
             events: VecDeque::with_capacity(EVENT_QUEUE_CAPACITY),
             work_ready: None,
+            #[cfg(test)]
+            full_waits: 0,
         }
     }
 
@@ -103,6 +109,8 @@ struct SharedQueue {
     state: Mutex<QueueState>,
     not_empty: Condvar,
     not_full: Condvar,
+    #[cfg(test)]
+    sender_waiting: Condvar,
     shutdown: AtomicBool,
     animation_active: AtomicBool,
 }
@@ -113,6 +121,8 @@ impl SharedQueue {
             state: Mutex::new(QueueState::new()),
             not_empty: Condvar::new(),
             not_full: Condvar::new(),
+            #[cfg(test)]
+            sender_waiting: Condvar::new(),
             shutdown: AtomicBool::new(false),
             animation_active: AtomicBool::new(false),
         }
@@ -130,6 +140,11 @@ impl SharedQueue {
         }
 
         while state.events.len() == EVENT_QUEUE_CAPACITY && !self.shutdown.load(Ordering::Acquire) {
+            #[cfg(test)]
+            {
+                state.full_waits += 1;
+                self.sender_waiting.notify_all();
+            }
             state = self
                 .not_full
                 .wait(state)
@@ -407,7 +422,8 @@ fn translate_event(event: &Event) -> Option<RuntimeEvent> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc};
+    use std::time::Duration;
 
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -451,9 +467,6 @@ mod tests {
 
     #[test]
     fn shutdown_wakes_both_waiters_at_the_predicate_to_wait_boundary() {
-        use std::sync::mpsc;
-        use std::time::Duration;
-
         for full in [false, true] {
             let queue = Arc::new(SharedQueue::new());
             if full {
@@ -511,33 +524,51 @@ mod tests {
         assert!(queue.shutdown.load(super::Ordering::Acquire));
     }
 
-    #[test]
-    fn shutdown_releases_a_sender_blocked_by_backpressure() {
-        let queue = Arc::new(SharedQueue::new());
+    /// Fills the queue, starts a sender for `event`, and returns once that
+    /// sender is inside the full-queue wait. The receiver yields its result.
+    fn blocked_sender(
+        queue: &Arc<SharedQueue>,
+        event: RuntimeEvent,
+    ) -> mpsc::Receiver<Result<(), EventError>> {
         for _ in 0..EVENT_QUEUE_CAPACITY {
             queue.send(key('x')).expect("fill queue");
         }
+        let (result, sent) = mpsc::channel();
+        let sender_queue = Arc::clone(queue);
+        std::thread::spawn(move || {
+            let _ = result.send(sender_queue.send(event));
+        });
+        // The sender counts its wait while holding the lock, and waiting
+        // releases it, so holding the lock here proves the sender is blocked.
+        let state = queue.state.lock().expect("queue state");
+        let (_state, timeout) = queue
+            .sender_waiting
+            .wait_timeout_while(state, Duration::from_secs(2), |state| state.full_waits == 0)
+            .expect("sender reaches the full-queue wait");
+        assert!(!timeout.timed_out(), "sender must block on a full queue");
+        sent
+    }
 
-        let sender_queue = Arc::clone(&queue);
-        let sender = std::thread::spawn(move || sender_queue.send(key('y')));
+    #[test]
+    fn shutdown_releases_a_sender_blocked_by_backpressure() {
+        let queue = Arc::new(SharedQueue::new());
+        let sent = blocked_sender(&queue, key('y'));
         queue.begin_shutdown();
 
-        assert!(sender.join().expect("sender joins").is_err());
+        assert!(matches!(
+            sent.recv_timeout(Duration::from_secs(2))
+                .expect("shutdown releases the sender"),
+            Err(EventError::QueueUnavailable)
+        ));
     }
 
     #[test]
     fn backpressure_preserves_the_key_that_waited_for_capacity() {
         let queue = Arc::new(SharedQueue::new());
-        for _ in 0..EVENT_QUEUE_CAPACITY {
-            queue.send(key('x')).expect("fill queue");
-        }
-
-        let sender_queue = Arc::clone(&queue);
-        let sender = std::thread::spawn(move || sender_queue.send(key('y')));
+        let sent = blocked_sender(&queue, key('y'));
         assert_eq!(queue.receive().expect("free one slot"), Some(key('x')));
-        sender
-            .join()
-            .expect("sender joins")
+        sent.recv_timeout(Duration::from_secs(2))
+            .expect("capacity releases the sender")
             .expect("waiting key enters queue");
         for _ in 1..EVENT_QUEUE_CAPACITY {
             assert_eq!(queue.receive().expect("queued key"), Some(key('x')));

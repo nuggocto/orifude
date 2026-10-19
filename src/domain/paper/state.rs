@@ -41,7 +41,6 @@ struct Snapshot {
     ink: InkPattern,
     fold_count: FoldCount,
     stroke_count: StrokeCount,
-    action_count: ActionCount,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -67,7 +66,6 @@ pub struct Paper {
     ink: InkPattern,
     fold_count: FoldCount,
     stroke_count: StrokeCount,
-    action_count: ActionCount,
     history: Vec<HistoryEntry>,
 }
 
@@ -108,7 +106,6 @@ impl Paper {
             ink: InkPattern::empty(dimensions),
             fold_count: FoldCount(0),
             stroke_count: StrokeCount(0),
-            action_count: ActionCount(0),
             history: Vec::with_capacity(usize::from(budget.actions.get())),
         };
         paper.assert_invariants();
@@ -131,12 +128,7 @@ impl Paper {
     }
 
     #[must_use]
-    pub const fn action_count(&self) -> ActionCount {
-        self.action_count
-    }
-
-    #[must_use]
-    pub fn history_len(&self) -> ActionCount {
+    pub fn action_count(&self) -> ActionCount {
         ActionCount::from_history_len(self.history.len())
     }
 
@@ -304,7 +296,6 @@ impl Paper {
             cell.orientation = cell.orientation.folded_across(axis);
         }
         self.fold_count = self.fold_count.increment();
-        self.action_count = self.action_count.increment();
         self.assert_invariants();
         Ok(())
     }
@@ -336,7 +327,6 @@ impl Paper {
             self.ink.insert(cell_id);
         }
         self.stroke_count = self.stroke_count.increment();
-        self.action_count = self.action_count.increment();
         self.assert_invariants();
         Ok(())
     }
@@ -371,7 +361,6 @@ impl Paper {
         self.remember(PaperAction::Line(line));
         self.ink = ink;
         self.stroke_count = self.stroke_count.increment();
-        self.action_count = self.action_count.increment();
         self.assert_invariants();
         Ok(())
     }
@@ -416,7 +405,6 @@ impl Paper {
         self.ink = entry.before.ink;
         self.fold_count = entry.before.fold_count;
         self.stroke_count = entry.before.stroke_count;
-        self.action_count = entry.before.action_count;
         self.assert_invariants();
         Ok(())
     }
@@ -441,7 +429,6 @@ impl Paper {
         self.ink = InkPattern::empty(self.dimensions);
         self.fold_count = FoldCount(0);
         self.stroke_count = StrokeCount(0);
-        self.action_count = ActionCount(0);
         self.history.clear();
         self.assert_invariants();
     }
@@ -465,7 +452,7 @@ impl Paper {
     }
 
     fn validate_action_budget(&self) -> Result<(), PaperError> {
-        if self.action_count >= self.budget.actions {
+        if self.action_count() >= self.budget.actions {
             return Err(PaperError::ActionBudgetExhausted {
                 limit: self.budget.actions,
             });
@@ -481,7 +468,6 @@ impl Paper {
                 ink: self.ink,
                 fold_count: self.fold_count,
                 stroke_count: self.stroke_count,
-                action_count: self.action_count,
             },
             action,
         });
@@ -490,13 +476,12 @@ impl Paper {
     fn assert_invariants(&self) {
         assert_eq!(self.cells.len(), self.dimensions.cell_count());
         assert!(self.cells.len() <= MAX_PHYSICAL_CELLS);
-        assert_eq!(self.history.len(), self.action_count.get() as usize);
         assert!(self.fold_count <= self.budget.folds);
         assert!(self.stroke_count <= self.budget.strokes);
-        assert!(self.action_count <= self.budget.actions);
+        assert!(self.action_count() <= self.budget.actions);
         assert_eq!(
             self.fold_count.get() + self.stroke_count.get(),
-            self.action_count.get()
+            self.action_count().get()
         );
         assert_eq!(self.ink.dimensions, self.dimensions);
 

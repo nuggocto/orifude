@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use rusqlite::{Connection, ErrorCode, OpenFlags};
 
-use crate::packs::{MAX_INSTALLED_PACKS, PackError, ValidatedPack};
+use crate::packs::{MAX_INSTALLED_PACKS, PackError};
 
 pub use managed_packs::{InstallOutcome, RegisteredPack};
 pub use paths::{AppPaths, PathError};
@@ -226,7 +226,6 @@ pub struct Storage {
     connection: Connection,
     paths: AppPaths,
     _lock: File,
-    loaded_pack: Option<ValidatedPack>,
 }
 
 impl Storage {
@@ -280,7 +279,6 @@ impl Storage {
             connection,
             paths,
             _lock: lock,
-            loaded_pack: None,
         };
         storage.reconcile_pack_install()?;
         storage.reconcile_registered_pack_paths()?;

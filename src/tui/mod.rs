@@ -265,13 +265,12 @@ impl Shell<'_> {
             }
             AppAction::LoadPack(pack_id) => {
                 match self.storage.load_pack(&pack_id) {
-                    Ok(Some(pack)) => self.app.open_pack(pack),
+                    Ok(Some(pack)) => self.app.open_pack(&pack),
                     Ok(None) => self
                         .app
                         .show_error(&"That installed pack is no longer available."),
                     Err(error) => self.app.show_error(&error),
                 }
-                self.storage.clear_loaded_pack();
                 true
             }
             AppAction::LoadReplay { pack_id, puzzle_id } => {

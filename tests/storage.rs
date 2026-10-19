@@ -807,7 +807,7 @@ fn legacy_license_recovery_preserves_pack_bytes_progress_and_replay() {
         .unwrap();
     drop(connection);
 
-    let mut storage = Storage::open(paths.clone()).expect("legacy license recovers");
+    let storage = Storage::open(paths.clone()).expect("legacy license recovers");
     let pack = storage.load_pack("quiet-grove").unwrap().unwrap();
     assert_eq!(pack.fingerprint(), fingerprint);
     assert_eq!(

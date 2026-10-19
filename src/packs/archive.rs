@@ -49,7 +49,7 @@ pub(super) fn validate_archive_bytes(bytes: &[u8]) -> Result<ValidatedPack, Pack
     let mut extracted = 0_u64;
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(|_| PackError::Archive)?;
-        let name = entry.name().to_owned();
+        let name = entry.name().map_err(|_| PackError::Archive)?.into_owned();
         if entry.is_dir() {
             let directory = name.strip_suffix('/').unwrap_or(&name);
             validate_relative_path(directory)?;

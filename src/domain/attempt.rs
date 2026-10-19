@@ -51,7 +51,7 @@ impl Attempt {
     }
 
     #[must_use]
-    pub const fn action_count(&self) -> ActionCount {
+    pub fn action_count(&self) -> ActionCount {
         self.paper.action_count()
     }
 

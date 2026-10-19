@@ -510,15 +510,13 @@ impl App {
                     } => Some((day, generator_version, generated.clone())),
                     _ => None,
                 };
-                self.session = Some(PlaySession::new(
+                self.open_session(PlaySession::new(
                     &generated,
                     title,
                     "A fresh paper, made on your computer.",
                     vec!["Fold and ink the paper to match the target.".into()],
                     source,
                 ));
-                self.screen = Screen::Play;
-                self.selection = 0;
                 daily
             }
             GenerationOutcome::Exhausted { .. } => {
@@ -563,9 +561,7 @@ impl App {
         match PlaySession::from_replay(decoded.puzzle(), decoded.replay(), title) {
             Ok(session) => {
                 self.group_completion = None;
-                self.session = Some(session);
-                self.screen = Screen::Play;
-                self.selection = 0;
+                self.open_session(session);
             }
             Err(error) => self.show_error(&error),
         }
@@ -854,15 +850,13 @@ impl App {
             return self.internal_error("That paper unlocks after the previous one is complete.");
         }
         let paper = &self.journey[self.selection];
-        self.session = Some(PlaySession::new(
+        self.open_session(PlaySession::new(
             paper.puzzle(),
             paper.title(),
             paper.description(),
             paper.cues().to_vec(),
             PlaySource::Journey(self.selection),
         ));
-        self.screen = Screen::Play;
-        self.selection = 0;
         AppAction::Render
     }
 
@@ -871,27 +865,29 @@ impl App {
             return self.back();
         }
         let paper = self.pack_papers[self.selection].clone();
-        self.session = Some(PlaySession::new(
+        self.open_session(PlaySession::new(
             &paper.puzzle,
             paper.title,
             paper.description,
             paper.cues,
             PlaySource::Pack,
         ));
-        self.screen = Screen::Play;
-        self.selection = 0;
         AppAction::Render
     }
 
     fn open_lesson(&mut self) {
         let paper = content::lesson();
-        self.session = Some(PlaySession::new(
+        self.open_session(PlaySession::new(
             paper.puzzle(),
             paper.title(),
             paper.description(),
             paper.cues().to_vec(),
             PlaySource::Lesson,
         ));
+    }
+
+    fn open_session(&mut self, session: PlaySession) {
+        self.session = Some(session);
         self.screen = Screen::Play;
         self.selection = 0;
     }

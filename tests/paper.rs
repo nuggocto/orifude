@@ -71,7 +71,6 @@ fn assert_observable_invariants(paper: &Paper) {
             .iter()
             .all(|present| !present)
     );
-    assert_eq!(paper.history_len(), paper.action_count());
 }
 
 #[test]

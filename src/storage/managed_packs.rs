@@ -86,31 +86,20 @@ impl Storage {
         self.install_validated(&pack, installed_at_unix_seconds)
     }
 
-    /// Verifies and loads one selected community pack, replacing any previous
-    /// in-memory community pack.
+    /// Verifies and loads one selected community pack.
     ///
     /// # Errors
     ///
     /// A missing registry row, invalid managed name, content validation error,
     /// or fingerprint mismatch disables loading without changing the registry.
-    pub fn load_pack(&mut self, pack_id: &str) -> Result<Option<&ValidatedPack>, StorageError> {
-        let registered = self.registered_pack_row(pack_id)?;
-        let Some((summary, managed_name)) = registered else {
-            self.loaded_pack = None;
+    pub fn load_pack(&self, pack_id: &str) -> Result<Option<ValidatedPack>, StorageError> {
+        let Some((summary, managed_name)) = self.registered_pack_row(pack_id)? else {
             return Ok(None);
         };
         if !is_fingerprint_name(&managed_name) {
             return Err(StorageError::Corrupt);
         }
-        let loaded = self.read_managed_pack(&summary, &managed_name)?;
-        self.loaded_pack = Some(loaded);
-        Ok(self.loaded_pack.as_ref())
-    }
-
-    /// Discards the validated pack cache after a caller has copied the bounded
-    /// playable projection it needs.
-    pub(crate) fn clear_loaded_pack(&mut self) {
-        self.loaded_pack = None;
+        self.read_managed_pack(&summary, &managed_name).map(Some)
     }
 
     /// Removes a pack from play before deleting its managed files. Puzzle
@@ -140,7 +129,6 @@ impl Storage {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         transaction.execute("DELETE FROM pack_registry WHERE pack_id = ?1", [pack_id])?;
         transaction.commit()?;
-        self.loaded_pack = None;
         let path = self.paths.managed_packs().join(managed_name);
         if path.exists() {
             fs::remove_dir_all(path).map_err(|_| StorageError::PackCleanup)?;

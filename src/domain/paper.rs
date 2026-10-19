@@ -251,14 +251,6 @@ impl ActionCount {
         self.0
     }
 
-    fn increment(self) -> Self {
-        Self(
-            self.0
-                .checked_add(1)
-                .expect("a validated action count must not overflow"),
-        )
-    }
-
     fn from_history_len(length: usize) -> Self {
         let value = u8::try_from(length).expect("bounded history length must fit in u8");
         Self::new(value).expect("history length must stay below the global action limit")

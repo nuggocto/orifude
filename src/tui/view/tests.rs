@@ -14,8 +14,7 @@ fn every_layout_renders_first_launch_without_losing_the_capability_message() {
     let app = App::new(Settings::default(), now);
     let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
     for (width, height) in [(80, 24), (60, 20), (59, 19)] {
-        let backend = TestBackend::new(width, height);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut terminal = test_terminal(width, height);
         terminal
             .draw(|frame| render(frame, &app, profile, now))
             .expect("view renders");
@@ -24,7 +23,6 @@ fn every_layout_renders_first_launch_without_losing_the_capability_message() {
             assert!(text.contains("Match the paper to the shown pattern."));
             assert!(text.contains("An available tool"));
             assert!(text.contains("Enter starts the lesson"));
-            assert!(text.contains("Enter start"));
             assert!(!text.contains("Up/Down move"));
         }
     }
@@ -36,8 +34,7 @@ fn engine_session_renders_target_folded_paper_and_stack() {
     let mut app = App::new(Settings::default(), now);
     press(&mut app, KeyCode::Enter, now);
     press(&mut app, KeyCode::Char('f'), now);
-    let backend = TestBackend::new(100, 30);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut terminal = test_terminal(100, 30);
     let profile = StyleProfile::new(ColorCapability::Ansi16, GlyphMode::Unicode);
     terminal
         .draw(|frame| render(frame, &app, profile, now))
@@ -110,8 +107,7 @@ fn ascii_profile_keeps_branch_and_player_buffers_ascii_only() {
     };
     let mut app = App::new(settings, now);
     let profile = StyleProfile::new(ColorCapability::Ansi16, GlyphMode::Ascii);
-    let backend = TestBackend::new(100, 30);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut terminal = test_terminal(100, 30);
     terminal
         .draw(|frame| render(frame, &app, profile, now))
         .expect("branch renders");
@@ -158,50 +154,8 @@ fn branch_card_title_names_complete_journey_progress() {
 
     let text = menu_text(&app, now, 100, 30);
     assert!(text.contains("Home · Journey 40/40"));
-}
-
-#[test]
-fn completed_branch_is_readable_in_every_visual_profile_without_a_resident_squirrel() {
-    let now = Instant::now();
-    let settings = Settings {
-        lesson_complete: true,
-        reduced_motion: true,
-        ..Settings::default()
-    };
-    let app = App::with_state(
-        settings,
-        ProgressPage {
-            entries: Vec::new(),
-            has_more: false,
-        },
-        Vec::new(),
-        vec![true; crate::content::journey().len()],
-        CalendarDate::new(2026, 9, 3).unwrap(),
-        1,
-        now,
-    );
-    for (capability, glyphs) in [
-        (ColorCapability::TrueColor, GlyphMode::Unicode),
-        (ColorCapability::Ansi256, GlyphMode::Unicode),
-        (ColorCapability::Ansi16, GlyphMode::Ascii),
-        (ColorCapability::Monochrome, GlyphMode::Unicode),
-        (ColorCapability::Monochrome, GlyphMode::Ascii),
-    ] {
-        let backend = TestBackend::new(100, 30);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
-        let profile = StyleProfile::new(capability, glyphs);
-        terminal
-            .draw(|frame| render(frame, &app, profile, now))
-            .expect("completed branch renders");
-        let text = rendered_text(&terminal);
-        assert!(text.contains("the full canopy."));
-        assert!(text.contains("8 of 8"));
-        assert!(text.contains("Journey 40/40"));
-        assert!(!text.contains("/)_/)"));
-        if glyphs == GlyphMode::Ascii {
-            assert!(text.is_ascii());
-        }
-    }
+    assert!(text.contains("the full canopy."));
+    assert!(text.contains("8 of 8"));
 }
 
 #[test]
@@ -243,8 +197,7 @@ fn minimum_player_layout_keeps_the_ready_tool_and_first_paper_cue_visible() {
         .chars()
         .take(24)
         .collect::<String>();
-    let backend = TestBackend::new(60, 20);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut terminal = test_terminal(60, 20);
     let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
     terminal
         .draw(|frame| render(frame, &app, profile, now))
@@ -342,25 +295,9 @@ fn compact_maximum_board_keeps_the_cursor_visible_and_switches_to_the_target() {
             true,
         );
     }
-    let backend = TestBackend::new(60, 20);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+    let mut terminal = test_terminal(60, 20);
     let session_area = Rect::new(2, 4, 56, 13);
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                session_area,
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("compact paper renders");
+    draw_session(&mut terminal, session_area, &session, now);
     let paper = rendered_text(&terminal);
     assert!(paper.contains("Folded paper rows"));
     assert!(paper.contains("-12/12"));
@@ -373,21 +310,7 @@ fn compact_maximum_board_keeps_the_cursor_visible_and_switches_to_the_target() {
         now,
         true,
     );
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 4, 56, 13),
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("compact target renders");
+    draw_session(&mut terminal, Rect::new(2, 4, 56, 13), &session, now);
     let target = rendered_text(&terminal);
     assert!(target.contains("Pattern to match rows"));
     assert!(target.contains("-12/12"));
@@ -418,9 +341,7 @@ fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
         true,
     );
     assert!(session.result().is_some_and(|result| !result.is_success()));
-    let backend = TestBackend::new(60, 20);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+    let mut terminal = test_terminal(60, 20);
     let session_area = Rect::new(2, 4, 56, 13);
     let boards_area = Layout::default()
         .direction(Direction::Vertical)
@@ -430,21 +351,7 @@ fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(72), Constraint::Percentage(28)])
         .split(boards_area)[1];
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                session_area,
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("failed result renders");
+    draw_session(&mut terminal, session_area, &session, now);
     let first_result = rendered_text(&terminal);
     let first_stack = rendered_area_text(&terminal, stack_area);
     assert!(first_result.contains("Opened comparison rows 1-5/8"));
@@ -457,21 +364,7 @@ fn failed_large_result_scrolls_without_moving_the_stack_cursor() {
             true,
         );
     }
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                session_area,
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("scrolled failed result renders");
+    draw_session(&mut terminal, session_area, &session, now);
     let result = rendered_text(&terminal)
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -510,8 +403,7 @@ fn long_focus_lists_scroll_the_selected_choice_into_view() {
     let choices = (0..40)
         .map(|index| format!("paper-{index}"))
         .collect::<Vec<_>>();
-    let backend = TestBackend::new(60, 20);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut terminal = test_terminal(60, 20);
     let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
     terminal
         .draw(|frame| {
@@ -605,8 +497,7 @@ fn minimum_saved_result_keeps_next_return_and_export_controls_visible() {
         updated_at_unix_seconds: 1,
     });
     let render_compact = |app: &App| {
-        let backend = TestBackend::new(60, 20);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut terminal = test_terminal(60, 20);
         let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Ascii);
         terminal
             .draw(|frame| render(frame, app, profile, now))
@@ -701,24 +592,8 @@ fn above_reference_success_shows_the_result_and_reference_score() {
     );
     session.mark_saved();
 
-    let backend = TestBackend::new(80, 24);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 4, 76, 17),
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("above-reference result renders");
+    let mut terminal = test_terminal(80, 24);
+    draw_session(&mut terminal, Rect::new(2, 4, 76, 17), &session, now);
     let text = rendered_text(&terminal)
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -739,24 +614,8 @@ fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
     let mut session = PlaySession::from_replay(paper.puzzle(), &replay, paper.title())
         .expect("recorded replay loads");
     let now = Instant::now();
-    let backend = TestBackend::new(80, 24);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 4, 76, 17),
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("saved replay renders");
+    let mut terminal = test_terminal(80, 24);
+    draw_session(&mut terminal, Rect::new(2, 4, 76, 17), &session, now);
     let text = rendered_text(&terminal);
     assert!(text.contains("Folded paper"));
     assert!(text.contains("Replay ready: fresh paper."));
@@ -775,21 +634,7 @@ fn saved_replay_steps_from_fresh_paper_to_the_opened_result() {
         now,
         true,
     );
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 4, 76, 17),
-                &session,
-                KeyBindings::default(),
-                profile,
-                now,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("completed replay renders");
+    draw_session(&mut terminal, Rect::new(2, 4, 76, 17), &session, now);
     let text = rendered_text(&terminal);
     assert!(text.contains("Opened comparison"));
     assert!(text.contains("Replay complete."));
@@ -815,25 +660,14 @@ fn replay_without_actions_explains_that_enter_opens_the_paper() {
     .unwrap();
     let replay = Replay::new(ReplayMetadata::current(&puzzle), Vec::new()).unwrap();
     let session = PlaySession::from_replay(&puzzle, &replay, "Blank paper").unwrap();
-    let backend = TestBackend::new(80, 24);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+    let mut terminal = test_terminal(80, 24);
 
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 4, 76, 17),
-                &session,
-                KeyBindings::default(),
-                profile,
-                Instant::now(),
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("empty replay renders");
+    draw_session(
+        &mut terminal,
+        Rect::new(2, 4, 76, 17),
+        &session,
+        Instant::now(),
+    );
 
     assert!(rendered_text(&terminal).contains("no recorded actions. Enter opens it."));
     assert!(replay_status_text(&session, KeyBindings::default(), " · ", 76).contains("Enter open"));
@@ -874,8 +708,7 @@ fn contextual_play_help_defines_tools_at_supported_sizes() {
     press(&mut app, KeyCode::Char('?'), now);
     let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
     for (width, height) in [(80, 24), (60, 20)] {
-        let backend = TestBackend::new(width, height);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut terminal = test_terminal(width, height);
         terminal
             .draw(|frame| render(frame, &app, profile, now))
             .expect("help renders");
@@ -918,43 +751,18 @@ fn applied_fold_keeps_static_feedback_without_covering_the_paper() {
         false,
     );
 
-    let backend = TestBackend::new(100, 30);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 2, 96, 26),
-                &session,
-                KeyBindings::default(),
-                profile,
-                started,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("fold feedback renders");
+    let mut terminal = test_terminal(100, 30);
+    draw_session(&mut terminal, Rect::new(2, 2, 96, 26), &session, started);
     let first = rendered_text(&terminal);
     assert!(first.contains("Last step: Fold complete. The dot brush is ready."));
     assert!(!first.contains("paper  ›   crease"));
 
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 2, 96, 26),
-                &session,
-                KeyBindings::default(),
-                profile,
-                started + std::time::Duration::from_secs(2),
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("static feedback renders later");
+    draw_session(
+        &mut terminal,
+        Rect::new(2, 2, 96, 26),
+        &session,
+        started + std::time::Duration::from_secs(2),
+    );
     let later = rendered_text(&terminal);
     assert!(later.contains("Last step: Fold complete. The dot brush is ready."));
     assert!(!later.contains("paper  ›   crease"));
@@ -991,24 +799,8 @@ fn placed_ink_stays_visible_in_the_paper_and_stack() {
         );
     }
 
-    let backend = TestBackend::new(60, 20);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
-    terminal
-        .draw(|frame| {
-            render_session(
-                frame,
-                Rect::new(2, 4, 56, 13),
-                &session,
-                KeyBindings::default(),
-                profile,
-                started,
-                None,
-                false,
-                true,
-            );
-        })
-        .expect("ink state renders");
+    let mut terminal = test_terminal(60, 20);
+    draw_session(&mut terminal, Rect::new(2, 4, 56, 13), &session, started);
     let text = rendered_text(&terminal);
     assert!(text.contains('◉'));
     assert!(text.contains("Ready: Open paper"));
@@ -1322,29 +1114,13 @@ fn a_maximum_wide_title_leaves_the_ready_tool_and_guide_visible() {
         paper.cues().to_vec(),
         PlaySource::Journey(0),
     );
-    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
     for (width, height) in [(60, 20), (80, 24), (100, 30)] {
-        let backend = TestBackend::new(width, height);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut terminal = test_terminal(width, height);
         let area = Rect::new(0, 0, width, height);
         let content = content_area(
             ShellLayout::new(area, LayoutMode::for_area(area)).expect("supported size"),
         );
-        terminal
-            .draw(|frame| {
-                render_session(
-                    frame,
-                    content,
-                    &session,
-                    KeyBindings::default(),
-                    profile,
-                    Instant::now(),
-                    None,
-                    false,
-                    true,
-                );
-            })
-            .expect("wide title renders");
+        draw_session(&mut terminal, content, &session, Instant::now());
         let text = rendered_text(&terminal);
         assert!(
             text.contains("Ready: Dot brush"),
@@ -1360,6 +1136,35 @@ fn a_maximum_wide_title_leaves_the_ready_tool_and_guide_visible() {
         );
         assert!(text.contains("Folds 0/0"), "{width}x{height}: {text}");
     }
+}
+
+fn test_terminal(width: u16, height: u16) -> Terminal<TestBackend> {
+    Terminal::new(TestBackend::new(width, height)).expect("test terminal")
+}
+
+/// Draws a play session the way the shell does with no dialog on top.
+fn draw_session(
+    terminal: &mut Terminal<TestBackend>,
+    area: Rect,
+    session: &PlaySession,
+    now: Instant,
+) {
+    let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
+    terminal
+        .draw(|frame| {
+            render_session(
+                frame,
+                area,
+                session,
+                KeyBindings::default(),
+                profile,
+                now,
+                None,
+                false,
+                true,
+            );
+        })
+        .expect("session renders");
 }
 
 fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
@@ -1391,8 +1196,7 @@ fn player_text(app: &App, now: Instant) -> String {
 }
 
 fn player_text_with_glyphs(app: &App, now: Instant, glyph_mode: GlyphMode) -> String {
-    let backend = TestBackend::new(120, 36);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut terminal = test_terminal(120, 36);
     let profile = StyleProfile::new(ColorCapability::Monochrome, glyph_mode);
     terminal
         .draw(|frame| render(frame, app, profile, now))
@@ -1401,8 +1205,7 @@ fn player_text_with_glyphs(app: &App, now: Instant, glyph_mode: GlyphMode) -> St
 }
 
 fn menu_text(app: &App, now: Instant, width: u16, height: u16) -> String {
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut terminal = test_terminal(width, height);
     let profile = StyleProfile::new(ColorCapability::Monochrome, GlyphMode::Unicode);
     terminal
         .draw(|frame| render(frame, app, profile, now))

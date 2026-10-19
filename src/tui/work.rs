@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use crate::content;
@@ -15,8 +15,7 @@ pub(crate) struct WorkManager {
 struct ActiveJob {
     id: u64,
     cancel: Arc<CancellationFlag>,
-    result: Arc<Mutex<Option<GenerationOutcome>>>,
-    worker: JoinHandle<()>,
+    worker: JoinHandle<GenerationOutcome>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,7 +24,6 @@ pub enum WorkError {
     InvalidPolicy,
     StartFailed,
     WorkerPanicked,
-    ResultUnavailable,
 }
 
 impl std::fmt::Display for WorkError {
@@ -35,9 +33,6 @@ impl std::fmt::Display for WorkError {
             Self::InvalidPolicy => formatter.write_str("the local generation policy is invalid"),
             Self::StartFailed => formatter.write_str("the paper generator could not start"),
             Self::WorkerPanicked => formatter.write_str("the paper generator stopped unexpectedly"),
-            Self::ResultUnavailable => {
-                formatter.write_str("the generated paper result is unavailable")
-            }
         }
     }
 }
@@ -73,25 +68,15 @@ impl WorkManager {
         let id = self.next_id;
         self.next_id = self.next_id.checked_add(1).unwrap_or(1);
         let cancel = Arc::new(CancellationFlag::new());
-        let result = Arc::new(Mutex::new(None));
         let worker_cancel = Arc::clone(&cancel);
-        let worker_result = Arc::clone(&result);
         let worker = thread::Builder::new()
             .name("orifude-paper-generator".to_owned())
             .spawn(move || {
                 let _completion = CompletionNotice { notifier, id };
-                let outcome = job(worker_cancel.as_ref());
-                if let Ok(mut slot) = worker_result.lock() {
-                    *slot = Some(outcome);
-                }
+                job(worker_cancel.as_ref())
             })
             .map_err(|_| WorkError::StartFailed)?;
-        self.active = Some(ActiveJob {
-            id,
-            cancel,
-            result,
-            worker,
-        });
+        self.active = Some(ActiveJob { id, cancel, worker });
         Ok(id)
     }
 
@@ -103,16 +88,10 @@ impl WorkManager {
             self.active = Some(active);
             return Ok(None);
         }
-        active
+        let outcome = active
             .worker
             .join()
             .map_err(|_| WorkError::WorkerPanicked)?;
-        let outcome = active
-            .result
-            .lock()
-            .map_err(|_| WorkError::ResultUnavailable)?
-            .take()
-            .ok_or(WorkError::ResultUnavailable)?;
         Ok(Some(outcome))
     }
 
@@ -121,7 +100,11 @@ impl WorkManager {
             return Ok(());
         };
         active.cancel.cancel();
-        active.worker.join().map_err(|_| WorkError::WorkerPanicked)
+        active
+            .worker
+            .join()
+            .map(drop)
+            .map_err(|_| WorkError::WorkerPanicked)
     }
 }
 
