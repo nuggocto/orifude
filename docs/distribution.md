@@ -57,17 +57,39 @@ and assembles ARM packages, whose binaries have separate native player checks.
 
 ## Installing an exact published version
 
-Use the copyable commands on [the installation page](https://orifude.com/install/).
-They download the complete exact-version script over HTTPS before executing it.
+Use the copyable commands on [the installation page](https://orifude.com/install/):
+
+```sh
+curl -fsS https://orifude.com/install.sh | sh
+```
+
+```powershell
+irm https://orifude.com/install.ps1 | iex
+```
+
+orifude.com serves byte-for-byte copies of the latest release's `install.sh` and
+`install.ps1`. The website build fails unless each copy matches the SHA-256
+recorded with that release. From version 1.1.2, both scripts are safe to pipe.
+The POSIX script defines `main` and calls it only on its last line. The
+PowerShell script runs inside one script block that PowerShell parses completely
+before running. A connection that drops mid-download therefore runs nothing.
+Earlier scripts must be downloaded completely before they run.
+
 For separate inspection, download the release's `install.sh` or `install.ps1`,
 read it, and verify it with `gh release verify-asset` as shown below. The
 [security overview](security-review.md#installers-and-publication) explains the
 bootstrap trust assumptions.
 
-With version 1.0.1 and later, run the downloaded POSIX script with:
+With version 1.0.1 and later, run a downloaded POSIX script with:
 
 ```sh
 sh install.sh
+```
+
+To pass options through the pipe, use `sh -s --`:
+
+```sh
+curl -fsS https://orifude.com/install.sh | sh -s -- --bin-dir /absolute/directory
 ```
 
 It creates `$HOME/.local/bin`. Use `--bin-dir /absolute/directory` to choose another
@@ -75,7 +97,8 @@ location. Profiles stay unchanged. If the directory is absent from PATH, the
 installer prints the executable's full path; add the directory through your usual
 shell settings to run `orifude` by name.
 
-On Windows, run the downloaded script with:
+On Windows, `irm | iex` uses the default directory and updates your user PATH.
+To choose options, run a downloaded script with:
 
 ```powershell
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1
@@ -184,14 +207,14 @@ in the nixpkgs collection.
 With Nix and flakes enabled, play an exact release or install it in your profile:
 
 ```sh
-nix run github:nuggocto/orifude/v1.1.1
-nix profile add github:nuggocto/orifude/v1.1.1
+nix run github:nuggocto/orifude/v1.1.2
+nix profile add github:nuggocto/orifude/v1.1.2
 ```
 
 For a NixOS configuration that already uses flakes, add an input:
 
 ```nix
-inputs.orifude.url = "github:nuggocto/orifude/v1.1.1";
+inputs.orifude.url = "github:nuggocto/orifude/v1.1.2";
 ```
 
 Pass the input into your modules through `specialArgs`, or use it in an inline

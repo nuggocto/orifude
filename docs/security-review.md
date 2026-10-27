@@ -28,11 +28,20 @@ expressions and other control characters remain errors.
 
 ## Installers and publication
 
-The website's default command trusts an exact immutable GitHub release over
-HTTPS. It downloads the complete script into a fresh temporary directory before
-execution, with transfer size and time limits and cleanup. It does not independently
-authenticate the script with a second hash. Script inspection, the reviewed
-PowerShell hash, and GitHub release attestations are available separately.
+The website's default commands pipe `https://orifude.com/install.sh` into `sh`
+and `https://orifude.com/install.ps1` into `Invoke-Expression`. The site serves
+copies of the latest immutable release's scripts. Its build fails unless each
+copy matches the SHA-256 recorded in the reviewed release record, so a changed
+script cannot ship without a reviewed hash change. Users who run these commands
+also trust the orifude.com domain and its Cloudflare Pages project, in addition
+to GitHub. Script inspection, both reviewed hashes, and GitHub release
+attestations remain available for anyone who wants to check first.
+
+From version 1.1.2 the scripts tolerate a truncated download. The POSIX body is
+one `main` function called on the last line, and the PowerShell body is one
+script block that PowerShell parses before running. A partial transfer defines
+nothing runnable or fails to parse. The installer check pipes truncated copies
+of the real scripts and requires the previous executable to survive.
 
 The [installer templates](../scripts/release/) embed archive checksums, validate
 the archive layout and binary version, and replace the executable only after

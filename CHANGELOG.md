@@ -3,10 +3,16 @@
 This changelog covers the folding-and-ink puzzle game. The retired
 letter-exchange application is a separate product and is not an upgrade source.
 
-## Unreleased
+## 1.1.2 - 2026-10-27
+
+Install with one short command from orifude.com.
 
 ### Changed
 
+- The installers are safe to pipe. Use `curl -fsS https://orifude.com/install.sh | sh`
+  on Linux and macOS, or `irm https://orifude.com/install.ps1 | iex` in Windows
+  PowerShell. A download that stops partway runs nothing.
+- The README lists the installer and package-manager commands.
 - Simplify paper action counting, generation-worker results, pack loading, and
   play-screen transitions without changing gameplay or saved-data formats.
 - Consolidate rendering test setup, remove redundant visual checks, and make

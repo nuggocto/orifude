@@ -29,11 +29,7 @@ impl Installer {
             .env("HOME", self.root.join("home"))
             .env("TMPDIR", &self.root)
             .env("TEMP", &self.root)
-            .env("TMP", &self.root)
-            .env(
-                "ORIFUDE_DOWNLOAD_SENTINEL",
-                self.root.join("executed-partial-installer"),
-            );
+            .env("TMP", &self.root);
         if self.windows {
             // Model the client policy without changing user or machine settings.
             command.env("PSExecutionPolicyPreference", "Restricted");
@@ -83,61 +79,77 @@ impl Installer {
             "installer fixture did not inherit the restricted client policy",
         )
     }
-    fn partial_download(&self, server: &Https) -> Result<()> {
-        let partial = self.root.join(if self.windows {
-            "partial.ps1"
+    /// Pipes the served installer into the shell the way the website's commands do.
+    /// `cut` serves only that prefix, then fails the transfer.
+    fn piped(&self, server: &Https, script: &str, cut: Option<usize>) -> Result<bool> {
+        let name = if self.windows {
+            "piped.ps1"
         } else {
-            "partial.sh"
-        });
-        let name = partial
-            .file_name()
-            .ok_or("missing fixture filename")?
-            .to_string_lossy();
-        server.serve(
-            &name,
-            if self.windows {
-                b"Set-Content -LiteralPath $env:ORIFUDE_DOWNLOAD_SENTINEL -Value executed\r\n"
-            } else {
-                b"touch \"$ORIFUDE_DOWNLOAD_SENTINEL\"\n"
-            },
-            100,
-        )?;
+            "piped.sh"
+        };
+        let sent = cut.unwrap_or(script.len());
+        server.serve(name, &script.as_bytes()[..sent], script.len() - sent)?;
         let url = format!("{}/{name}", server.base);
         let mut command = if self.windows {
-            let wrapper = self.root.join("download.ps1");
+            // Parse the whole download before running it, as `irm | iex` does.
+            let wrapper = self.root.join("pipe-run.ps1");
             fs::write(
                 &wrapper,
-                "param($Destination, $Url)\n$ErrorActionPreference = 'Stop'\ncurl.exe --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 --cacert $env:ORIFUDE_FIXTURE_CA --max-time 10 --output $Destination $Url\nif ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }\n& $Destination\n",
+                "param($Url, $BinDir)\n$Script = (& curl.exe --fail --silent --show-error --cacert $env:ORIFUDE_FIXTURE_CA --max-time 10 $Url) -join \"`n\"\n& ([scriptblock]::Create($Script)) -BinDir $BinDir -NoPath\n",
             )?;
             let mut command = support::command("powershell.exe");
-            command
-                .args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                ])
-                .arg(wrapper)
-                .arg(&partial)
-                .arg(url);
+            command.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ]);
+            command.arg(wrapper);
             command
         } else {
             let mut command = support::command("sh");
-            command.args(["-c", "curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 --max-time 10 --output \"$1\" \"$2\" && sh \"$1\"", "download"]).arg(&partial).arg(url);
+            command.args([
+                "-c",
+                "curl --fail --silent --show-error --max-time 10 \"$1\" | sh -s -- --bin-dir \"$2\"",
+                "piped",
+            ]);
             command
         };
+        command.arg(url).arg(&self.destination);
         self.environment(&mut command);
-        expect(&mut command, false)?;
-        require(
-            !support::read(&partial, 4096)?.is_empty(),
-            "partial-download fixture did not transfer the executable prefix",
-        )?;
-        require(
-            !self.root.join("executed-partial-installer").exists(),
-            "a partial installer was executed",
-        )
+        let (status, _) = support::output(&mut command, 180)?;
+        Ok(status.success())
     }
+}
+/// Prefixes a dropped connection could deliver: mid-script, and everything but the final call.
+fn truncations(script: &str, windows: bool) -> Result<[usize; 2]> {
+    let last = if windows {
+        script.trim_end().rfind('}')
+    } else {
+        script.rfind("\nmain \"$@\"")
+    };
+    Ok([
+        script.len() / 2,
+        last.ok_or("installer has no final entry point")?,
+    ])
+}
+fn piped_install(
+    installer: &Installer,
+    server: &Https,
+    script: &str,
+    executable: &Path,
+    before: &[u8],
+) -> Result<()> {
+    fs::remove_file(executable)?;
+    require(
+        installer.piped(server, script, None)?,
+        "piped installation failed",
+    )?;
+    require(
+        support::read(executable, MAX_BYTES)? == before,
+        "piped installation differs from the verified executable",
+    )
 }
 fn expect(command: &mut Command, success: bool) -> Result<()> {
     let (status, _) = support::output(command, 180)?;
@@ -187,8 +199,10 @@ pub fn verify(directory: &Path, target: &str) -> Result<()> {
     let saved = root.join("data/orifude/orifude.sqlite3");
     fs::create_dir_all(saved.parent().ok_or("missing data parent")?)?;
     fs::write(&saved, b"existing player database")?;
-    installer.partial_download(&server)?;
-    preserved(&existing)?;
+    for cut in truncations(&script, windows)? {
+        installer.piped(&server, &script, Some(cut))?;
+        preserved(&existing)?;
+    }
     #[cfg(unix)]
     unix_failures(&installer, &existing)?;
     server.serve(&archive_name, b"tampered archive", 0)?;
@@ -228,6 +242,7 @@ pub fn verify(directory: &Path, target: &str) -> Result<()> {
         support::read(&existing, MAX_BYTES)? == before,
         "reinstall changed verified bytes",
     )?;
+    piped_install(&installer, &server, &script, &existing, &before)?;
     fs::remove_file(&existing)?;
     installer.execute(true)?;
     new_destinations(&installer, target, &before)?;

@@ -15,8 +15,35 @@ on your computer, with no account to create.
 
 ## Start playing
 
-Orifude is available for Linux, macOS, and Windows. Follow the
-[installation guide](https://orifude.com/install/) for your computer, then run:
+Orifude runs on Linux, macOS, and Windows. On Linux or macOS, run:
+
+```console
+curl -fsS https://orifude.com/install.sh | sh
+```
+
+In Windows PowerShell, run:
+
+```powershell
+irm https://orifude.com/install.ps1 | iex
+```
+
+Each installer puts the latest release in your user account without
+administrator rights. It checks the downloaded archive against the SHA-256
+recorded in the script before replacing anything. Package managers work too:
+
+```console
+brew install nuggocto/tap/orifude          # macOS
+yay -S orifude-bin                         # Arch Linux
+nix run github:nuggocto/orifude/v1.1.2     # Linux with Nix flakes
+```
+
+```powershell
+scoop bucket add nuggocto https://github.com/nuggocto/scoop-bucket
+scoop install nuggocto/orifude
+```
+
+The [installation guide](https://orifude.com/install/) lists supported systems
+and shows how to inspect a script before you run it. Then start the game:
 
 ```console
 orifude
@@ -26,9 +53,8 @@ Your first visit begins with a short, playable lesson. It walks you through a
 fold, a brush stroke, and opening the paper. A terminal at least 80 columns wide
 and 24 rows tall gives everything room; the minimum is 60 by 20.
 
-On Linux with Nix and flakes enabled, run `nix run github:nuggocto/orifude/v1.1.1`.
-The [Nix guide](docs/distribution.md#nix-and-nixos) also covers installation and
-NixOS configurations.
+The [Nix guide](docs/distribution.md#nix-and-nixos) covers profile installation
+and NixOS configurations.
 
 ## How a paper works
 

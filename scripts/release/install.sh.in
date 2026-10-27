@@ -1,78 +1,86 @@
 #!/bin/sh
-# Download this complete file before running it. Use --bin-dir to choose a directory.
+# Installs one exact Orifude release. Use --bin-dir to choose a directory.
+# Safe to pipe into sh: main runs only after the shell has read the last line.
 set -eu
 umask 077
 version='@VERSION@'
 base_url='@BASE_URL@'
-fail() { printf 'error: %s\n' "$1" >&2; exit 1; }
-if [ "$#" = 1 ] && [ "$1" = --help ]; then
-    printf '%s\n' 'Usage: sh install.sh [--bin-dir /directory]' \
-        'Default: .local/bin under your home directory (created if needed).' \
-        'Installs this exact release without sudo or profile changes.'
-    exit 0
-fi
-case "$#" in
-    0) [ -n "${HOME:-}" ] || fail 'HOME is not set'; bin_dir="$HOME/.local/bin" ;;
-    2) [ "$1" = --bin-dir ] || fail 'expected --bin-dir DIRECTORY'; bin_dir=$2 ;;
-    *) fail 'expected no arguments or --bin-dir DIRECTORY' ;;
-esac
-case "$bin_dir" in /*) ;; *) fail 'installation directory must be absolute' ;; esac
-[ "${#bin_dir}" -le 4096 ] || fail 'installation path is too long'
-if [ -e "$bin_dir" ]; then
-    [ -d "$bin_dir" ] && [ -w "$bin_dir" ] || fail 'installation directory must be writable'
-fi
-destination="$bin_dir/orifude"
-[ ! -L "$destination" ] || fail 'destination must not be a symbolic link'
-if [ -e "$destination" ]; then
-    [ -f "$destination" ] || fail 'destination must be a regular file'
-fi
-case "$(uname -s):$(uname -m)" in
-    Linux:x86_64) target=x86_64-unknown-linux-musl; expected='@x86_64-unknown-linux-musl@' ;;
-    Linux:aarch64|Linux:arm64) target=aarch64-unknown-linux-musl; expected='@aarch64-unknown-linux-musl@' ;;
-    Darwin:x86_64) target=x86_64-apple-darwin; expected='@x86_64-apple-darwin@' ;;
-    Darwin:arm64) target=aarch64-apple-darwin; expected='@aarch64-apple-darwin@' ;;
-    *) fail 'unsupported operating system or architecture' ;;
-esac
-for tool in curl tar mktemp chmod mv; do command -v "$tool" >/dev/null || fail "missing tool: $tool"; done
-if command -v sha256sum >/dev/null; then hash_tool=sha256sum
-elif command -v shasum >/dev/null; then hash_tool=shasum
-else fail 'sha256sum or shasum is required'; fi
-work=$(mktemp -d "${TMPDIR:-/tmp}/orifude-install.XXXXXXXX")
+work=''
 staging=''
+fail() { printf 'error: %s\n' "$1" >&2; exit 1; }
 cleanup() {
-    rm -rf "$work"
+    if [ -n "$work" ]; then rm -rf "$work"; fi
     if [ -n "$staging" ]; then rm -rf "$staging"; fi
 }
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM HUP
-archive="orifude-$version-$target.tar.gz"
-curl --fail --silent --show-error --location --max-redirs 5 \
-    --proto '=https' --proto-redir '=https' --tlsv1.2 \
-    --connect-timeout 15 --max-time 120 --max-filesize 67108864 \
-    --output "$work/archive.tar.gz" "$base_url/$archive" || fail 'archive download failed'
-if [ "$hash_tool" = sha256sum ]; then actual=$(sha256sum "$work/archive.tar.gz")
-else actual=$(shasum -a 256 "$work/archive.tar.gz"); fi
-actual=${actual%% *}
-[ "$actual" = "$expected" ] || fail 'archive checksum mismatch'
-folder="orifude-$version-$target"
-listing=$(tar -tzf "$work/archive.tar.gz") || fail 'cannot read archive'
-expected_listing=$(printf '%s\n' "$folder/LICENSE" "$folder/README.txt" "$folder/orifude")
-[ "$listing" = "$expected_listing" ] || fail 'unexpected archive layout'
-tar -xzf "$work/archive.tar.gz" -C "$work" || fail 'archive extraction failed'
-[ -f "$work/$folder/orifude" ] && [ ! -L "$work/$folder/orifude" ] || fail 'missing regular executable'
-chmod 755 "$work/$folder/orifude"
-actual_version=$("$work/$folder/orifude" --version) || fail 'downloaded executable cannot run'
-[ "$actual_version" = "orifude $version" ] || fail 'downloaded executable version mismatch'
-mkdir -p "$bin_dir" || fail 'cannot create installation directory'
-bin_dir=$(CDPATH='' cd -P "$bin_dir" && pwd)
-staging=$(mktemp -d "$bin_dir/.orifude-install.XXXXXXXX")
-cp "$work/$folder/orifude" "$staging/orifude"
-chmod 755 "$staging/orifude"
-# Rename within the destination filesystem only after every check succeeds.
-mv -f "$staging/orifude" "$bin_dir/"
-printf 'Installed Orifude %s in %s.\n' "$version" "$bin_dir"
-case ":${PATH:-}:" in
-    *":$bin_dir:"*) printf '%s\n' 'Run orifude to play.' ;;
-    *) printf 'Run %s/orifude to play, or add %s to PATH in your shell settings.\n' "$bin_dir" "$bin_dir" ;;
-esac
+
+main() {
+    if [ "$#" = 1 ] && [ "$1" = --help ]; then
+        printf '%s\n' 'Usage: sh install.sh [--bin-dir /directory]' \
+            '   or: curl -fsS https://orifude.com/install.sh | sh -s -- --bin-dir /directory' \
+            'Default: .local/bin under your home directory (created if needed).' \
+            'Installs this exact release without sudo or profile changes.'
+        exit 0
+    fi
+    case "$#" in
+        0) [ -n "${HOME:-}" ] || fail 'HOME is not set'; bin_dir="$HOME/.local/bin" ;;
+        2) [ "$1" = --bin-dir ] || fail 'expected --bin-dir DIRECTORY'; bin_dir=$2 ;;
+        *) fail 'expected no arguments or --bin-dir DIRECTORY' ;;
+    esac
+    case "$bin_dir" in /*) ;; *) fail 'installation directory must be absolute' ;; esac
+    [ "${#bin_dir}" -le 4096 ] || fail 'installation path is too long'
+    if [ -e "$bin_dir" ]; then
+        [ -d "$bin_dir" ] && [ -w "$bin_dir" ] || fail 'installation directory must be writable'
+    fi
+    destination="$bin_dir/orifude"
+    [ ! -L "$destination" ] || fail 'destination must not be a symbolic link'
+    if [ -e "$destination" ]; then
+        [ -f "$destination" ] || fail 'destination must be a regular file'
+    fi
+    case "$(uname -s):$(uname -m)" in
+        Linux:x86_64) target=x86_64-unknown-linux-musl; expected='@x86_64-unknown-linux-musl@' ;;
+        Linux:aarch64|Linux:arm64) target=aarch64-unknown-linux-musl; expected='@aarch64-unknown-linux-musl@' ;;
+        Darwin:x86_64) target=x86_64-apple-darwin; expected='@x86_64-apple-darwin@' ;;
+        Darwin:arm64) target=aarch64-apple-darwin; expected='@aarch64-apple-darwin@' ;;
+        *) fail 'unsupported operating system or architecture' ;;
+    esac
+    for tool in curl tar mktemp chmod mv; do command -v "$tool" >/dev/null || fail "missing tool: $tool"; done
+    if command -v sha256sum >/dev/null; then hash_tool=sha256sum
+    elif command -v shasum >/dev/null; then hash_tool=shasum
+    else fail 'sha256sum or shasum is required'; fi
+    work=$(mktemp -d "${TMPDIR:-/tmp}/orifude-install.XXXXXXXX")
+    trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM HUP
+    archive="orifude-$version-$target.tar.gz"
+    curl --fail --silent --show-error --location --max-redirs 5 \
+        --proto '=https' --proto-redir '=https' --tlsv1.2 \
+        --connect-timeout 15 --max-time 120 --max-filesize 67108864 \
+        --output "$work/archive.tar.gz" "$base_url/$archive" || fail 'archive download failed'
+    if [ "$hash_tool" = sha256sum ]; then actual=$(sha256sum "$work/archive.tar.gz")
+    else actual=$(shasum -a 256 "$work/archive.tar.gz"); fi
+    actual=${actual%% *}
+    [ "$actual" = "$expected" ] || fail 'archive checksum mismatch'
+    folder="orifude-$version-$target"
+    listing=$(tar -tzf "$work/archive.tar.gz") || fail 'cannot read archive'
+    expected_listing=$(printf '%s\n' "$folder/LICENSE" "$folder/README.txt" "$folder/orifude")
+    [ "$listing" = "$expected_listing" ] || fail 'unexpected archive layout'
+    tar -xzf "$work/archive.tar.gz" -C "$work" || fail 'archive extraction failed'
+    [ -f "$work/$folder/orifude" ] && [ ! -L "$work/$folder/orifude" ] || fail 'missing regular executable'
+    chmod 755 "$work/$folder/orifude"
+    actual_version=$("$work/$folder/orifude" --version </dev/null) || fail 'downloaded executable cannot run'
+    [ "$actual_version" = "orifude $version" ] || fail 'downloaded executable version mismatch'
+    mkdir -p "$bin_dir" || fail 'cannot create installation directory'
+    bin_dir=$(CDPATH='' cd -P "$bin_dir" && pwd)
+    staging=$(mktemp -d "$bin_dir/.orifude-install.XXXXXXXX")
+    cp "$work/$folder/orifude" "$staging/orifude"
+    chmod 755 "$staging/orifude"
+    # Rename within the destination filesystem only after every check succeeds.
+    mv -f "$staging/orifude" "$bin_dir/"
+    printf 'Installed Orifude %s in %s.\n' "$version" "$bin_dir"
+    case ":${PATH:-}:" in
+        *":$bin_dir:"*) printf '%s\n' 'Run orifude to play.' ;;
+        *) printf 'Run %s/orifude to play, or add %s to PATH in your shell settings.\n' "$bin_dir" "$bin_dir" ;;
+    esac
+}
+
+main "$@"
