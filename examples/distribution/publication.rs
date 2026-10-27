@@ -193,7 +193,7 @@ pub fn publish(tag: &str, commit: &str, run: &str, write: bool) -> Result<()> {
         REPOSITORY,
         "--draft=false",
     ])?;
-    gh(&["release", "verify", tag, "--repo", REPOSITORY])?;
+    verify_published(tag)?;
     for name in &assets {
         gh(&[
             "release",
@@ -206,6 +206,16 @@ pub fn publish(tag: &str, commit: &str, run: &str, write: bool) -> Result<()> {
     }
     println!("publication=verified; package updates can now consume these immutable assets");
     Ok(())
+}
+// GitHub creates the release attestation shortly after publication; 1.1.2 found none at first.
+fn verify_published(tag: &str) -> Result<()> {
+    for _ in 0..12 {
+        if gh(&["release", "verify", tag, "--repo", REPOSITORY]).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(10));
+    }
+    gh(&["release", "verify", tag, "--repo", REPOSITORY]).map(drop)
 }
 fn check_release_absent(tag: &str) -> Result<()> {
     let releases = api("releases?per_page=100")?;

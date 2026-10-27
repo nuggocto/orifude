@@ -4,6 +4,53 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.1.2 publication decision on 2026-10-27
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.2)
+uses signed source commit [6a69c68](https://github.com/nuggocto/orifude/commit/6a69c6805bf35dd17532f6a2760ce9fbb997677a)
+and a verified signed annotated tag. Both installers are now safe to pipe: the
+POSIX body is one `main` function called on the last line, and the PowerShell
+body is one script block. orifude.com serves exact copies of the 1.1.2 scripts.
+The release also carries the unreleased simplifications and the ZIP dependency
+update. Save schemas, content formats, and generator compatibility are unchanged.
+The [coverage limitations below](#coverage-and-limitations) still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/40596284043), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/40596292414), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/40596284035) passed. Each candidate installation job piped truncated copies of the real installer and required the previous executable to survive, then installed through a complete pipe. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/40598040170) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/40598928739) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
+| Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/40597882219) passed, including installed-player checks on Linux x86_64 and ARM64. `nix run github:nuggocto/orifude/v1.1.2 -- --version` reported 1.1.2 in a fresh Nix container. |
+| Website | [Frontend 2e36589](https://github.com/nuggocto/orifude-front/commit/2e365898cf581e586b964a69d318cdd10e5300a8) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/40600263268), including 39 Linux and 26 Windows browser cases and Windows PowerShell 5.1 `irm | iex` runs under the Restricted policy. The first run failed because the Windows checkout converted `install.sh` to CRLF; the repository now marks both installers `-text`. Cloudflare deployment succeeded. Both live scripts match the release hashes and are served as `text/plain`. `curl -fsS https://orifude.com/install.sh \| sh` installed and reinstalled 1.1.2 as an unprivileged user in a disposable Arch container and produced the exact musl executable below. |
+
+Publication compared all eight draft assets with the candidate. The publisher's
+first `gh release verify` ran before GitHub had created the release attestation
+and reported none. Rerunning it a minute later verified the release and every
+asset attestation; the publisher now retries for up to two minutes.
+[SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.1.2/SHA256SUMS)
+records the five archive hashes. The POSIX script SHA-256 is
+`ac428b0c0ec1548020d5e0df084c2b2316b1926e20ac14fc508d65ef8a7a5073` and the
+PowerShell script SHA-256 is
+`f6ae14709fdafba378795046f40a4f2b4ae88dcd1d5448f2227c64d686304b3a`.
+
+Package updates are [Homebrew ed14c52](https://github.com/nuggocto/homebrew-tap/commit/ed14c529b3d2b3342b662b0208e5f273da4f6141),
+[Scoop a7659cc](https://github.com/nuggocto/scoop-bucket/commit/a7659cc7fbda666e35148ecabaf2b83901d00c33),
+and AUR commit `6eb8cfa68558e6ea46e4f3dda7fe40b86b53c7ab`, pushed after release
+attestation checks with the dedicated `aur@sshmoi.com` SSH identity.
+
+Local checks passed formatting, shell analysis, dependency policies,
+warning-denied Clippy, all tests, doctests, and the release tool tests. Rendering
+the new POSIX template with the published 1.1.1 hashes installed 1.1.1 through a
+pipe; the same script cut before its last line installed nothing and exited 0,
+and cut halfway failed with a syntax error. A Windows-style `irm | iex` of the
+new structure in PowerShell 7 left the caller's error preference unchanged, and
+a truncated copy failed to parse before running.
+
+The Linux musl executable has SHA-256
+`895701a5d5affa65f35be4068b8d631bf462521c642058f722382b5d05f08106`.
+It is 5,731,456 bytes; its archive is 2,396,615 bytes. Startup, input, and
+storage measurements were not repeated for this installer and dependency release.
+
 ## 1.1.1 publication decision on 2026-10-01
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.1)
