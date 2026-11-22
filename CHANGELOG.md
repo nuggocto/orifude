@@ -3,15 +3,39 @@
 This changelog covers the folding-and-ink puzzle game. The retired
 letter-exchange application is a separate product and is not an upgrade source.
 
-## 1.1.2 - 2026-10-27
+## 1.1.3 - 2026-11-22
 
-Install with one short command from orifude.com.
+Install from GitHub releases, with a smaller binary.
 
 ### Changed
 
-- The installers are safe to pipe. Use `curl -fsS https://orifude.com/install.sh | sh`
-  on Linux and macOS, or `irm https://orifude.com/install.ps1 | iex` in Windows
-  PowerShell. A download that stops partway runs nothing.
+- The README installs from GitHub release URLs and hosts its own screenshot.
+  Community packs are listed as GitHub releases with `pack-` tags.
+- Release builds use fat LTO, one codegen unit, and a stripped symbol table.
+  The Linux x86_64 binary shrinks from 5.8 MB to about 4.4 MB.
+- Read terminal input on the main thread instead of a separate worker and queue.
+  Input, ticks, and resizes behave the same; a finished paper appears within
+  50 ms.
+- Remove the paper's separate action budget, which the fold and stroke budgets
+  already enforced. The replay and solution limit is now 20 actions, the most a
+  puzzle can use, so every previously valid replay still loads.
+- Keep each puzzle's gameplay fields in one place, so replay binding compares
+  one value.
+
+### Security
+
+- Update the bundled SQLite to 3.54.1 for RUSTSEC-2026-0459. Older SQLite could
+  return stale process memory when it opened a database next to a crafted `-wal`
+  file. Orifude uses rollback journals and a private data directory, so this
+  needed someone who could already write the player's files.
+
+## 1.1.2 - 2026-10-27
+
+Installers that are safe to pipe.
+
+### Changed
+
+- The installers are safe to pipe. A download that stops partway runs nothing.
 - The README lists the installer and package-manager commands.
 - Simplify paper action counting, generation-worker results, pack loading, and
   play-screen transitions without changing gameplay or saved-data formats.
@@ -153,8 +177,6 @@ computer, and return to a paper whenever you like.
   macOS, and Windows x86_64, with SHA-256 checksums.
 - Provide exact-version POSIX and PowerShell installers, a macOS Homebrew
   formula, a Windows Scoop manifest, and the `orifude-bin` AUR package.
-- Explain the game and publish release notes on a static website with bundled
-  artwork and fonts.
 
 ### Security
 

@@ -10,7 +10,6 @@ use std::fs;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use orifude::domain::paper::MAX_ACTIONS;
 use orifude::packs::{
     validate_archive_bytes, validate_directory, validate_metadata_bytes, validate_puzzle_bytes,
 };
@@ -46,11 +45,14 @@ fn write_all(output: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Matches `MAX_FUZZ_INPUT_BYTES` in `support/domain_actions.rs`.
+const DOMAIN_ACTION_INPUT_BYTES: usize = 64 * 4;
+
 /// Four-byte records: opcodes 0-3 fold, 4 dots, 5-6 draw lines, 7 undoes,
 /// and 8 resets.
 fn domain_actions() -> Seeds {
     let every_opcode = (0..9_u8).flat_map(|op| [op, op, op + 1, op + 2]).collect();
-    let full_length = (0..usize::from(MAX_ACTIONS) * 4)
+    let full_length = (0..DOMAIN_ACTION_INPUT_BYTES)
         .map(|index| u8::try_from(index % 251).expect("the remainder fits a byte"))
         .collect();
     vec![

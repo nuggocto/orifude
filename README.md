@@ -7,34 +7,35 @@ Play at your own pace. There is no timer, and you can undo a move or start over
 whenever you need to. The game works entirely offline and keeps your progress
 on your computer, with no account to create.
 
-[Install Orifude](https://orifude.com/install/) ·
-[Visit the website](https://orifude.com) ·
-[Release notes](https://orifude.com/changelog/)
+[Releases](https://github.com/nuggocto/orifude/releases) ·
+[Release notes](CHANGELOG.md) ·
+[Installation details](docs/distribution.md#installing-an-exact-published-version)
 
-![Orifude's first lesson after one fold and one brush stroke, with two inked layers ready to unfold.](https://orifude.com/terminal.png)
+![Orifude's first lesson after one fold and one brush stroke, with two inked layers ready to unfold.](docs/terminal.png)
 
 ## Start playing
 
 Orifude runs on Linux, macOS, and Windows. On Linux or macOS, run:
 
 ```console
-curl -fsS https://orifude.com/install.sh | sh
+curl -fsSL https://github.com/nuggocto/orifude/releases/download/v1.1.3/install.sh | sh
 ```
 
 In Windows PowerShell, run:
 
 ```powershell
-irm https://orifude.com/install.ps1 | iex
+Invoke-WebRequest https://github.com/nuggocto/orifude/releases/download/v1.1.3/install.ps1 -OutFile install.ps1 -UseBasicParsing
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Each installer puts the latest release in your user account without
+Each installer puts that release in your user account without
 administrator rights. It checks the downloaded archive against the SHA-256
 recorded in the script before replacing anything. Package managers work too:
 
 ```console
 brew install nuggocto/tap/orifude          # macOS
 yay -S orifude-bin                         # Arch Linux
-nix run github:nuggocto/orifude/v1.1.2     # Linux with Nix flakes
+nix run github:nuggocto/orifude/v1.1.3     # Linux with Nix flakes
 ```
 
 ```powershell
@@ -42,8 +43,9 @@ scoop bucket add nuggocto https://github.com/nuggocto/scoop-bucket
 scoop install nuggocto/orifude
 ```
 
-The [installation guide](https://orifude.com/install/) lists supported systems
-and shows how to inspect a script before you run it. Then start the game:
+The [installation guide](docs/distribution.md#installing-an-exact-published-version)
+lists installer options and shows how to inspect a script before you run it.
+Then start the game:
 
 ```console
 orifude
@@ -110,8 +112,10 @@ saved between visits; an unfinished attempt starts fresh when you leave it.
 
 ## Play and share puzzle packs
 
-[Community packs](https://orifude.com/#puzzle-packs) add more papers to solve.
-Download a reviewed ZIP and its checksum file, then
+Community packs add more papers to solve. Reviewed packs are published as
+GitHub releases whose tags start with `pack-`, such as
+[Paper garden 1.0.0](https://github.com/nuggocto/orifude/releases/tag/pack-paper-garden-v1.0.0).
+Download the pack ZIP and its `SHA256SUMS` file, then
 [check the download](docs/puzzle-authoring.md#download-and-install-a-published-pack)
 and install it locally:
 
@@ -128,7 +132,7 @@ are plain-text files you can edit and play on your computer. The
 [authoring guide](docs/puzzle-authoring.md) explains the format, how to check and
 solve your puzzles, and how to submit them through a pull request. Automated
 checks validate each submission, and a maintainer reviews the puzzles, writing,
-and license before publishing a ZIP and checksum on the website.
+and license before publishing a ZIP and checksum as a GitHub release.
 
 ## LICENSE
 

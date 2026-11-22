@@ -35,14 +35,12 @@ pub enum TuiError {
     Storage(StorageError),
     /// Terminal acquisition, drawing, resizing, or restoration failed.
     Terminal(io::Error),
-    /// The owned input worker or its queue failed.
+    /// Terminal input could not be read.
     Events(EventError),
     /// The local calendar date or injected test clock was unavailable.
     Clock(ClockError),
     /// The owned puzzle generation worker failed.
     Work(WorkError),
-    /// The input worker ended without a normal shutdown request or error.
-    EventWorkerStopped,
 }
 
 impl fmt::Display for TuiError {
@@ -54,9 +52,6 @@ impl fmt::Display for TuiError {
             Self::Events(_) => formatter.write_str("could not read terminal input"),
             Self::Clock(_) => formatter.write_str("could not read the local calendar date"),
             Self::Work(_) => formatter.write_str("could not generate a local paper"),
-            Self::EventWorkerStopped => {
-                formatter.write_str("the terminal input worker stopped unexpectedly")
-            }
         }
     }
 }
@@ -70,7 +65,6 @@ impl Error for TuiError {
             Self::Events(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::Work(error) => Some(error),
-            Self::EventWorkerStopped => None,
         }
     }
 }
@@ -120,7 +114,7 @@ pub fn play() -> Result<(), TuiError> {
     let run_result = {
         let mut shell = Shell {
             terminal: &mut terminal,
-            events: &events,
+            events: &mut events,
             storage: &mut storage,
             app: &mut app,
             clock: &clock,
@@ -131,18 +125,14 @@ pub fn play() -> Result<(), TuiError> {
         shell.run(started)
     };
     let work_result = work.cancel().map_err(TuiError::Work);
-    let shutdown_result = events.shutdown().map_err(TuiError::Events);
     let restore_result = terminal.restore().map_err(TuiError::Terminal);
 
-    run_result
-        .and(work_result)
-        .and(shutdown_result)
-        .and(restore_result)
+    run_result.and(work_result).and(restore_result)
 }
 
 struct Shell<'a> {
     terminal: &'a mut TerminalSession,
-    events: &'a EventPump,
+    events: &'a mut EventPump,
     storage: &'a mut Storage,
     app: &'a mut App,
     clock: &'a Clock,
@@ -163,9 +153,7 @@ impl Shell<'_> {
             .set_animation_active(self.app.animation_active(started));
 
         loop {
-            let Some(event) = self.events.next().map_err(TuiError::Events)? else {
-                return Err(TuiError::EventWorkerStopped);
-            };
+            let event = self.events.next().map_err(TuiError::Events)?;
             let now = match event {
                 RuntimeEvent::Tick(now) => now,
                 RuntimeEvent::Key(_)

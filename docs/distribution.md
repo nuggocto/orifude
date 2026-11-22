@@ -19,7 +19,8 @@ Linux needs musl headers and a C compiler for bundled SQLite. Use `musl-gcc` for
 Rust's final linker can remain the native `cc`; the build enables static CRT
 linking. The archive checker rejects Linux executables with a dynamic interpreter.
 Windows also links the CRT statically. macOS uses a 13.0 deployment target.
-Release arithmetic checks and panic unwinding remain enabled.
+Release arithmetic checks and panic unwinding remain enabled. The release profile
+also uses fat LTO, one codegen unit, and strips the symbol table.
 
 Collect the five archives from the same commit, then run:
 
@@ -57,22 +58,21 @@ and assembles ARM packages, whose binaries have separate native player checks.
 
 ## Installing an exact published version
 
-Use the copyable commands on [the installation page](https://orifude.com/install/):
+Every release attaches its own `install.sh` and `install.ps1`. Fetch them from
+that release's download URL, replacing `v1.1.3` with the version you want:
 
 ```sh
-curl -fsS https://orifude.com/install.sh | sh
+curl -fsSL https://github.com/nuggocto/orifude/releases/download/v1.1.3/install.sh | sh
 ```
 
 ```powershell
-irm https://orifude.com/install.ps1 | iex
+Invoke-WebRequest https://github.com/nuggocto/orifude/releases/download/v1.1.3/install.ps1 -OutFile install.ps1 -UseBasicParsing
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-orifude.com serves byte-for-byte copies of the latest release's `install.sh` and
-`install.ps1`. The website build fails unless each copy matches the SHA-256
-recorded with that release. From version 1.1.2, both scripts are safe to pipe.
-The POSIX script defines `main` and calls it only on its last line. The
-PowerShell script runs inside one script block that PowerShell parses completely
-before running. A connection that drops mid-download therefore runs nothing.
+From version 1.1.2, both scripts are safe to pipe. The POSIX script defines
+`main` and calls it only on its last line. The PowerShell script runs inside one
+script block that PowerShell parses completely before running. A connection that drops mid-download therefore runs nothing.
 Earlier scripts must be downloaded completely before they run.
 
 For separate inspection, download the release's `install.sh` or `install.ps1`,
@@ -89,7 +89,7 @@ sh install.sh
 To pass options through the pipe, use `sh -s --`:
 
 ```sh
-curl -fsS https://orifude.com/install.sh | sh -s -- --bin-dir /absolute/directory
+curl -fsSL https://github.com/nuggocto/orifude/releases/download/v1.1.3/install.sh | sh -s -- --bin-dir /absolute/directory
 ```
 
 It creates `$HOME/.local/bin`. Use `--bin-dir /absolute/directory` to choose another
@@ -97,11 +97,11 @@ location. Profiles stay unchanged. If the directory is absent from PATH, the
 installer prints the executable's full path; add the directory through your usual
 shell settings to run `orifude` by name.
 
-On Windows, `irm | iex` uses the default directory and updates your user PATH.
-To choose options, run a downloaded script with:
+On Windows, the downloaded script uses the default directory and updates your
+user PATH. To choose options, pass them after the script path:
 
 ```powershell
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -NoPath
 ```
 
 It creates `%LOCALAPPDATA%\Programs\Orifude` and adds that directory to the saved
@@ -207,14 +207,14 @@ in the nixpkgs collection.
 With Nix and flakes enabled, play an exact release or install it in your profile:
 
 ```sh
-nix run github:nuggocto/orifude/v1.1.2
-nix profile add github:nuggocto/orifude/v1.1.2
+nix run github:nuggocto/orifude/v1.1.3
+nix profile add github:nuggocto/orifude/v1.1.3
 ```
 
 For a NixOS configuration that already uses flakes, add an input:
 
 ```nix
-inputs.orifude.url = "github:nuggocto/orifude/v1.1.2";
+inputs.orifude.url = "github:nuggocto/orifude/v1.1.3";
 ```
 
 Pass the input into your modules through `specialArgs`, or use it in an inline

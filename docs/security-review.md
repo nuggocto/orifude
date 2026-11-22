@@ -14,7 +14,7 @@ description of the current design, not a guarantee that every defect is absent.
 | Archives and paths | [Pack loading](../src/packs/mod.rs) bounds input, file count, and expanded bytes. [ZIP preflight](../src/packs/archive.rs) rejects ambiguous catalogs, duplicate paths, traversal, links, special files, and unsupported archive forms before installation. |
 | SQLite | [Storage](../src/storage/mod.rs) checks paths, takes an exclusive process lock, validates schemas and rows, and uses parameterized statements and transactions. Capacity limits preserve space for essential progress writes. |
 | Installed packs | Private staging, a pending-operation record, and registry reconciliation make installation recoverable. Fingerprints detect changed content before play. Source directories are never removal targets. |
-| Terminal | [Input](../src/tui/event.rs) has a bounded queue. External text cannot emit terminal controls. [Terminal ownership](../src/tui/terminal.rs) tracks acquired capabilities and retries failed restoration steps. |
+| Terminal | [Input](../src/tui/event.rs) is read on the main thread, so no queue can grow. External text cannot emit terminal controls. [Terminal ownership](../src/tui/terminal.rs) tracks acquired capabilities and retries failed restoration steps. |
 
 The [authoring guide](puzzle-authoring.md#limits) gives pack limits, and the
 [contributor guide](../CONTRIBUTING.md#resource-limits-and-verification) records
@@ -28,14 +28,10 @@ expressions and other control characters remain errors.
 
 ## Installers and publication
 
-The website's default commands pipe `https://orifude.com/install.sh` into `sh`
-and `https://orifude.com/install.ps1` into `Invoke-Expression`. The site serves
-copies of the latest immutable release's scripts. Its build fails unless each
-copy matches the SHA-256 recorded in the reviewed release record, so a changed
-script cannot ship without a reviewed hash change. Users who run these commands
-also trust the orifude.com domain and its Cloudflare Pages project, in addition
-to GitHub. Script inspection, both reviewed hashes, and GitHub release
-attestations remain available for anyone who wants to check first.
+The README's install commands fetch `install.sh` and `install.ps1` from a fixed
+GitHub release download URL, so users trust GitHub and this repository's release
+process. Script inspection and GitHub release attestations remain available for
+anyone who wants to check first.
 
 From version 1.1.2 the scripts tolerate a truncated download. The POSIX body is
 one `main` function called on the last line, and the PowerShell body is one
@@ -63,20 +59,6 @@ or credentials. [Pack publication](../.github/workflows/pack-release.yml) requir
 a committed review and maintainer attestation for the selected source commit.
 Its write job compares prepared asset bytes and verifies release attestations.
 Maintainers remain responsible for authorship, license rights, and puzzle quality.
-
-## Static website
-
-The separate frontend validates bounded release records and hash-checked
-changelog snapshots, escapes contributor text, and derives download links from
-the fixed repository. Its only application script is the optional installation
-clipboard helper, permitted by its exact hash through CSP and script integrity.
-It has no accounts, analytics, or browser game.
-
-Cloudflare's injected bot-detection markup on 404 responses was observed blocked
-by CSP. Removing the injection requires zone permissions unavailable during
-release verification; the owner accepted this limitation and waived the
-`www` redirect. [Release QA](release-qa.md#coverage-and-limitations) records the
-tested scope.
 
 ## Verification and limits
 

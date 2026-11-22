@@ -11,7 +11,6 @@ fn paper(width: u8, height: u8) -> Paper {
         height,
         MAX_FOLD_ACTIONS,
         MAX_STROKE_ACTIONS,
-        MAX_ACTIONS,
     ))
     .expect("the test paper should be valid")
 }
@@ -110,10 +109,10 @@ fn scalar_newtypes_enforce_the_recorded_bounds() {
         StrokeCount::new(MAX_STROKE_ACTIONS + 1),
         Err(PaperError::StrokeBudgetOutOfRange { value: 9 })
     );
-    assert_eq!(ActionCount::new(MAX_ACTIONS).map(ActionCount::get), Ok(64));
+    assert_eq!(ActionCount::new(MAX_ACTIONS).map(ActionCount::get), Ok(20));
     assert_eq!(
         ActionCount::new(MAX_ACTIONS + 1),
-        Err(PaperError::ActionBudgetOutOfRange { value: 65 })
+        Err(PaperError::ActionCountOutOfRange { value: 21 })
     );
 
     assert_eq!(CellId::new(143).map(CellId::get), Ok(143));
@@ -134,24 +133,20 @@ fn scalar_newtypes_enforce_the_recorded_bounds() {
 fn paper_construction_reports_malformed_dimensions_and_budgets() {
     let cases = [
         (
-            PaperSpec::new(3, 4, 1, 1, 2),
+            PaperSpec::new(3, 4, 1, 1),
             PaperError::WidthOutOfRange { value: 3 },
         ),
         (
-            PaperSpec::new(4, 13, 1, 1, 2),
+            PaperSpec::new(4, 13, 1, 1),
             PaperError::HeightOutOfRange { value: 13 },
         ),
         (
-            PaperSpec::new(4, 4, 13, 1, 2),
+            PaperSpec::new(4, 4, 13, 1),
             PaperError::FoldBudgetOutOfRange { value: 13 },
         ),
         (
-            PaperSpec::new(4, 4, 1, 9, 2),
+            PaperSpec::new(4, 4, 1, 9),
             PaperError::StrokeBudgetOutOfRange { value: 9 },
-        ),
-        (
-            PaperSpec::new(4, 4, 1, 1, 65),
-            PaperError::ActionBudgetOutOfRange { value: 65 },
         ),
     ];
 
@@ -417,8 +412,7 @@ fn invalid_folds_and_exhausted_budgets_leave_state_unchanged() {
     );
     assert_eq!(empty_side, before_empty);
 
-    let mut no_folds =
-        Paper::new(PaperSpec::new(4, 4, 0, 1, 1)).expect("zero is a valid fold budget");
+    let mut no_folds = Paper::new(PaperSpec::new(4, 4, 0, 1)).expect("zero is a valid fold budget");
     let before_no_folds = no_folds.clone();
     assert_eq!(
         no_folds.fold(Fold::new(FoldDirection::Left, 2)),
@@ -428,19 +422,19 @@ fn invalid_folds_and_exhausted_budgets_leave_state_unchanged() {
     );
     assert_eq!(no_folds, before_no_folds);
 
-    let mut one_action =
-        Paper::new(PaperSpec::new(4, 4, 1, 1, 1)).expect("one action should be valid");
-    one_action
-        .fold(Fold::new(FoldDirection::Left, 2))
-        .expect("the one allowed action should succeed");
-    let before_exhausted = one_action.clone();
+    let mut one_stroke =
+        Paper::new(PaperSpec::new(4, 4, 1, 1)).expect("one stroke should be valid");
+    one_stroke
+        .stamp_dot(coordinate(&one_stroke, 1, 1))
+        .expect("the one allowed stroke should succeed");
+    let before_exhausted = one_stroke.clone();
     assert_eq!(
-        one_action.stamp_dot(coordinate(&one_action, 1, 1)),
-        Err(PaperError::ActionBudgetExhausted {
-            limit: ActionCount::new(1).expect("one is valid"),
+        one_stroke.stamp_dot(coordinate(&one_stroke, 2, 2)),
+        Err(PaperError::StrokeBudgetExhausted {
+            limit: StrokeCount::new(1).expect("one is valid"),
         })
     );
-    assert_eq!(one_action, before_exhausted);
+    assert_eq!(one_stroke, before_exhausted);
 
     let mut odd_width = paper(5, 4);
     let before_odd_fold = odd_width.clone();

@@ -52,7 +52,7 @@
 
             meta = {
               description = manifest.package.description;
-              homepage = manifest.package.homepage;
+              homepage = manifest.package.repository;
               license = pkgs.lib.licenses.asl20;
               mainProgram = "orifude";
               platforms = systems;

@@ -1,8 +1,8 @@
 # Contributing to Orifude
 
 Orifude is a native Rust terminal game that works fully offline. The permanent
-default branch is `shrek`. The separate `orifude-front` repository contains the
-static website; the game has no accounts, telemetry, or hosted application service.
+default branch is `shrek`. The game has no accounts, telemetry, or hosted
+application service.
 
 ## Build and check
 
@@ -60,7 +60,8 @@ Storage -> saved completion, progress, and replay in one transaction
 
 Paper keeps a dense vector of at most 144 physical cells. Its row-major index
 is the stable cell identity; folds change position, layer, face, and orientation.
-Complete snapshots make undo straightforward within the 64-entry history limit.
+Complete snapshots make undo straightforward. History holds at most 20 entries,
+the combined fold and stroke limit.
 Failed actions must leave state unchanged.
 
 The solver retains exact state keys and parent records instead of full attempts.
@@ -68,8 +69,9 @@ It replays production actions to restore candidates and verify solutions.
 Generation has a versioned deterministic seed and a fixed attempt budget.
 Preserve daily-puzzle output across supported platforms.
 
-The event worker owns terminal polling. Its 256-entry queue preserves keys and
-coalesces ticks and resizes. One work manager owns and joins at most one
+The shell polls terminal input on the main thread and checks for a finished
+generation job before each poll, at least every 50 ms. Consecutive resizes
+collapse into one redraw. One work manager owns and joins at most one
 cancellable generation job. Terminal capabilities restore in reverse acquisition
 order, including failure paths. Release builds retain overflow checks and panic
 unwinding; expected I/O and validation failures return errors.

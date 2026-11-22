@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt;
 
 use crate::domain::paper::{
-    ActionCount, CellId, Coordinate, Dimensions, FoldAxis, FoldCount, FoldDirection, MAX_ACTIONS,
+    CellId, Coordinate, Dimensions, FoldAxis, FoldCount, FoldDirection, MAX_ACTIONS,
     MAX_BOARD_HEIGHT, MAX_BOARD_WIDTH, MAX_FOLD_ACTIONS, MAX_PHYSICAL_CELLS, MAX_STROKE_ACTIONS,
     MIN_BOARD_HEIGHT, MIN_BOARD_WIDTH, StrokeCount,
 };
@@ -30,7 +30,7 @@ pub enum PaperError {
     StrokeBudgetOutOfRange {
         value: u8,
     },
-    ActionBudgetOutOfRange {
+    ActionCountOutOfRange {
         value: u8,
     },
     CoordinateOutsidePaper {
@@ -65,9 +65,6 @@ pub enum PaperError {
     },
     StrokeBudgetExhausted {
         limit: StrokeCount,
-    },
-    ActionBudgetExhausted {
-        limit: ActionCount,
     },
     EmptyBrushPosition {
         coordinate: Coordinate,
@@ -110,8 +107,8 @@ impl fmt::Display for PaperError {
                 formatter,
                 "stroke budget {value} exceeds {MAX_STROKE_ACTIONS}"
             ),
-            Self::ActionBudgetOutOfRange { value } => {
-                write!(formatter, "action budget {value} exceeds {MAX_ACTIONS}")
+            Self::ActionCountOutOfRange { value } => {
+                write!(formatter, "action count {value} exceeds {MAX_ACTIONS}")
             }
             Self::CoordinateOutsidePaper {
                 row,
@@ -165,13 +162,6 @@ impl fmt::Display for PaperError {
                 "the brush-stroke budget of {} is exhausted",
                 limit.get()
             ),
-            Self::ActionBudgetExhausted { limit } => {
-                write!(
-                    formatter,
-                    "the action budget of {} is exhausted",
-                    limit.get()
-                )
-            }
             Self::EmptyBrushPosition { coordinate } => write!(
                 formatter,
                 "cannot stamp empty position ({}, {})",

@@ -7,8 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use crate::domain::attempt::Attempt;
 use crate::domain::paper::{
-    BrushRule, LineStroke, MAX_FOLD_ACTIONS, MAX_STROKE_ACTIONS, PaperAction, PaperStateKey,
-    PhysicalCell, StrokeAxis,
+    BrushRule, LineStroke, MAX_ACTIONS, PaperAction, PaperStateKey, PhysicalCell, StrokeAxis,
 };
 use crate::domain::puzzle::Puzzle;
 use crate::domain::replay::Replay;
@@ -16,7 +15,7 @@ use crate::domain::score::Score;
 
 pub const MAX_SOLVER_VISITED_STATES: usize = 250_000;
 pub const MAX_SOLVER_MEMORY_BYTES: usize = 128 * 1024 * 1024;
-pub const MAX_SOLVER_DEPTH: u8 = MAX_FOLD_ACTIONS + MAX_STROKE_ACTIONS;
+pub const MAX_SOLVER_DEPTH: u8 = MAX_ACTIONS;
 pub const MAX_CANDIDATE_ACTIONS: usize = 1_772;
 
 const RETAINED_STATE_MARGIN_BYTES: usize = 512;

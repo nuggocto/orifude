@@ -206,7 +206,7 @@ raw_args = true
 run = "cargo run --quiet --locked --release --example pack_release -- check"
 
 [tasks.pack-release-build]
-description = "Build a deterministic pack ZIP, checksum, and website record"
+description = "Build a deterministic pack ZIP, checksum, and release record"
 raw_args = true
 run = "cargo run --quiet --locked --release --example pack_release -- build"
 

@@ -406,7 +406,7 @@ pub fn generated(hashes: &BTreeMap<String, String>) -> Result<Files> {
     }
     let target = "x86_64-pc-windows-msvc";
     let project = project()?;
-    let scoop = json!({"version": version()?, "description": project["package"]["description"].as_str(), "homepage": project["package"]["homepage"].as_str(), "license": "Apache-2.0", "architecture": {"64bit": {"url": format!("{}/{}", base_url()?, name(target)?), "hash": hashes[&name(target)?]}}, "extract_dir": folder(target)?, "bin": "orifude.exe"});
+    let scoop = json!({"version": version()?, "description": project["package"]["description"].as_str(), "homepage": project["package"]["repository"].as_str(), "license": "Apache-2.0", "architecture": {"64bit": {"url": format!("{}/{}", base_url()?, name(target)?), "hash": hashes[&name(target)?]}}, "extract_dir": folder(target)?, "bin": "orifude.exe"});
     output.insert(
         "orifude.json".to_owned(),
         format!("{}\n", serde_json::to_string_pretty(&scoop)?).into_bytes(),

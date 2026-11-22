@@ -15,7 +15,9 @@ pub const MAX_BOARD_HEIGHT: u8 = 12;
 pub const MAX_PHYSICAL_CELLS: usize = 144;
 pub const MAX_FOLD_ACTIONS: u8 = 12;
 pub const MAX_STROKE_ACTIONS: u8 = 8;
-pub const MAX_ACTIONS: u8 = 64;
+/// Every successful action is a fold or a stroke, so the fold and stroke
+/// limits together bound history, replays, and solver depth.
+pub const MAX_ACTIONS: u8 = MAX_FOLD_ACTIONS + MAX_STROKE_ACTIONS;
 
 const INK_WORDS: usize = MAX_PHYSICAL_CELLS.div_ceil(u64::BITS as usize);
 
@@ -237,12 +239,12 @@ impl ActionCount {
     ///
     /// # Errors
     ///
-    /// Returns [`PaperError::ActionBudgetOutOfRange`] above the global limit.
+    /// Returns [`PaperError::ActionCountOutOfRange`] above the global limit.
     pub const fn new(value: u8) -> Result<Self, PaperError> {
         if value <= MAX_ACTIONS {
             Ok(Self(value))
         } else {
-            Err(PaperError::ActionBudgetOutOfRange { value })
+            Err(PaperError::ActionCountOutOfRange { value })
         }
     }
 
@@ -620,24 +622,16 @@ pub struct PaperSpec {
     height: u8,
     fold_budget: u8,
     stroke_budget: u8,
-    action_budget: u8,
 }
 
 impl PaperSpec {
     #[must_use]
-    pub const fn new(
-        width: u8,
-        height: u8,
-        fold_budget: u8,
-        stroke_budget: u8,
-        action_budget: u8,
-    ) -> Self {
+    pub const fn new(width: u8, height: u8, fold_budget: u8, stroke_budget: u8) -> Self {
         Self {
             width,
             height,
             fold_budget,
             stroke_budget,
-            action_budget,
         }
     }
 }

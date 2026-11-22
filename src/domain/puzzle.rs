@@ -39,9 +39,9 @@ pub struct PuzzleIdentity {
 
 /// Exact bounded gameplay definition used to bind saved replays.
 ///
-/// Display metadata is deliberately absent. Two puzzles have the same revision
-/// only when every field that can change legal actions or result evaluation is
-/// equal.
+/// Display metadata is deliberately absent. [`Puzzle`] stores its gameplay
+/// fields only here, so two puzzles have the same revision exactly when every
+/// field that can change legal actions or result evaluation is equal.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PuzzleRevision {
     dimensions: Dimensions,
@@ -51,18 +51,6 @@ pub struct PuzzleRevision {
     fold_budget: FoldCount,
     stroke_budget: StrokeCount,
     par: Option<Par>,
-}
-
-impl PuzzleRevision {
-    pub(crate) fn matches(&self, puzzle: &Puzzle) -> bool {
-        self.dimensions == puzzle.dimensions
-            && self.target == puzzle.target
-            && self.allowed_folds == puzzle.allowed_folds
-            && self.allowed_brushes == puzzle.allowed_brushes
-            && self.fold_budget == puzzle.fold_budget
-            && self.stroke_budget == puzzle.stroke_budget
-            && self.par == puzzle.par
-    }
 }
 
 impl PuzzleIdentity {
@@ -165,13 +153,7 @@ impl PuzzleSpec {
 pub struct Puzzle {
     format_version: u16,
     identity: PuzzleIdentity,
-    dimensions: Dimensions,
-    target: InkPattern,
-    allowed_folds: Box<[Fold]>,
-    allowed_brushes: Box<[BrushRule]>,
-    fold_budget: FoldCount,
-    stroke_budget: StrokeCount,
-    par: Option<Par>,
+    revision: PuzzleRevision,
 }
 
 impl Puzzle {
@@ -218,13 +200,15 @@ impl Puzzle {
         Ok(Self {
             format_version: spec.format_version,
             identity: spec.identity,
-            dimensions,
-            target,
-            allowed_folds: spec.allowed_folds.into_boxed_slice(),
-            allowed_brushes: spec.allowed_brushes.into_boxed_slice(),
-            fold_budget,
-            stroke_budget,
-            par: spec.par,
+            revision: PuzzleRevision {
+                dimensions,
+                target,
+                allowed_folds: spec.allowed_folds.into_boxed_slice(),
+                allowed_brushes: spec.allowed_brushes.into_boxed_slice(),
+                fold_budget,
+                stroke_budget,
+                par: spec.par,
+            },
         })
     }
 
@@ -240,51 +224,43 @@ impl Puzzle {
 
     #[must_use]
     pub const fn dimensions(&self) -> Dimensions {
-        self.dimensions
+        self.revision.dimensions
     }
 
     #[must_use]
     pub const fn target(&self) -> InkPattern {
-        self.target
+        self.revision.target
     }
 
     #[must_use]
     pub fn allowed_folds(&self) -> &[Fold] {
-        &self.allowed_folds
+        &self.revision.allowed_folds
     }
 
     #[must_use]
     pub fn allowed_brushes(&self) -> &[BrushRule] {
-        &self.allowed_brushes
+        &self.revision.allowed_brushes
     }
 
     #[must_use]
     pub const fn fold_budget(&self) -> FoldCount {
-        self.fold_budget
+        self.revision.fold_budget
     }
 
     #[must_use]
     pub const fn stroke_budget(&self) -> StrokeCount {
-        self.stroke_budget
+        self.revision.stroke_budget
     }
 
     #[must_use]
     pub const fn par(&self) -> Option<Par> {
-        self.par
+        self.revision.par
     }
 
     /// Returns the complete bounded gameplay revision for replay validation.
     #[must_use]
-    pub fn revision(&self) -> PuzzleRevision {
-        PuzzleRevision {
-            dimensions: self.dimensions,
-            target: self.target,
-            allowed_folds: self.allowed_folds.clone(),
-            allowed_brushes: self.allowed_brushes.clone(),
-            fold_budget: self.fold_budget,
-            stroke_budget: self.stroke_budget,
-            par: self.par,
-        }
+    pub const fn revision(&self) -> &PuzzleRevision {
+        &self.revision
     }
 
     /// Starts an attempt that owns a bounded copy of this validated puzzle.
@@ -299,11 +275,10 @@ impl Puzzle {
 
     pub(crate) fn paper_spec(&self) -> PaperSpec {
         PaperSpec::new(
-            self.dimensions.width().get(),
-            self.dimensions.height().get(),
-            self.fold_budget.get(),
-            self.stroke_budget.get(),
-            crate::domain::paper::MAX_ACTIONS,
+            self.revision.dimensions.width().get(),
+            self.revision.dimensions.height().get(),
+            self.revision.fold_budget.get(),
+            self.revision.stroke_budget.get(),
         )
     }
 }

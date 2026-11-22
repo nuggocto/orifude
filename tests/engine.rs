@@ -755,8 +755,8 @@ fn replay_rejects_a_revised_puzzle_under_the_same_identity() {
 
     let revised = fold_puzzle(4, 4, vec![left], 2);
 
-    assert_eq!(replay.metadata().puzzle_revision(), &original.revision());
-    assert_ne!(replay.metadata().puzzle_revision(), &revised.revision());
+    assert_eq!(replay.metadata().puzzle_revision(), original.revision());
+    assert_ne!(replay.metadata().puzzle_revision(), revised.revision());
     assert_eq!(
         replay.execute(&revised),
         Err(ReplayError::PuzzleRevisionMismatch)
@@ -782,7 +782,7 @@ fn replay_rejects_oversized_incompatible_and_foreign_data() {
     let incompatible = Replay::new(
         ReplayMetadata::new(
             puzzle.identity().clone(),
-            puzzle.revision(),
+            puzzle.revision().clone(),
             puzzle.format_version(),
             ENGINE_COMPATIBILITY_VERSION + 1,
         ),
@@ -802,7 +802,7 @@ fn replay_rejects_oversized_incompatible_and_foreign_data() {
     let foreign = Replay::new(
         ReplayMetadata::new(
             foreign_identity,
-            puzzle.revision(),
+            puzzle.revision().clone(),
             puzzle.format_version(),
             ENGINE_COMPATIBILITY_VERSION,
         ),
@@ -817,7 +817,7 @@ fn replay_rejects_oversized_incompatible_and_foreign_data() {
     let wrong_format = Replay::new(
         ReplayMetadata::new(
             puzzle.identity().clone(),
-            puzzle.revision(),
+            puzzle.revision().clone(),
             puzzle.format_version() + 1,
             ENGINE_COMPATIBILITY_VERSION,
         ),

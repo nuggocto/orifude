@@ -2,15 +2,14 @@
 
 use crate::domain::paper::{
     ActionCount, CellId, Coordinate, Dimensions, Face, Fold, FoldAxis, FoldCount, FoldDirection,
-    INK_WORDS, InkComparison, InkPattern, Layer, LineStroke, MAX_PHYSICAL_CELLS, Orientation,
-    PaperAction, PaperError, PaperSpec, PhysicalCell, StackView, StrokeCount,
+    INK_WORDS, InkComparison, InkPattern, Layer, LineStroke, MAX_ACTIONS, MAX_PHYSICAL_CELLS,
+    Orientation, PaperAction, PaperError, PaperSpec, PhysicalCell, StackView, StrokeCount,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct PaperBudget {
     folds: FoldCount,
     strokes: StrokeCount,
-    actions: ActionCount,
 }
 
 impl PaperBudget {
@@ -23,15 +22,7 @@ impl PaperBudget {
             Ok(strokes) => strokes,
             Err(error) => return Err(error),
         };
-        let actions = match ActionCount::new(spec.action_budget) {
-            Ok(actions) => actions,
-            Err(error) => return Err(error),
-        };
-        Ok(Self {
-            folds,
-            strokes,
-            actions,
-        })
+        Ok(Self { folds, strokes })
     }
 }
 
@@ -106,7 +97,7 @@ impl Paper {
             ink: InkPattern::empty(dimensions),
             fold_count: FoldCount(0),
             stroke_count: StrokeCount(0),
-            history: Vec::with_capacity(usize::from(budget.actions.get())),
+            history: Vec::with_capacity(usize::from(budget.folds.get() + budget.strokes.get())),
         };
         paper.assert_invariants();
         Ok(paper)
@@ -236,7 +227,6 @@ impl Paper {
     /// Panics if the canonical state violates cell conservation, identity, or
     /// total layer order. Public actions preserve those invariants.
     pub fn fold(&mut self, fold: Fold) -> Result<(), PaperError> {
-        self.assert_invariants();
         let axis = fold.direction.axis();
         let extent = match axis {
             FoldAxis::Vertical => self.dimensions.width.get(),
@@ -312,7 +302,6 @@ impl Paper {
     /// Panics if the canonical state violates cell conservation, identity, or
     /// total layer order. Public actions preserve those invariants.
     pub fn stamp_dot(&mut self, coordinate: Coordinate) -> Result<(), PaperError> {
-        self.assert_invariants();
         self.dimensions.validate_coordinate(coordinate)?;
         self.validate_stroke_budget()?;
 
@@ -339,7 +328,6 @@ impl Paper {
     /// diagonal, shorter than two cells, outside the paper, crosses an empty
     /// position, or exceeds a budget.
     pub fn stamp_line(&mut self, line: LineStroke) -> Result<(), PaperError> {
-        self.assert_invariants();
         self.dimensions.validate_coordinate(line.start)?;
         self.dimensions.validate_coordinate(line.end)?;
         self.validate_stroke_budget()?;
@@ -397,7 +385,6 @@ impl Paper {
     /// Panics if the canonical state or a stored snapshot violates cell
     /// conservation, identity, or total layer order.
     pub fn undo(&mut self) -> Result<(), PaperError> {
-        self.assert_invariants();
         let Some(entry) = self.history.pop() else {
             return Err(PaperError::NothingToUndo);
         };
@@ -439,7 +426,7 @@ impl Paper {
                 limit: self.budget.folds,
             });
         }
-        self.validate_action_budget()
+        Ok(())
     }
 
     fn validate_stroke_budget(&self) -> Result<(), PaperError> {
@@ -448,20 +435,11 @@ impl Paper {
                 limit: self.budget.strokes,
             });
         }
-        self.validate_action_budget()
-    }
-
-    fn validate_action_budget(&self) -> Result<(), PaperError> {
-        if self.action_count() >= self.budget.actions {
-            return Err(PaperError::ActionBudgetExhausted {
-                limit: self.budget.actions,
-            });
-        }
         Ok(())
     }
 
     fn remember(&mut self, action: PaperAction) {
-        assert!(self.history.len() < usize::from(self.budget.actions.get()));
+        assert!(self.history.len() < usize::from(MAX_ACTIONS));
         self.history.push(HistoryEntry {
             before: Snapshot {
                 cells: self.cells.clone(),
@@ -478,7 +456,6 @@ impl Paper {
         assert!(self.cells.len() <= MAX_PHYSICAL_CELLS);
         assert!(self.fold_count <= self.budget.folds);
         assert!(self.stroke_count <= self.budget.strokes);
-        assert!(self.action_count() <= self.budget.actions);
         assert_eq!(
             self.fold_count.get() + self.stroke_count.get(),
             self.action_count().get()

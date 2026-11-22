@@ -150,7 +150,7 @@ and [domain types](../src/domain/puzzle.rs) enforce these limits before play:
 | Authors | 16 entries, 80 Unicode scalar values each |
 | Tutorial cues | 16 entries, 512 Unicode scalar values each |
 | SPDX license expression | 128 bytes |
-| Recorded solution | 64 actions, subject to the puzzle's fold and stroke budgets |
+| Recorded solution | 20 actions, subject to the puzzle's fold and stroke budgets |
 
 Required display text must contain a non-whitespace character. Text fields and
 notes reject control characters. The validator reports at most 32 issues at once;
@@ -207,9 +207,11 @@ compatible with the existing `1.0.0` game and need no application update.
 
 ## Download and install a published pack
 
-The [landing page](https://orifude.com/#puzzle-packs) links reviewed ZIPs and their
-SHA-256 checksum files. Download the named pack ZIP, not GitHub's automatic
-source-code archive, and verify the ZIP before installing it:
+Reviewed packs are GitHub releases whose tags start with `pack-`, for example
+[`pack-paper-garden-v1.0.0`](https://github.com/nuggocto/orifude/releases/tag/pack-paper-garden-v1.0.0).
+Each one has the pack ZIP and its SHA-256 checksum file. Download the named pack
+ZIP, not GitHub's automatic source-code archive, and verify the ZIP before
+installing it:
 
 ```console
 sha256sum --check SHA256SUMS
@@ -240,8 +242,8 @@ a local proposal in a new directory:
 mise run pack-release-build -- community/paper-garden/1.0.0 1.0.0 target/paper-garden-proposal
 ```
 
-The proposal contains a deterministic ZIP, `SHA256SUMS`, and `pack.json` for the
-website. The builder verifies the archive fingerprint against the source and
+The proposal contains a deterministic ZIP, `SHA256SUMS`, and a `pack.json`
+release record. The builder verifies the archive fingerprint against the source and
 solves every puzzle before writing the proposal. The catalog accepts at most
 128 versions; each pack retains the game's existing limits.
 
@@ -256,9 +258,9 @@ release. Existing tags and assets are not overwritten.
 
 If publication fails, inspect the failed run and any draft before proceeding.
 A draft can be removed after inspection; a published immutable release needs a
-new pack version for corrections. Update the website only after verifying the
-public ZIP, checksum, and a local install. Copy its `pack.json` data into the
-reviewed website catalog and record the source commit and release evidence.
+new pack version for corrections. After publication, verify the public ZIP,
+checksum, and a local install, then record the source commit and release
+evidence in the pack review.
 
 Include the full redistribution license and required attribution in the pack,
 using a declared puzzle's `notes/PUZZLE-ID.txt` file. The example's

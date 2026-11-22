@@ -1,19 +1,22 @@
 use orifude::domain::attempt::Attempt;
 use orifude::domain::paper::{
-    BrushRule, Fold, FoldDirection, LineStroke, MAX_ACTIONS, MAX_PHYSICAL_CELLS, PaperAction,
-    StackView, StrokeAxis,
+    BrushRule, Fold, FoldDirection, LineStroke, MAX_PHYSICAL_CELLS, PaperAction, StackView,
+    StrokeAxis,
 };
 use orifude::domain::puzzle::{Puzzle, PuzzleIdentity, PuzzleSpec};
 use orifude::domain::replay::Replay;
 
-pub const MAX_FUZZ_INPUT_BYTES: usize = MAX_ACTIONS as usize * 4;
+// More records than the game's action limit, so inputs keep trying actions
+// after the budgets run out and exercise the rejection paths.
+const MAX_FUZZ_RECORDS: usize = 64;
+pub const MAX_FUZZ_INPUT_BYTES: usize = MAX_FUZZ_RECORDS * 4;
 
 pub fn exercise(input: &[u8]) {
     assert!(input.len() <= MAX_FUZZ_INPUT_BYTES);
     let puzzle = fuzz_puzzle();
     let mut attempt = puzzle.start();
 
-    for bytes in input.chunks(4).take(usize::from(MAX_ACTIONS)) {
+    for bytes in input.chunks(4).take(MAX_FUZZ_RECORDS) {
         let opcode = bytes[0] % 9;
         let first = bytes.get(1).copied().unwrap_or(0);
         let second = bytes.get(2).copied().unwrap_or(0);

@@ -37,7 +37,7 @@ impl ReplayMetadata {
     pub fn current(puzzle: &Puzzle) -> Self {
         Self::new(
             puzzle.identity().clone(),
-            puzzle.revision(),
+            puzzle.revision().clone(),
             puzzle.format_version(),
             ENGINE_COMPATIBILITY_VERSION,
         )
@@ -141,7 +141,7 @@ impl Replay {
         if self.metadata.puzzle != *puzzle.identity() {
             return Err(ReplayError::PuzzleIdentityMismatch);
         }
-        if !self.metadata.puzzle_revision.matches(puzzle) {
+        if self.metadata.puzzle_revision != *puzzle.revision() {
             return Err(ReplayError::PuzzleRevisionMismatch);
         }
         Ok(())

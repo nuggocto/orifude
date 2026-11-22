@@ -79,7 +79,7 @@ impl Installer {
             "installer fixture did not inherit the restricted client policy",
         )
     }
-    /// Pipes the served installer into the shell the way the website's commands do.
+    /// Pipes the served installer into the shell the way the README's command does.
     /// `cut` serves only that prefix, then fails the transfer.
     fn piped(&self, server: &Https, script: &str, cut: Option<usize>) -> Result<bool> {
         let name = if self.windows {

@@ -117,7 +117,7 @@ struct CompletionNotice {
 
 impl Drop for CompletionNotice {
     fn drop(&mut self) {
-        let _notification = self.notifier.work_ready(self.id);
+        self.notifier.work_ready(self.id);
     }
 }
 
@@ -143,7 +143,7 @@ mod tests {
         let mut work = WorkManager::new();
         let id = work
             .start(
-                EventNotifier::isolated(),
+                EventNotifier::channel().0,
                 "orifude-endless",
                 GenerationSeed::current(7),
             )
@@ -156,7 +156,7 @@ mod tests {
 
         let second = work
             .start(
-                EventNotifier::isolated(),
+                EventNotifier::channel().0,
                 "orifude-endless",
                 GenerationSeed::current(8),
             )
@@ -166,16 +166,13 @@ mod tests {
 
     #[test]
     fn a_panicking_job_still_notifies_and_reports_the_panic() {
-        let notifier = EventNotifier::isolated();
+        let (notifier, ready) = EventNotifier::channel();
         let mut work = WorkManager::new();
         let id = work
             .spawn(notifier.clone(), |_| panic!("injected generator failure"))
             .expect("job starts");
 
-        assert_eq!(
-            notifier.wait_for_work_ready(Duration::from_secs(10)),
-            Some(id)
-        );
+        assert_eq!(ready.recv_timeout(Duration::from_secs(10)), Ok(id));
         assert_eq!(work.finish(id), Err(WorkError::WorkerPanicked));
         assert!(
             work.start(notifier, "orifude-endless", GenerationSeed::current(7))
@@ -189,7 +186,7 @@ mod tests {
         let mut work = WorkManager::new();
         let id = work
             .start(
-                EventNotifier::isolated(),
+                EventNotifier::channel().0,
                 "orifude-endless",
                 GenerationSeed::current(9),
             )

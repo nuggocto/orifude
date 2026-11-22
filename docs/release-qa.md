@@ -10,7 +10,7 @@ The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.2)
 uses signed source commit [6a69c68](https://github.com/nuggocto/orifude/commit/6a69c6805bf35dd17532f6a2760ce9fbb997677a)
 and a verified signed annotated tag. Both installers are now safe to pipe: the
 POSIX body is one `main` function called on the last line, and the PowerShell
-body is one script block. orifude.com serves exact copies of the 1.1.2 scripts.
+body is one script block.
 The release also carries the unreleased simplifications and the ZIP dependency
 update. Save schemas, content formats, and generator compatibility are unchanged.
 The [coverage limitations below](#coverage-and-limitations) still apply.
@@ -21,7 +21,6 @@ The [coverage limitations below](#coverage-and-limitations) still apply.
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/40598040170) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/40598928739) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/40597882219) passed, including installed-player checks on Linux x86_64 and ARM64. `nix run github:nuggocto/orifude/v1.1.2 -- --version` reported 1.1.2 in a fresh Nix container. |
-| Website | [Frontend 2e36589](https://github.com/nuggocto/orifude-front/commit/2e365898cf581e586b964a69d318cdd10e5300a8) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/40600263268), including 39 Linux and 26 Windows browser cases and Windows PowerShell 5.1 `irm | iex` runs under the Restricted policy. The first run failed because the Windows checkout converted `install.sh` to CRLF; the repository now marks both installers `-text`. Cloudflare deployment succeeded. Both live scripts match the release hashes and are served as `text/plain`. `curl -fsS https://orifude.com/install.sh \| sh` installed and reinstalled 1.1.2 as an unprivileged user in a disposable Arch container and produced the exact musl executable below. |
 
 Publication compared all eight draft assets with the candidate. The publisher's
 first `gh release verify` ran before GitHub had created the release attestation
@@ -70,7 +69,6 @@ became a direct dependency at the version already in the tree. The
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/36918002797) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/36918655073) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/36917877941) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.1.1 in the pinned Nix container and resolved to the release commit. |
-| Website | [Frontend 6e693f4](https://github.com/nuggocto/orifude-front/commit/6e693f459552604f0b6fa923f9105fe9a1e39887) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/36919264278), including 39 Linux and 26 Windows browser cases. Cloudflare deployment succeeded. |
 
 Publication compared all eight draft assets with the candidate and verified the
 release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.1.1/SHA256SUMS)
@@ -105,14 +103,6 @@ processes had p95 between 20.806 and 28.952 ms. All configured budgets passed.
 These warm-filesystem measurements share the limits recorded for 1.1.0. Results
 remain in `target/release-measurement-1.1.1`.
 
-Live production checks verified all four routes, the new version and both
-changelog bullets, security headers, eight exact clipboard pastes, and layouts
-without horizontal scrolling at 1440, 390, and 320 pixels, and the landing and
-installation pages worked with JavaScript disabled. The production-copied POSIX
-command installed and reinstalled 1.1.1 as an unprivileged user in a disposable
-Arch container, preserved a saved-data sentinel, removed temporary files, and
-produced the exact musl executable above.
-
 ## 1.1.0 publication decision on 2026-10-01
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.0)
@@ -132,7 +122,6 @@ still apply.
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/36897653877) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/36898453785) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/36897504188) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.1.0 in the pinned Nix container and resolved to the release commit. |
-| Website | [Frontend 0d620a9](https://github.com/nuggocto/orifude-front/commit/0d620a94d99481bec6aa3b7437bc6d364ea5c441) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/36909338757), including 39 Linux and 26 Windows browser cases. Cloudflare deployment succeeded. |
 
 The first CI run for the release commit waited behind the superseded run for its
 parent commit, which was cancelled; the release commit's own run passed every job.
@@ -179,24 +168,6 @@ waited for the home title that 1.1.0 replaced; commit
 title, and the measurement then completed. Results remain in
 `target/release-measurement-1.1.0`.
 
-The website publishes the 1.1.0 record in
-[2a3959c](https://github.com/nuggocto/orifude-front/commit/2a3959c017ec50ab00b893d48fd05221fe9ea1fc)
-and a terminal still recaptured from the published 1.1.0 binary in
-[24f60ce](https://github.com/nuggocto/orifude-front/commit/24f60ce339bb170728eb3bf687422384babd0dc3).
-Its Linux browser job first ran out of time three times while an Ubuntu mirror
-served browser system packages at about 70 KB/s; tests that had started all
-passed. The job now runs in Microsoft's Playwright image pinned by digest, and the
-same 39 cases passed in that image locally as an unprivileged user.
-
-Live production checks verified all four routes, the new version and all eleven
-changelog bullets, security headers, eight exact clipboard pastes, and layouts
-without horizontal scrolling at 1440, 390, and 320 pixels. The installation page
-and landing page worked with JavaScript disabled.
-
-The production-copied POSIX command installed and reinstalled 1.1.0 as an
-unprivileged user in a disposable Arch container. It preserved a saved-data
-sentinel, removed temporary files, and produced the exact musl executable above.
-
 ## 1.0.4 publication decision on 2026-09-15
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.4)
@@ -213,7 +184,6 @@ generator compatibility, and dependency versions are unchanged. The
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34991803353) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34992694636) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/34991646087) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation reported 1.0.4 in the pinned Nix container and resolved to the release commit. |
-| Website | [Frontend 7c41fad](https://github.com/nuggocto/orifude-front/commit/7c41fadc73c21338ad5b2e98f58c3311b6ff73c2) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34993780147), including 39 Linux and 26 Windows browser cases. Cloudflare deployment succeeded. |
 
 The first candidate Intel macOS installation job failed during toolchain setup:
 the runner's rustup process exited with SIGILL before any project code ran. The
@@ -269,20 +239,6 @@ packaged musl binary; solver and storage helpers used the local GNU release buil
 Commands, environment details, raw samples, and results remain in
 `target/release-measurement-1.0.4`; validation logs are under `target/`.
 
-Live checks of [deployment e0b34107](https://e0b34107.orifude-front.pages.dev)
-and production verified all four routes, the new version and every changelog
-bullet, security headers, eight exact clipboard pastes, and installation layout
-at 1440, 390, and 320 pixels. Preview routes retained noindex, and the pages worked
-with JavaScript disabled. Local Chromium and Firefox checks passed all 26 cases;
-hosted Linux CI also covered WebKit.
-
-The production-copied POSIX command installed and reinstalled 1.0.4 as an
-unprivileged user in a disposable Arch container. It preserved a saved-data
-sentinel, removed temporary files, and produced the exact musl executable above.
-Frontend captures and checks remain under its ignored `.preview/release-1.0.4/`
-directory. The release record pins the canonical changelog to the signed native
-release commit and advertises only the six verified installation channels.
-
 ## 1.0.3 publication decision on 2026-09-12
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.3)
@@ -299,7 +255,6 @@ still apply.
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34705122298) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34705496315) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
 | Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/34705072050) passed, including installed-player checks on Linux x86_64 and ARM64. Public tagged-flake run and fresh-profile installation commands also reported 1.0.3 in the pinned Nix container. |
-| Website | [Frontend 949c395](https://github.com/nuggocto/orifude-front/commit/949c395f1ebe7c0b4478618d7f6793e74e10bd1b) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34706049591), including 39 Linux and 26 Windows browser cases and native launcher fixtures. Cloudflare deployment succeeded. |
 
 Publication compared all eight draft assets with the candidate and verified the
 release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.3/SHA256SUMS)
@@ -339,21 +294,6 @@ over 1.0.2. Player timing used the packaged musl binary; solver and storage help
 used the local GNU release build. Exact commands, environment details, raw samples,
 and results remain in `target/release-measurement-1.0.3`.
 
-Live checks of [deployment 1f2cde51](https://1f2cde51.orifude-front.pages.dev)
-and production verified all four routes, current release notes, security headers,
-eight exact clipboard pastes, and installation layout at 1440, 390, and 320 pixels.
-Preview routes retained noindex, and the pages worked with JavaScript disabled.
-The production-copied POSIX command installed and reinstalled 1.0.3 in a disposable
-Arch container, preserved a saved-data sentinel, cleaned its temporary files, and
-produced the exact musl executable above. Frontend captures and checks remain
-under its ignored `.preview/release-1.0.3/` directory.
-
-Local WebKit verification required the matching Playwright container because
-the desktop lacked browser libraries. Initial container runs hit its 512-process
-limit; all thirteen unchanged cases passed with a 2,048-process limit, 1 GiB
-shared memory, and the pinned Node 24.19.0 binary. Hosted browser checks passed
-without those local environment adjustments.
-
 ## 1.0.2 publication decision on 2026-09-11
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.0.2)
@@ -369,7 +309,6 @@ Save schemas and Cargo dependencies are unchanged. The
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34605479565) verified public downloads, installed bytes, play, save, restart, and replay. |
 | Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/34606186147) passed for both Homebrew architectures, Scoop, and x86_64 AUR. |
 | Nix | [Tag CI](https://github.com/nuggocto/orifude/actions/runs/34605393560) passed both native Linux flake checks and the other seven CI jobs. The public tagged flake also passed local installation and player checks. |
-| Website | [Frontend 3d653d2](https://github.com/nuggocto/orifude-front/commit/3d653d2523d9659ec6641632ee58ec9ad37c4ef8) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34607263711), including 39 Linux and 26 Windows browser cases and native launcher fixtures. |
 
 Publication compared all eight draft assets with the candidate and verified the
 release and every asset attestation. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.2/SHA256SUMS)
@@ -404,15 +343,6 @@ its installed-player journey after copying the production executable, keeping
 test-only features out of the installed game. NixOS configuration evaluation
 accepted the package; a complete NixOS system was not booted for this release.
 
-Live checks of [deployment 7ef1c694](https://7ef1c694.orifude-front.pages.dev)
-and production verified all four routes, current release text, CSP, eight exact
-clipboard pastes, and installation layout at 1440, 390, and 320 pixels. Preview
-routes retained noindex and worked with JavaScript disabled. The production-copied
-POSIX command installed and reinstalled 1.0.2 inside a disposable container,
-preserved a saved-data sentinel, cleaned its temporary files, and produced the
-exact musl executable above. Frontend captures remain under its ignored
-`.preview/release-1.0.2/` directory.
-
 ## 1.0.1 publication decision on 2026-09-08
 
 Shipped with the [coverage limitations below](#coverage-and-limitations).
@@ -425,20 +355,11 @@ uses signed source commit [4800168](https://github.com/nuggocto/orifude/commit/4
 | Native checks | [Seven CI jobs](https://github.com/nuggocto/orifude/actions/runs/34268188969), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/34268188948), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/34268188806) passed. |
 | Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/34269489611) checked installed bytes, play, save, restart, and replay. |
 | Public packages | [Four journeys](https://github.com/nuggocto/orifude/actions/runs/34270233779) passed for both Homebrew architectures, Scoop, and x86_64 AUR. |
-| Website | [Frontend 9c5daca](https://github.com/nuggocto/orifude-front/commit/9c5dacac4cf042acd60f7e9e03d6d252858cec9c) passed [hosted checks](https://github.com/nuggocto/orifude-front/actions/runs/34271138988), including 39 Linux and 26 Windows browser cases and native launcher fixtures. |
 
 Publication compared every draft asset with the candidate and verified the
 release and all eight asset attestations. [SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.0.1/SHA256SUMS)
 contains the archive hashes. The PowerShell script SHA-256 is
 `c0879a523df2bab1102359784431015da15d85aa08c50749504f7947d33c87e8`.
-
-Live checks of [deployment 4e84316b](https://4e84316b.orifude-front.pages.dev)
-and production covered all four routes, CSP, seven exact clipboard pastes, and
-expanded installation instructions at 1440, 390, and 320 pixels. The
-production-copied POSIX command installed and reinstalled 1.0.1 in private paths,
-preserving a test profile and saved-data sentinel and removing temporary files.
-Its executable matched the verified archive. Local captures and results remain
-under the frontend's ignored `.preview/cleanup/` directory.
 
 <a id="current-publication-decision-on-2026-09-07"></a>
 
@@ -486,12 +407,6 @@ play did not record OS versions or artifact hashes. Native PTY and ConPTY tests
 provide repeatable process and terminal-protocol coverage, not GUI inspection.
 ARM64 AUR assembly and native ARM64 binary play are separate from public x86_64
 AUR installation.
-
-Frontend automation runs Chromium, Firefox, and WebKit on Linux, and Chromium
-and Firefox on Windows. Windows WebKit clipboard and link-focus behavior excludes
-that automation target; Linux WebKit is not native Safari or iPhone certification.
-The owner accepted the blocked Cloudflare 404 injection and waived the `www`
-redirect. Automated accessibility checks do not establish full conformance.
 
 ## Repeatable checks and budgets
 

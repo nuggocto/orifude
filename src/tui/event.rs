@@ -1,15 +1,10 @@
-use std::collections::VecDeque;
 use std::fmt;
 use std::io;
-use std::panic::{self, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex, mpsc};
-use std::thread::{self, JoinHandle};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 
-pub(crate) const EVENT_QUEUE_CAPACITY: usize = 256;
 const ACTIVE_TICK_INTERVAL: Duration = Duration::from_nanos(33_333_334);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const SIZE_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -23,38 +18,17 @@ pub(crate) enum RuntimeEvent {
     WorkReady(u64),
 }
 
-impl RuntimeEvent {
-    fn can_coalesce(self) -> bool {
-        matches!(self, Self::Resize(..) | Self::Tick(..))
-    }
-
-    fn same_coalescing_class(self, other: Self) -> bool {
-        matches!(
-            (self, other),
-            (Self::Resize(..), Self::Resize(..)) | (Self::Tick(..), Self::Tick(..))
-        )
-    }
-}
-
 #[derive(Debug)]
-/// A terminal input worker or bounded queue failure.
+/// A terminal input failure.
 pub enum EventError {
     /// The operating system terminal input call failed.
     Io(io::Error),
-    /// The synchronized queue was poisoned or stopped accepting work.
-    QueueUnavailable,
-    /// The owned event worker panicked and was joined.
-    WorkerPanicked,
 }
 
 impl fmt::Display for EventError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => write!(formatter, "terminal input failed: {error}"),
-            Self::QueueUnavailable => {
-                formatter.write_str("terminal input queue became unavailable")
-            }
-            Self::WorkerPanicked => formatter.write_str("terminal input worker panicked"),
         }
     }
 }
@@ -63,349 +37,172 @@ impl std::error::Error for EventError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
-            Self::QueueUnavailable | Self::WorkerPanicked => None,
         }
     }
 }
 
-struct QueueState {
-    events: VecDeque<RuntimeEvent>,
-    work_ready: Option<u64>,
-    /// Counts entries into the full-queue wait so tests can act only after a
-    /// sender is actually blocked.
-    #[cfg(test)]
-    full_waits: usize,
-}
-
-impl QueueState {
-    fn new() -> Self {
-        Self {
-            events: VecDeque::with_capacity(EVENT_QUEUE_CAPACITY),
-            work_ready: None,
-            #[cfg(test)]
-            full_waits: 0,
-        }
-    }
-
-    fn coalesce(&mut self, event: RuntimeEvent) -> bool {
-        if !event.can_coalesce() {
-            return false;
-        }
-
-        if let Some(existing) = self
-            .events
-            .iter_mut()
-            .find(|existing| existing.same_coalescing_class(event))
-        {
-            *existing = event;
-            true
-        } else {
-            false
-        }
-    }
-}
-
-struct SharedQueue {
-    state: Mutex<QueueState>,
-    not_empty: Condvar,
-    not_full: Condvar,
-    #[cfg(test)]
-    sender_waiting: Condvar,
-    shutdown: AtomicBool,
-    animation_active: AtomicBool,
-}
-
-impl SharedQueue {
-    fn new() -> Self {
-        Self {
-            state: Mutex::new(QueueState::new()),
-            not_empty: Condvar::new(),
-            not_full: Condvar::new(),
-            #[cfg(test)]
-            sender_waiting: Condvar::new(),
-            shutdown: AtomicBool::new(false),
-            animation_active: AtomicBool::new(false),
-        }
-    }
-
-    fn send(&self, event: RuntimeEvent) -> Result<(), EventError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| EventError::QueueUnavailable)?;
-
-        if state.coalesce(event) {
-            self.not_empty.notify_one();
-            return Ok(());
-        }
-
-        while state.events.len() == EVENT_QUEUE_CAPACITY && !self.shutdown.load(Ordering::Acquire) {
-            #[cfg(test)]
-            {
-                state.full_waits += 1;
-                self.sender_waiting.notify_all();
-            }
-            state = self
-                .not_full
-                .wait(state)
-                .map_err(|_| EventError::QueueUnavailable)?;
-            if state.coalesce(event) {
-                self.not_empty.notify_one();
-                return Ok(());
-            }
-        }
-
-        if self.shutdown.load(Ordering::Acquire) {
-            return Err(EventError::QueueUnavailable);
-        }
-
-        debug_assert!(state.events.len() < EVENT_QUEUE_CAPACITY);
-        state.events.push_back(event);
-        self.not_empty.notify_one();
-        Ok(())
-    }
-
-    fn receive(&self) -> Result<Option<RuntimeEvent>, EventError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| EventError::QueueUnavailable)?;
-
-        while state.events.is_empty()
-            && state.work_ready.is_none()
-            && !self.shutdown.load(Ordering::Acquire)
-        {
-            state = self
-                .not_empty
-                .wait(state)
-                .map_err(|_| EventError::QueueUnavailable)?;
-        }
-
-        let event = state
-            .work_ready
-            .take()
-            .map(RuntimeEvent::WorkReady)
-            .or_else(|| state.events.pop_front());
-        if event.is_some() {
-            self.not_full.notify_one();
-        }
-        Ok(event)
-    }
-
-    fn notify_work_ready(&self, job_id: u64) -> Result<(), EventError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| EventError::QueueUnavailable)?;
-        if self.shutdown.load(Ordering::Acquire) {
-            return Err(EventError::QueueUnavailable);
-        }
-        state.work_ready = Some(job_id);
-        self.not_empty.notify_one();
-        Ok(())
-    }
-
-    fn begin_shutdown(&self) {
-        // Serialize the predicate change with checking it and entering either wait.
-        // Even a poisoned queue must wake its waiters so they can report failure.
-        let _state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        self.shutdown.store(true, Ordering::Release);
-        self.not_empty.notify_all();
-        self.not_full.notify_all();
-    }
-}
-
+/// Reads terminal input on the calling thread and merges in finished
+/// generation jobs, animation ticks, and periodic size checks.
+///
+/// The idle poll interval bounds how long a finished job waits to be seen.
 pub(crate) struct EventPump {
-    shared: Arc<SharedQueue>,
-    failure: Arc<Mutex<Option<EventError>>>,
-    worker: Option<JoinHandle<()>>,
+    work_sender: Sender<u64>,
+    work_ready: Receiver<u64>,
+    pending: Option<RuntimeEvent>,
+    schedule: Schedule,
 }
 
+/// Wakes the shell when a generation job ends.
 #[derive(Clone)]
 pub(crate) struct EventNotifier {
-    shared: Arc<SharedQueue>,
+    sender: Sender<u64>,
 }
 
 impl EventNotifier {
-    pub(crate) fn work_ready(&self, job_id: u64) -> Result<(), EventError> {
-        self.shared.notify_work_ready(job_id)
+    pub(crate) fn work_ready(&self, job_id: u64) {
+        // A closed receiver means the shell has stopped; nothing is left to wake.
+        let _closed = self.sender.send(job_id);
     }
 
     #[cfg(test)]
-    pub(crate) fn isolated() -> Self {
-        Self {
-            shared: Arc::new(SharedQueue::new()),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn wait_for_work_ready(&self, timeout: Duration) -> Option<u64> {
-        let state = self.shared.state.lock().ok()?;
-        let (mut state, _) = self
-            .shared
-            .not_empty
-            .wait_timeout_while(state, timeout, |state| state.work_ready.is_none())
-            .ok()?;
-        state.work_ready.take()
+    pub(crate) fn channel() -> (Self, Receiver<u64>) {
+        let (sender, receiver) = mpsc::channel();
+        (Self { sender }, receiver)
     }
 }
 
 impl EventPump {
     pub(crate) fn start() -> Result<Self, EventError> {
-        let shared = Arc::new(SharedQueue::new());
-        let failure = Arc::new(Mutex::new(None));
-        let (ready_sender, ready_receiver) = mpsc::sync_channel(0);
-        let worker_shared = Arc::clone(&shared);
-        let worker_failure = Arc::clone(&failure);
-        let worker = thread::Builder::new()
-            .name("orifude-terminal-events".to_owned())
-            .spawn(move || {
-                match panic::catch_unwind(AssertUnwindSafe(|| {
-                    // The first poll installs Crossterm's resize source. Keep
-                    // initialization and every later poll/read on this worker.
-                    match event::poll(Duration::ZERO) {
-                        Ok(_) => ready_sender
-                            .send(Ok(()))
-                            .map_err(|_| EventError::QueueUnavailable)?,
-                        Err(error) => {
-                            ready_sender
-                                .send(Err(error))
-                                .map_err(|_| EventError::QueueUnavailable)?;
-                            return Ok(());
-                        }
-                    }
-                    run_event_worker(&worker_shared)
-                })) {
-                    Ok(Ok(())) => {}
-                    Ok(Err(error)) => record_failure(&worker_failure, error),
-                    Err(_panic) => record_failure(&worker_failure, EventError::WorkerPanicked),
-                }
-                worker_shared.begin_shutdown();
-            })
-            .map_err(EventError::Io)?;
-
-        match ready_receiver.recv() {
-            Ok(Ok(())) => Ok(Self {
-                shared,
-                failure,
-                worker: Some(worker),
-            }),
-            Ok(Err(error)) => {
-                shared.begin_shutdown();
-                let _ = worker.join();
-                Err(EventError::Io(error))
-            }
-            Err(_) => {
-                shared.begin_shutdown();
-                let _ = worker.join();
-                let error = failure
-                    .lock()
-                    .map_err(|_| EventError::QueueUnavailable)?
-                    .take()
-                    .unwrap_or(EventError::WorkerPanicked);
-                Err(error)
-            }
-        }
-    }
-
-    pub(crate) fn next(&self) -> Result<Option<RuntimeEvent>, EventError> {
-        let event = self.shared.receive()?;
-        if let Some(error) = self
-            .failure
-            .lock()
-            .map_err(|_| EventError::QueueUnavailable)?
-            .take()
-        {
-            return Err(error);
-        }
-        Ok(event)
+        // The first poll installs Crossterm's resize source. Fail before play
+        // starts if the terminal cannot report input.
+        event::poll(Duration::ZERO).map_err(EventError::Io)?;
+        let size = crossterm::terminal::size().map_err(EventError::Io)?;
+        let (work_sender, work_ready) = mpsc::channel();
+        Ok(Self {
+            work_sender,
+            work_ready,
+            pending: None,
+            schedule: Schedule::new(Instant::now(), size),
+        })
     }
 
     pub(crate) fn notifier(&self) -> EventNotifier {
         EventNotifier {
-            shared: Arc::clone(&self.shared),
+            sender: self.work_sender.clone(),
         }
     }
 
-    pub(crate) fn set_animation_active(&self, active: bool) {
-        self.shared
-            .animation_active
-            .store(active, Ordering::Release);
+    pub(crate) fn set_animation_active(&mut self, active: bool) {
+        self.schedule.set_animation_active(active, Instant::now());
     }
 
-    pub(crate) fn shutdown(&mut self) -> Result<(), EventError> {
-        self.shared.begin_shutdown();
-        let Some(worker) = self.worker.take() else {
-            return Ok(());
-        };
-        worker.join().map_err(|_| EventError::WorkerPanicked)
-    }
-}
+    /// Blocks until the next event. A finished job comes before pending
+    /// input, so a generated paper never waits behind a burst of keys.
+    pub(crate) fn next(&mut self) -> Result<RuntimeEvent, EventError> {
+        loop {
+            if let Ok(job_id) = self.work_ready.try_recv() {
+                return Ok(RuntimeEvent::WorkReady(job_id));
+            }
+            if let Some(event) = self.pending.take() {
+                return Ok(event);
+            }
 
-impl Drop for EventPump {
-    fn drop(&mut self) {
-        self.shared.begin_shutdown();
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
+            let timeout = self.schedule.timeout(Instant::now());
+            if event::poll(timeout).map_err(EventError::Io)?
+                && let Some(event) = translate_event(&event::read().map_err(EventError::Io)?)
+            {
+                return self.coalesce_resizes(event);
+            }
+
+            let now = Instant::now();
+            if self.schedule.size_check_due(now) {
+                let size = crossterm::terminal::size().map_err(EventError::Io)?;
+                if let Some(event) = self.schedule.observe_size(size, now) {
+                    return Ok(event);
+                }
+            }
+            if let Some(event) = self.schedule.tick_due(now) {
+                return Ok(event);
+            }
         }
     }
-}
 
-fn record_failure(failure: &Mutex<Option<EventError>>, error: EventError) {
-    if let Ok(mut failure) = failure.lock() {
-        *failure = Some(error);
+    /// Replaces a run of resize events with the newest one, so a dragged
+    /// window costs one redraw. The first other event waits for the next call.
+    fn coalesce_resizes(&mut self, mut event: RuntimeEvent) -> Result<RuntimeEvent, EventError> {
+        while let RuntimeEvent::Resize(width, height) = event {
+            self.schedule.observed_size = (width, height);
+            if !event::poll(Duration::ZERO).map_err(EventError::Io)? {
+                break;
+            }
+            match translate_event(&event::read().map_err(EventError::Io)?) {
+                Some(next @ RuntimeEvent::Resize(..)) => event = next,
+                Some(other) => {
+                    self.pending = Some(other);
+                    break;
+                }
+                None => {}
+            }
+        }
+        Ok(event)
     }
 }
 
-fn run_event_worker(shared: &SharedQueue) -> Result<(), EventError> {
-    let mut animation_was_active = false;
-    let mut next_tick = Instant::now() + ACTIVE_TICK_INTERVAL;
-    let mut observed_size = crossterm::terminal::size().map_err(EventError::Io)?;
-    let mut next_size_check = Instant::now() + SIZE_POLL_INTERVAL;
+/// Deadlines for animation ticks and the size check, kept apart from
+/// terminal I/O so the timing rules are testable.
+struct Schedule {
+    animation_active: bool,
+    next_tick: Instant,
+    observed_size: (u16, u16),
+    next_size_check: Instant,
+}
 
-    while !shared.shutdown.load(Ordering::Acquire) {
-        let animation_active = shared.animation_active.load(Ordering::Acquire);
-        if animation_active && !animation_was_active {
-            next_tick = Instant::now() + ACTIVE_TICK_INTERVAL;
+impl Schedule {
+    fn new(now: Instant, size: (u16, u16)) -> Self {
+        Self {
+            animation_active: false,
+            next_tick: now + ACTIVE_TICK_INTERVAL,
+            observed_size: size,
+            next_size_check: now + SIZE_POLL_INTERVAL,
         }
-        animation_was_active = animation_active;
+    }
 
-        let event_timeout = if animation_active {
-            next_tick.saturating_duration_since(Instant::now())
+    fn set_animation_active(&mut self, active: bool, now: Instant) {
+        if active && !self.animation_active {
+            self.next_tick = now + ACTIVE_TICK_INTERVAL;
+        }
+        self.animation_active = active;
+    }
+
+    fn timeout(&self, now: Instant) -> Duration {
+        let event_timeout = if self.animation_active {
+            self.next_tick.saturating_duration_since(now)
         } else {
             IDLE_POLL_INTERVAL
         };
-        let timeout = event_timeout.min(next_size_check.saturating_duration_since(Instant::now()));
-
-        if event::poll(timeout).map_err(EventError::Io)?
-            && let Some(runtime_event) = translate_event(&event::read().map_err(EventError::Io)?)
-        {
-            if let RuntimeEvent::Resize(width, height) = runtime_event {
-                observed_size = (width, height);
-            }
-            shared.send(runtime_event)?;
-        }
-
-        let now = Instant::now();
-        if now >= next_size_check {
-            let size = crossterm::terminal::size().map_err(EventError::Io)?;
-            if size != observed_size {
-                observed_size = size;
-                shared.send(RuntimeEvent::Resize(size.0, size.1))?;
-            }
-            next_size_check = now + SIZE_POLL_INTERVAL;
-        }
-
-        if animation_active && now >= next_tick {
-            shared.send(RuntimeEvent::Tick(now))?;
-            next_tick = now + ACTIVE_TICK_INTERVAL;
-        }
+        event_timeout.min(self.next_size_check.saturating_duration_since(now))
     }
 
-    Ok(())
+    fn size_check_due(&self, now: Instant) -> bool {
+        now >= self.next_size_check
+    }
+
+    fn observe_size(&mut self, size: (u16, u16), now: Instant) -> Option<RuntimeEvent> {
+        self.next_size_check = now + SIZE_POLL_INTERVAL;
+        if size == self.observed_size {
+            return None;
+        }
+        self.observed_size = size;
+        Some(RuntimeEvent::Resize(size.0, size.1))
+    }
+
+    fn tick_due(&mut self, now: Instant) -> Option<RuntimeEvent> {
+        if !self.animation_active || now < self.next_tick {
+            return None;
+        }
+        self.next_tick = now + ACTIVE_TICK_INTERVAL;
+        Some(RuntimeEvent::Tick(now))
+    }
 }
 
 fn translate_event(event: &Event) -> Option<RuntimeEvent> {
@@ -422,191 +219,90 @@ fn translate_event(event: &Event) -> Option<RuntimeEvent> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex, mpsc};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    use super::{EVENT_QUEUE_CAPACITY, EventError, EventPump, RuntimeEvent, SharedQueue};
-
-    fn key(character: char) -> RuntimeEvent {
-        RuntimeEvent::Key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
-    }
+    use super::{
+        ACTIVE_TICK_INTERVAL, EventNotifier, IDLE_POLL_INTERVAL, RuntimeEvent, SIZE_POLL_INTERVAL,
+        Schedule, translate_event,
+    };
 
     #[test]
-    fn resize_and_tick_replace_pending_events_without_reordering_keys() {
-        let queue = SharedQueue::new();
-        let first_tick = std::time::Instant::now();
-        let newest_tick = first_tick + std::time::Duration::from_millis(10);
-        queue.send(key('a')).expect("first key");
-        queue
-            .send(RuntimeEvent::Resize(80, 24))
-            .expect("first resize");
-        queue.send(key('b')).expect("second key");
-        queue
-            .send(RuntimeEvent::Tick(first_tick))
-            .expect("first tick");
-        queue
-            .send(RuntimeEvent::Resize(120, 40))
-            .expect("newest resize");
-        queue
-            .send(RuntimeEvent::Tick(newest_tick))
-            .expect("newest tick");
+    fn idle_schedule_never_ticks_and_still_checks_size() {
+        let start = Instant::now();
+        let mut schedule = Schedule::new(start, (80, 24));
 
-        assert_eq!(queue.receive().expect("receive"), Some(key('a')));
+        assert_eq!(schedule.timeout(start), IDLE_POLL_INTERVAL);
+        assert_eq!(schedule.tick_due(start + Duration::from_secs(5)), None);
+
+        let later = start + SIZE_POLL_INTERVAL;
+        assert!(schedule.size_check_due(later));
+        assert_eq!(schedule.observe_size((80, 24), later), None);
+        assert!(!schedule.size_check_due(later));
         assert_eq!(
-            queue.receive().expect("receive"),
+            schedule.observe_size((120, 40), later + SIZE_POLL_INTERVAL),
             Some(RuntimeEvent::Resize(120, 40))
         );
-        assert_eq!(queue.receive().expect("receive"), Some(key('b')));
+    }
+
+    #[test]
+    fn animation_ticks_start_one_interval_after_activation() {
+        let start = Instant::now();
+        let mut schedule = Schedule::new(start, (80, 24));
+        // Activate well before the first size check so the tick sets the timeout.
+        let activated = start + Duration::from_millis(1);
+        schedule.set_animation_active(true, activated);
+
+        assert_eq!(schedule.timeout(activated), ACTIVE_TICK_INTERVAL);
+        assert_eq!(schedule.tick_due(activated), None);
+        let due = activated + ACTIVE_TICK_INTERVAL;
+        assert_eq!(schedule.tick_due(due), Some(RuntimeEvent::Tick(due)));
+        assert_eq!(schedule.tick_due(due), None, "one tick per interval");
+
+        schedule.set_animation_active(false, due);
+        assert_eq!(schedule.tick_due(due + ACTIVE_TICK_INTERVAL), None);
+    }
+
+    #[test]
+    fn staying_active_keeps_the_existing_tick_deadline() {
+        let start = Instant::now();
+        let mut schedule = Schedule::new(start, (80, 24));
+        schedule.set_animation_active(true, start);
+        schedule.set_animation_active(true, start + ACTIVE_TICK_INTERVAL / 2);
+
+        let due = start + ACTIVE_TICK_INTERVAL;
+        assert_eq!(schedule.tick_due(due), Some(RuntimeEvent::Tick(due)));
+    }
+
+    #[test]
+    fn only_presses_resizes_and_focus_reach_the_shell() {
+        let press = KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE);
+        let mut release = press;
+        release.kind = KeyEventKind::Release;
+
         assert_eq!(
-            queue.receive().expect("receive"),
-            Some(RuntimeEvent::Tick(newest_tick))
+            translate_event(&Event::Key(press)),
+            Some(RuntimeEvent::Key(press))
+        );
+        assert_eq!(translate_event(&Event::Key(release)), None);
+        assert_eq!(translate_event(&Event::Paste("ink".into())), None);
+        assert_eq!(
+            translate_event(&Event::Resize(100, 30)),
+            Some(RuntimeEvent::Resize(100, 30))
+        );
+        assert_eq!(
+            translate_event(&Event::FocusLost),
+            Some(RuntimeEvent::Focus(false))
         );
     }
 
     #[test]
-    fn shutdown_wakes_both_waiters_at_the_predicate_to_wait_boundary() {
-        for full in [false, true] {
-            let queue = Arc::new(SharedQueue::new());
-            if full {
-                for _ in 0..EVENT_QUEUE_CAPACITY {
-                    queue.send(key('x')).expect("fill queue");
-                }
-            }
-            // Hold the mutex at the exact boundary shared by send and receive:
-            // the queue requires waiting, and shutdown is still false.
-            let state = queue.state.lock().expect("queue state");
-            assert!(!queue.shutdown.load(super::Ordering::Acquire));
-            let (started, starting) = mpsc::channel();
-            let (finished, done) = mpsc::channel();
-            let shutdown_queue = Arc::clone(&queue);
-            let shutdown = std::thread::spawn(move || {
-                started.send(()).expect("announce shutdown");
-                shutdown_queue.begin_shutdown();
-                finished.send(()).expect("announce completion");
-            });
-            starting
-                .recv_timeout(Duration::from_secs(2))
-                .expect("shutdown starts");
-            let early = done.recv_timeout(Duration::from_millis(100));
-            let condition = if full {
-                &queue.not_full
-            } else {
-                &queue.not_empty
-            };
-            let (state, timeout) = condition
-                .wait_timeout_while(state, Duration::from_secs(2), |_| {
-                    !queue.shutdown.load(super::Ordering::Acquire)
-                })
-                .expect("shutdown releases waiter");
-            drop(state);
-            shutdown.join().expect("shutdown joins");
-            assert!(
-                matches!(early, Err(mpsc::RecvTimeoutError::Timeout)),
-                "shutdown must not notify between the predicate check and wait"
-            );
-            assert!(!timeout.timed_out(), "waiter must observe shutdown");
-        }
-    }
-
-    #[test]
-    fn shutdown_still_completes_when_the_queue_mutex_is_poisoned() {
-        let queue = Arc::new(SharedQueue::new());
-        let poisoned = Arc::clone(&queue);
-        let worker = std::thread::spawn(move || {
-            let _state = poisoned.state.lock().expect("queue state");
-            panic!("injected queue failure");
-        });
-        assert!(worker.join().is_err());
-        queue.begin_shutdown();
-        assert!(matches!(queue.receive(), Err(EventError::QueueUnavailable)));
-        assert!(queue.shutdown.load(super::Ordering::Acquire));
-    }
-
-    /// Fills the queue, starts a sender for `event`, and returns once that
-    /// sender is inside the full-queue wait. The receiver yields its result.
-    fn blocked_sender(
-        queue: &Arc<SharedQueue>,
-        event: RuntimeEvent,
-    ) -> mpsc::Receiver<Result<(), EventError>> {
-        for _ in 0..EVENT_QUEUE_CAPACITY {
-            queue.send(key('x')).expect("fill queue");
-        }
-        let (result, sent) = mpsc::channel();
-        let sender_queue = Arc::clone(queue);
-        std::thread::spawn(move || {
-            let _ = result.send(sender_queue.send(event));
-        });
-        // The sender counts its wait while holding the lock, and waiting
-        // releases it, so holding the lock here proves the sender is blocked.
-        let state = queue.state.lock().expect("queue state");
-        let (_state, timeout) = queue
-            .sender_waiting
-            .wait_timeout_while(state, Duration::from_secs(2), |state| state.full_waits == 0)
-            .expect("sender reaches the full-queue wait");
-        assert!(!timeout.timed_out(), "sender must block on a full queue");
-        sent
-    }
-
-    #[test]
-    fn shutdown_releases_a_sender_blocked_by_backpressure() {
-        let queue = Arc::new(SharedQueue::new());
-        let sent = blocked_sender(&queue, key('y'));
-        queue.begin_shutdown();
-
-        assert!(matches!(
-            sent.recv_timeout(Duration::from_secs(2))
-                .expect("shutdown releases the sender"),
-            Err(EventError::QueueUnavailable)
-        ));
-    }
-
-    #[test]
-    fn backpressure_preserves_the_key_that_waited_for_capacity() {
-        let queue = Arc::new(SharedQueue::new());
-        let sent = blocked_sender(&queue, key('y'));
-        assert_eq!(queue.receive().expect("free one slot"), Some(key('x')));
-        sent.recv_timeout(Duration::from_secs(2))
-            .expect("capacity releases the sender")
-            .expect("waiting key enters queue");
-        for _ in 1..EVENT_QUEUE_CAPACITY {
-            assert_eq!(queue.receive().expect("queued key"), Some(key('x')));
-        }
-        assert_eq!(queue.receive().expect("waiting key"), Some(key('y')));
-    }
-
-    #[test]
-    fn completed_work_stays_observable_without_waiting_for_queue_capacity() {
-        let queue = SharedQueue::new();
-        for _ in 0..EVENT_QUEUE_CAPACITY {
-            queue.send(key('x')).expect("fill queue");
-        }
-
-        queue
-            .notify_work_ready(7)
-            .expect("bounded work slot remains available");
-        assert_eq!(
-            queue.receive().expect("work result"),
-            Some(RuntimeEvent::WorkReady(7))
-        );
-        assert_eq!(
-            queue.receive().expect("keys remain ordered"),
-            Some(key('x'))
-        );
-    }
-
-    #[test]
-    fn worker_failure_preempts_events_that_were_already_queued() {
-        let shared = Arc::new(SharedQueue::new());
-        shared.send(key('x')).expect("queued before failure");
-        shared.begin_shutdown();
-        let pump = EventPump {
-            shared,
-            failure: Arc::new(Mutex::new(Some(EventError::WorkerPanicked))),
-            worker: None,
-        };
-
-        assert!(matches!(pump.next(), Err(EventError::WorkerPanicked)));
+    fn a_notifier_outliving_the_shell_does_not_fail() {
+        let (notifier, receiver) = EventNotifier::channel();
+        notifier.work_ready(3);
+        assert_eq!(receiver.recv_timeout(Duration::from_secs(1)), Ok(3));
+        drop(receiver);
+        notifier.work_ready(4);
     }
 }

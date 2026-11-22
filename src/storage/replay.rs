@@ -171,7 +171,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<DecodedReplay, ReplayDocumentError>
         .collect::<Result<Vec<_>, _>>()?;
     let metadata = ReplayMetadata::new(
         puzzle.identity().clone(),
-        puzzle.revision(),
+        puzzle.revision().clone(),
         puzzle.format_version(),
         document.engine_compatibility_version,
     );
