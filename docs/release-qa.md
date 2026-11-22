@@ -4,6 +4,51 @@ This record keeps published-artifact evidence and its limits. It does not make
 earlier test results evidence for a later binary. Follow the
 [distribution guide](distribution.md) for release commands and recovery.
 
+## 1.1.3 publication decision on 2026-11-22
+
+The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.3)
+uses signed source commit [594e8af](https://github.com/nuggocto/orifude/commit/594e8af9a50e2ae7b755e498151b7e5676963321)
+and a verified signed annotated tag. The README and guides now install from fixed
+GitHub release URLs. The bundled SQLite moves to 3.54.1 for RUSTSEC-2026-0459.
+Release builds use fat LTO, one codegen unit, and a stripped symbol table.
+Terminal input moves to the main thread, and the paper's redundant action budget
+is gone. Save schemas, content formats, and generator compatibility are
+unchanged. The [coverage limitations below](#coverage-and-limitations) still apply.
+
+| Verification | Evidence |
+| --- | --- |
+| Native checks | [Nine CI jobs](https://github.com/nuggocto/orifude/actions/runs/44966537097), [eleven candidate jobs](https://github.com/nuggocto/orifude/actions/runs/44966543834), and [pack validation](https://github.com/nuggocto/orifude/actions/runs/44966537091) passed. The first candidate attempt lost the Intel macOS archive upload to a runner DNS failure (`ENOTFOUND`) after the archive built; rerunning that job passed, and the remaining jobs then ran. |
+| Public installers | [Five native journeys](https://github.com/nuggocto/orifude/actions/runs/44970859931) verified public downloads, installed bytes, play, save, restart, and replay. |
+| Public packages | [Four native journeys](https://github.com/nuggocto/orifude/actions/runs/44971282415) passed for Intel and Apple Silicon Homebrew, Scoop, and x86_64 AUR. |
+| Nix | [All nine tag CI jobs](https://github.com/nuggocto/orifude/actions/runs/44968324079) passed, including installed-player checks on Linux x86_64 and ARM64. `nix run github:nuggocto/orifude/v1.1.3 -- --version` reported 1.1.3 in a fresh Nix container. |
+
+The tag was first pushed while its SSH signing key was registered on GitHub only
+for authentication, so GitHub reported it unverified. After the owner added the
+same key as a signing key, GitHub verified the unchanged tag and commit, and
+publication proceeded. Publication compared all eight draft assets with the
+candidate, then verified the release and every asset attestation after one retry.
+[SHA256SUMS](https://github.com/nuggocto/orifude/releases/download/v1.1.3/SHA256SUMS)
+records the five archive hashes. The POSIX script SHA-256 is
+`62d0f5b5a1ec895137f0cb9ac11682d27018efd909bfba4064093ceb5bdcb042` and the
+PowerShell script SHA-256 is
+`44a0cf71c8798f17ef1f5da3d43c4cdd0fb6e290064045befae2b360c1148126`.
+
+Package updates are [Homebrew d6f66c3](https://github.com/nuggocto/homebrew-tap/commit/d6f66c347d64e067c9dbb00c20e3657cd5566525),
+[Scoop 3e9ac32](https://github.com/nuggocto/scoop-bucket/commit/3e9ac32f93d34daab4aae499475df42a50cfeb84),
+and AUR commit `1a99c2e02d6e8be4454fa3cc29fa21672129b289`, pushed after release
+attestation checks with the dedicated `aur@sshmoi.com` SSH identity. All three
+now use the repository URL as their homepage.
+
+Local checks with the pinned 1.98.1 toolchain passed formatting, shell analysis,
+dependency policies for both workspaces, warning-denied Clippy, all tests,
+doctests, the release tool tests, the release-profile native player journey,
+property checks, and the secret scan.
+
+The Linux musl executable has SHA-256
+`5081808a1172214fd16572338789dd6723045cf0350188354ead17002e9cc9f5`.
+It is 4,345,664 bytes, down from 5,731,456 in 1.1.2; its archive is 2,100,783
+bytes. Startup, input, and storage measurements were not repeated for this release.
+
 ## 1.1.2 publication decision on 2026-10-27
 
 The immutable [release](https://github.com/nuggocto/orifude/releases/tag/v1.1.2)
